@@ -1371,11 +1371,48 @@ function getOpenMeteoCloudIds(timeStep){
     layerId: OPEN_METEO_CLOUD_LAYER_ID + "-" + safeKey
   };
 }
-    function isOpenMeteoCloudStepCached(timeValue){
+function isOpenMeteoCloudStepCached(timeValue){
   if(!openMeteoCloudValidTimes.length) return false;
 
   var timeStep = getNearestOpenMeteoTimeStep(timeValue);
   return openMeteoCloudSourceCache.has(timeStep);
+}
+
+function getNearestCachedOpenMeteoCloudTime(timeValue){
+  if(!openMeteoCloudValidTimes.length || !openMeteoCloudSourceCache.size){
+    return null;
+  }
+
+  var targetTime = Number(timeValue || selectedForecastTime || Date.now());
+  if(!isFinite(targetTime)) return null;
+
+  var bestTime = null;
+  var bestDiff = Infinity;
+
+  openMeteoCloudSourceCache.forEach(function(entry){
+    if(!entry || !entry.timeStep) return;
+
+    var match = String(entry.timeStep).match(/^valid_times_(\d+)$/);
+    if(!match) return;
+
+    var index = Number(match[1]);
+    if(!isFinite(index)) return;
+
+    var validTimeRaw = openMeteoCloudValidTimes[index];
+    if(!validTimeRaw) return;
+
+    var validTime = new Date(validTimeRaw).getTime();
+    if(!isFinite(validTime)) return;
+
+    var diff = Math.abs(validTime - targetTime);
+
+    if(diff < bestDiff){
+      bestDiff = diff;
+      bestTime = validTime;
+    }
+  });
+
+  return bestTime;
 }
 
 function hideAllOpenMeteoCloudLayers(){
@@ -3708,28 +3745,40 @@ function applySelectedForecastTimeImmediate(timeValue){
     if(precipitationLayerVisible && maptilerPrecipitationLayer) maptilerPrecipitationLayer.setAnimationTime(s);
   }catch(e){}
 
-  try{
-    if(satelliteLayerVisible && typeof syncOpenMeteoCloudLayerForSelectedTime === "function"){
-      var satelliteAlreadyCached =
-        typeof isOpenMeteoCloudStepCached === "function" &&
-        isOpenMeteoCloudStepCached(selectedForecastTime);
+try{
+  if(satelliteLayerVisible && typeof syncOpenMeteoCloudLayerForSelectedTime === "function"){
+    var satelliteAlreadyCached =
+      typeof isOpenMeteoCloudStepCached === "function" &&
+      isOpenMeteoCloudStepCached(selectedForecastTime);
 
-      if(satelliteAlreadyCached){
-        syncOpenMeteoCloudLayerForSelectedTime(selectedForecastTime, {
+    if(satelliteAlreadyCached){
+      // Exakt satellitsteg finns redan laddat: visa direkt medan reglaget dras.
+      syncOpenMeteoCloudLayerForSelectedTime(selectedForecastTime, {
+        immediate:true,
+        preload:true
+      });
+    }else{
+      // Exakt steg finns inte ännu.
+      // Visa närmaste redan laddade satellitsteg, så lagret fortfarande rör sig medan man drar.
+      var nearestCachedSatelliteTime =
+        typeof getNearestCachedOpenMeteoCloudTime === "function"
+          ? getNearestCachedOpenMeteoCloudTime(selectedForecastTime)
+          : null;
+
+      if(nearestCachedSatelliteTime){
+        syncOpenMeteoCloudLayerForSelectedTime(nearestCachedSatelliteTime, {
           immediate:true,
-          preload:true
+          preload:false
         });
-      }else{
-        // Viktigt:
-        // Byt INTE till ett nytt satellitlager direkt här.
-        // Vissa timmar saknar tiles, och då blir lagret tomt.
-        // Behåll nuvarande synliga satellitbild och ladda bara runt tiden i bakgrunden.
-        if(typeof preloadNearbyOpenMeteoCloudLayers === "function"){
-          preloadNearbyOpenMeteoCloudLayers(selectedForecastTime);
-        }
+      }
+
+      // Ladda området runt vald tid i bakgrunden, så fler steg blir redo under dragningen.
+      if(typeof preloadNearbyOpenMeteoCloudLayers === "function"){
+        preloadNearbyOpenMeteoCloudLayers(selectedForecastTime);
       }
     }
-  }catch(e){}
+  }
+}catch(e){}
 
   try{
     if(radarLayerVisible && maptilerRadarLayer) maptilerRadarLayer.setAnimationTime(s);
