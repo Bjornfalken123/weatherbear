@@ -1,3 +1,6 @@
+const CACHE_TTL_SECONDS = 2 * 60; // 2 minuter
+const CACHE_KEY = "https://weatherbear-cache.local/api/frames";
+
 const SMHI_LATEST_RADAR =
   "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp/latest.png";
 
@@ -27,8 +30,38 @@ function arrayBufferToBase64(arrayBuffer) {
   return btoa(binary);
 }
 
-async function fetchAsDataUrl(url) {
-  const upstream = await fetch(url, {
+async function getCachedResponse(context) {
+  const cache = caches.default;
+  const cacheRequest = new Request(CACHE_KEY, {
+    method: "GET"
+  });
+
+  const cached = await cache.match(cacheRequest);
+
+  if (cached) {
+    const response = new Response(cached.body, cached);
+    response.headers.set("x-weatherbear-cache", "HIT");
+    return response;
+  }
+
+  const freshData = await fetchFreshFrames();
+
+  const response = Response.json(freshData, {
+    headers: {
+      "cache-control": `public, max-age=${CACHE_TTL_SECONDS}`,
+      "x-weatherbear-cache": "MISS"
+    }
+  });
+
+  context.waitUntil(cache.put(cacheRequest, response.clone()));
+
+  return response;
+}
+
+async function fetchFreshFrames() {
+  const now = new Date();
+
+  const upstream = await fetch(SMHI_LATEST_RADAR, {
     headers: {
       "User-Agent": "KustvaderRadar/1.0"
     }
@@ -42,32 +75,22 @@ async function fetchAsDataUrl(url) {
   const arrayBuffer = await upstream.arrayBuffer();
   const base64 = arrayBufferToBase64(arrayBuffer);
 
-  return `data:${contentType};base64,${base64}`;
+  return {
+    source: "SMHI",
+    frames: [
+      {
+        kind: "radar",
+        label: `Nu • ${formatLabelSv(now)}`,
+        imageUrl: `data:${contentType};base64,${base64}`,
+        timestamp: now.toISOString()
+      }
+    ]
+  };
 }
 
 export async function onRequestGet(context) {
   try {
-    const now = new Date();
-    const imageUrl = await fetchAsDataUrl(SMHI_LATEST_RADAR);
-
-    return Response.json(
-      {
-        source: "SMHI",
-        frames: [
-          {
-            kind: "radar",
-            label: `Nu • ${formatLabelSv(now)}`,
-            imageUrl,
-            timestamp: now.toISOString()
-          }
-        ]
-      },
-      {
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
+    return await getCachedResponse(context);
   } catch (error) {
     return Response.json(
       {
