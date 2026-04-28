@@ -1,6 +1,6 @@
 const DEFAULT_LISTEN_MS = 9000;
 const MAX_LISTEN_MS = 10000;
-const CACHE_TTL_SECONDS = 5; // 5 sekunder
+const CACHE_TTL_SECONDS = 20; // 20 sekunder
 
 function clampNumber(value, min, max) {
   const n = Number(value);
@@ -243,7 +243,6 @@ function roundBboxCoord(value) {
     return 0;
   }
 
-  // 0.1 grad ≈ 6–11 km beroende på latitud. Bra nog för kort AIS-cache.
   return Math.round(n * 10) / 10;
 }
 
@@ -532,7 +531,6 @@ export async function onRequestGet(context) {
   const cacheKey = makeCacheKey(minLon, minLat, maxLon, maxLat);
 
   try {
-    // Debug ska alltid hämta fresh så du får riktig felsökningsdata.
     if (debug) {
       const freshPayload = await fetchFreshAis({
         apiKey,
