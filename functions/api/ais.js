@@ -41,7 +41,32 @@ function getMmsi(report) {
   );
 }
 
-function extractPosition(payload) {
+function normalizeIncomingData(data) {
+  if (typeof data === "string") return data;
+
+  if (data instanceof ArrayBuffer) {
+    return new TextDecoder().decode(data);
+  }
+
+  if (data && typeof data.text === "function") {
+    return data.text();
+  }
+
+  return String(data || "");
+}
+
+function getMessagePayload(msg) {
+  if (!msg) return null;
+
+  // AISStream brukar ofta skicka:
+  // { MessageType: "...", Message: { PositionReport: {...} } }
+  if (msg.Message) return msg.Message;
+
+  // Fallback om payloaden redan är själva message-objektet.
+  return msg;
+}
+
+function extractPosition(payload, metadata) {
   const report =
     payload?.PositionReport ||
     payload?.StandardClassBPositionReport ||
@@ -78,7 +103,11 @@ function extractPosition(payload) {
   if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) return null;
   if (Math.abs(latNum) > 90 || Math.abs(lonNum) > 180) return null;
 
-  const mmsi = getMmsi(report);
+  const mmsi = firstDefined(
+    getMmsi(report),
+    metadata?.MMSI,
+    metadata?.mmsi
+  );
 
   return {
     mmsi: mmsi || null,
@@ -110,22 +139,28 @@ function extractPosition(payload) {
       report.NavigationalStatus,
       report.NavigationStatus,
       report.navStatus
-    )
+    ),
+    name:
+      cleanString(metadata?.ShipName) ||
+      cleanString(metadata?.shipName) ||
+      null,
+    callsign:
+      cleanString(metadata?.CallSign) ||
+      cleanString(metadata?.callsign) ||
+      null
   };
 }
 
-function extractStaticData(payload) {
+function extractStaticData(payload, metadata) {
   const ship =
     payload?.ShipStaticData ||
     payload?.StaticDataReport ||
     payload?.StaticVoyageData ||
     null;
 
-  if (!ship) return null;
-
   let source = ship;
 
-  if (ship.ReportA || ship.ReportB) {
+  if (ship && (ship.ReportA || ship.ReportB)) {
     source = {
       ...ship,
       ...(ship.ReportA || {}),
@@ -133,47 +168,58 @@ function extractStaticData(payload) {
     };
   }
 
-  const mmsi = getMmsi(source);
+  const mmsi = firstDefined(
+    source && getMmsi(source),
+    metadata?.MMSI,
+    metadata?.mmsi
+  );
+
   if (!mmsi) return null;
 
   return {
     mmsi,
     name:
-      cleanString(source.Name) ||
-      cleanString(source.ShipName) ||
-      cleanString(source.VesselName),
+      cleanString(source?.Name) ||
+      cleanString(source?.ShipName) ||
+      cleanString(source?.VesselName) ||
+      cleanString(metadata?.ShipName) ||
+      cleanString(metadata?.shipName),
     callsign:
-      cleanString(source.CallSign) ||
-      cleanString(source.Callsign) ||
-      cleanString(source.CallsignName),
+      cleanString(source?.CallSign) ||
+      cleanString(source?.Callsign) ||
+      cleanString(source?.CallsSignName) ||
+      cleanString(metadata?.CallSign) ||
+      cleanString(metadata?.callsign),
     imo: firstDefined(
-      source.ImoNumber,
-      source.IMO,
-      source.Imo,
-      source.imo
+      source?.ImoNumber,
+      source?.IMO,
+      source?.Imo,
+      source?.imo,
+      metadata?.IMO,
+      metadata?.imo
     ),
     shipType: normalizeShipType(
       firstDefined(
-        source.Type,
-        source.ShipType,
-        source.ShipAndCargoType,
-        source.shipType
+        source?.Type,
+        source?.ShipType,
+        source?.ShipAndCargoType,
+        source?.shipType
       )
     ),
     destination:
-      cleanString(source.Destination) ||
-      cleanString(source.destination),
+      cleanString(source?.Destination) ||
+      cleanString(source?.destination),
     eta: firstDefined(
-      source.Eta,
-      source.ETA,
-      source.eta
+      source?.Eta,
+      source?.ETA,
+      source?.eta
     ),
-    dimensionToBow: firstDefined(source.DimensionToBow, source.ToBow),
-    dimensionToStern: firstDefined(source.DimensionToStern, source.ToStern),
-    dimensionToPort: firstDefined(source.DimensionToPort, source.ToPort),
+    dimensionToBow: firstDefined(source?.DimensionToBow, source?.ToBow),
+    dimensionToStern: firstDefined(source?.DimensionToStern, source?.ToStern),
+    dimensionToPort: firstDefined(source?.DimensionToPort, source?.ToPort),
     dimensionToStarboard: firstDefined(
-      source.DimensionToStarboard,
-      source.ToStarboard
+      source?.DimensionToStarboard,
+      source?.ToStarboard
     )
   };
 }
@@ -208,6 +254,7 @@ export async function onRequestGet(context) {
 
   const bbox = url.searchParams.get("bbox");
   const listenMs = url.searchParams.get("listenMs");
+  const debug = url.searchParams.get("debug") === "1";
 
   if (!bbox) {
     return jsonResponse({ error: "bbox required" }, 400);
@@ -232,6 +279,25 @@ export async function onRequestGet(context) {
 
   const vessels = new Map();
 
+  const debugInfo = {
+    connected: false,
+    closed: false,
+    errored: false,
+    messages: 0,
+    positionMessages: 0,
+    staticMessages: 0,
+    ignoredMessages: 0,
+    messageTypes: {},
+    lastError: null,
+    bbox: {
+      minLon,
+      minLat,
+      maxLon,
+      maxLat
+    },
+    listenMs: safeListenMs
+  };
+
   return new Promise((resolve) => {
     let finished = false;
     let finishTimer = null;
@@ -252,6 +318,10 @@ export async function onRequestGet(context) {
         }
       } catch (e) {}
 
+      if (debug) {
+        payload.debug = debugInfo;
+      }
+
       resolve(jsonResponse(payload, status));
     }
 
@@ -259,6 +329,8 @@ export async function onRequestGet(context) {
       ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
       ws.addEventListener("open", () => {
+        debugInfo.connected = true;
+
         ws.send(
           JSON.stringify({
             APIKey: API_KEY,
@@ -281,25 +353,52 @@ export async function onRequestGet(context) {
         }, safeListenMs);
       });
 
-      ws.addEventListener("message", (event) => {
+      ws.addEventListener("message", async (event) => {
         try {
-          const msg = JSON.parse(event.data);
-          const payload = msg && msg.Message ? msg.Message : null;
-          if (!payload) return;
+          const rawText = await normalizeIncomingData(event.data);
+          const msg = JSON.parse(rawText);
 
-          const position = extractPosition(payload);
+          debugInfo.messages += 1;
+
+          const messageType =
+            msg?.MessageType ||
+            msg?.messageType ||
+            "unknown";
+
+          debugInfo.messageTypes[messageType] =
+            (debugInfo.messageTypes[messageType] || 0) + 1;
+
+          // AISStream kan skicka Error-meddelanden som vanlig message.
+          if (msg?.Error || msg?.error) {
+            debugInfo.lastError = msg.Error || msg.error;
+            return;
+          }
+
+          const payload = getMessagePayload(msg);
+          const metadata = msg?.MetaData || msg?.metadata || null;
+
+          if (!payload) {
+            debugInfo.ignoredMessages += 1;
+            return;
+          }
+
+          const position = extractPosition(payload, metadata);
 
           if (position) {
+            debugInfo.positionMessages += 1;
+
             const key = vesselKeyFromPosition(position);
             const existing = vessels.get(key);
 
             const merged = mergeVessel(existing, {
               ...position,
               name:
+                position.name ||
                 existing?.name ||
                 existing?.static?.name ||
                 null,
               callsign:
+                position.callsign ||
                 existing?.callsign ||
                 existing?.static?.callsign ||
                 null,
@@ -321,9 +420,11 @@ export async function onRequestGet(context) {
             vessels.set(key, merged);
           }
 
-          const staticData = extractStaticData(payload);
+          const staticData = extractStaticData(payload, metadata);
 
           if (staticData) {
+            debugInfo.staticMessages += 1;
+
             const key = String(staticData.mmsi);
             const existing = vessels.get(key);
 
@@ -341,23 +442,35 @@ export async function onRequestGet(context) {
 
             vessels.set(key, merged);
           }
+
+          if (!position && !staticData) {
+            debugInfo.ignoredMessages += 1;
+          }
         } catch (e) {
-          // Ignorera trasiga AIS-meddelanden.
+          debugInfo.ignoredMessages += 1;
+          debugInfo.lastError = e?.message || String(e);
         }
       });
 
       ws.addEventListener("error", () => {
+        debugInfo.errored = true;
+
         finish(200, {
           vessels: Array.from(vessels.values())
         });
       });
 
       ws.addEventListener("close", () => {
+        debugInfo.closed = true;
+
         finish(200, {
           vessels: Array.from(vessels.values())
         });
       });
     } catch (error) {
+      debugInfo.errored = true;
+      debugInfo.lastError = error?.message || String(error);
+
       finish(500, {
         error: "AIS websocket failed",
         message: error.message
