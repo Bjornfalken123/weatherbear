@@ -1,5 +1,6 @@
 const DEFAULT_LISTEN_MS = 9000;
 const MAX_LISTEN_MS = 10000;
+const CACHE_TTL_SECONDS = 5; // 5 sekunder
 
 function clampNumber(value, min, max) {
   const n = Number(value);
@@ -57,12 +58,7 @@ function normalizeIncomingData(data) {
 
 function getMessagePayload(msg) {
   if (!msg) return null;
-
-  // AISStream brukar ofta skicka:
-  // { MessageType: "...", Message: { PositionReport: {...} } }
   if (msg.Message) return msg.Message;
-
-  // Fallback om payloaden redan är själva message-objektet.
   return msg;
 }
 
@@ -240,43 +236,69 @@ function vesselKeyFromPosition(position) {
   return `${Number(position.lat).toFixed(5)}:${Number(position.lon).toFixed(5)}`;
 }
 
-function jsonResponse(payload, status = 200) {
+function roundBboxCoord(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return 0;
+  }
+
+  // 0.1 grad ≈ 6–11 km beroende på latitud. Bra nog för kort AIS-cache.
+  return Math.round(n * 10) / 10;
+}
+
+function makeCacheKey(minLon, minLat, maxLon, maxLat) {
+  return [
+    "https://weatherbear-cache.local/api/ais",
+    roundBboxCoord(minLon),
+    roundBboxCoord(minLat),
+    roundBboxCoord(maxLon),
+    roundBboxCoord(maxLat)
+  ].join("/");
+}
+
+function jsonResponse(payload, status = 200, cacheStatus = "BYPASS") {
   return Response.json(payload, {
     status,
     headers: {
-      "cache-control": "no-store"
+      "cache-control": `public, max-age=${CACHE_TTL_SECONDS}`,
+      "x-weatherbear-cache": cacheStatus
     }
   });
 }
 
-export async function onRequestGet(context) {
-  const url = new URL(context.request.url);
+async function getCachedResponse(context, cacheKey, fetchFreshData) {
+  const cache = caches.default;
+  const cacheRequest = new Request(cacheKey, {
+    method: "GET"
+  });
 
-  const bbox = url.searchParams.get("bbox");
-  const listenMs = url.searchParams.get("listenMs");
-  const debug = url.searchParams.get("debug") === "1";
+  const cached = await cache.match(cacheRequest);
 
-  if (!bbox) {
-    return jsonResponse({ error: "bbox required" }, 400);
+  if (cached) {
+    const response = new Response(cached.body, cached);
+    response.headers.set("x-weatherbear-cache", "HIT");
+    return response;
   }
 
-  const [minLon, minLat, maxLon, maxLat] = String(bbox)
-    .split(",")
-    .map(Number);
+  const freshPayload = await fetchFreshData();
 
-  if ([minLon, minLat, maxLon, maxLat].some((v) => Number.isNaN(v))) {
-    return jsonResponse({ error: "invalid bbox" }, 400);
-  }
+  const response = jsonResponse(freshPayload, 200, "MISS");
 
-  const safeListenMs =
-    clampNumber(listenMs, 1000, MAX_LISTEN_MS) || DEFAULT_LISTEN_MS;
+  context.waitUntil(cache.put(cacheRequest, response.clone()));
 
-  const API_KEY = context.env.AISSTREAM_API_KEY;
+  return response;
+}
 
-  if (!API_KEY) {
-    return jsonResponse({ error: "AISSTREAM_API_KEY missing" }, 500);
-  }
-
+async function fetchFreshAis({
+  apiKey,
+  minLon,
+  minLat,
+  maxLon,
+  maxLat,
+  safeListenMs,
+  debug
+}) {
   const vessels = new Map();
 
   const debugInfo = {
@@ -303,7 +325,7 @@ export async function onRequestGet(context) {
     let finishTimer = null;
     let ws = null;
 
-    function finish(status = 200, payload = { vessels: [] }) {
+    function finish(payload = { vessels: [] }) {
       if (finished) return;
       finished = true;
 
@@ -322,7 +344,7 @@ export async function onRequestGet(context) {
         payload.debug = debugInfo;
       }
 
-      resolve(jsonResponse(payload, status));
+      resolve(payload);
     }
 
     try {
@@ -333,7 +355,7 @@ export async function onRequestGet(context) {
 
         ws.send(
           JSON.stringify({
-            APIKey: API_KEY,
+            APIKey: apiKey,
             BoundingBoxes: [[[minLat, minLon], [maxLat, maxLon]]],
             FilterMessageTypes: [
               "PositionReport",
@@ -347,7 +369,7 @@ export async function onRequestGet(context) {
         );
 
         finishTimer = setTimeout(() => {
-          finish(200, {
+          finish({
             vessels: Array.from(vessels.values())
           });
         }, safeListenMs);
@@ -368,7 +390,6 @@ export async function onRequestGet(context) {
           debugInfo.messageTypes[messageType] =
             (debugInfo.messageTypes[messageType] || 0) + 1;
 
-          // AISStream kan skicka Error-meddelanden som vanlig message.
           if (msg?.Error || msg?.error) {
             debugInfo.lastError = msg.Error || msg.error;
             return;
@@ -455,7 +476,7 @@ export async function onRequestGet(context) {
       ws.addEventListener("error", () => {
         debugInfo.errored = true;
 
-        finish(200, {
+        finish({
           vessels: Array.from(vessels.values())
         });
       });
@@ -463,7 +484,7 @@ export async function onRequestGet(context) {
       ws.addEventListener("close", () => {
         debugInfo.closed = true;
 
-        finish(200, {
+        finish({
           vessels: Array.from(vessels.values())
         });
       });
@@ -471,10 +492,81 @@ export async function onRequestGet(context) {
       debugInfo.errored = true;
       debugInfo.lastError = error?.message || String(error);
 
-      finish(500, {
+      finish({
         error: "AIS websocket failed",
-        message: error.message
+        message: error.message,
+        vessels: []
       });
     }
   });
+}
+
+export async function onRequestGet(context) {
+  const url = new URL(context.request.url);
+
+  const bbox = url.searchParams.get("bbox");
+  const listenMs = url.searchParams.get("listenMs");
+  const debug = url.searchParams.get("debug") === "1";
+
+  if (!bbox) {
+    return jsonResponse({ error: "bbox required" }, 400, "BYPASS");
+  }
+
+  const [minLon, minLat, maxLon, maxLat] = String(bbox)
+    .split(",")
+    .map(Number);
+
+  if ([minLon, minLat, maxLon, maxLat].some((v) => Number.isNaN(v))) {
+    return jsonResponse({ error: "invalid bbox" }, 400, "BYPASS");
+  }
+
+  const safeListenMs =
+    clampNumber(listenMs, 1000, MAX_LISTEN_MS) || DEFAULT_LISTEN_MS;
+
+  const apiKey = context.env.AISSTREAM_API_KEY;
+
+  if (!apiKey) {
+    return jsonResponse({ error: "AISSTREAM_API_KEY missing" }, 500, "BYPASS");
+  }
+
+  const cacheKey = makeCacheKey(minLon, minLat, maxLon, maxLat);
+
+  try {
+    // Debug ska alltid hämta fresh så du får riktig felsökningsdata.
+    if (debug) {
+      const freshPayload = await fetchFreshAis({
+        apiKey,
+        minLon,
+        minLat,
+        maxLon,
+        maxLat,
+        safeListenMs,
+        debug
+      });
+
+      return jsonResponse(freshPayload, 200, "BYPASS");
+    }
+
+    return await getCachedResponse(context, cacheKey, () =>
+      fetchFreshAis({
+        apiKey,
+        minLon,
+        minLat,
+        maxLon,
+        maxLat,
+        safeListenMs,
+        debug: false
+      })
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        error: true,
+        message: error.message,
+        vessels: []
+      },
+      500,
+      "BYPASS"
+    );
+  }
 }
