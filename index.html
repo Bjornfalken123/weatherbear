@@ -1154,10 +1154,12 @@ var aisLoadTimer = null;
 var aisRefreshInterval = null;
 var aisLatestRequestId = 0;
 
-var AIS_LISTEN_MS = 9000;
-var AIS_REFRESH_INTERVAL_MS = 10 * 1000;
-var AIS_MARKER_TTL_MS = 15 * 60 * 1000;
-var AIS_FETCH_THROTTLE_MS = 2500;
+var AIS_LISTEN_MS = 5000;
+var AIS_REFRESH_INTERVAL_MS = 20 * 1000;
+var AIS_MARKER_TTL_MS = 5 * 60 * 1000;
+var AIS_FETCH_THROTTLE_MS = 6000;
+var AIS_MAX_MARKERS = isMobileView() ? 180 : 350;
+var AIS_MIN_ZOOM = 6;
 
     var latestWeatherRequestId = 0;
     var mobileSearchTimer = null;
@@ -2397,7 +2399,20 @@ function clearAisMarkers(){
     aisVesselCache.clear();
   }
 }
+function clearAisMarkersOnly(){
+  aisMarkerMap.forEach(function(item){
+    try{
+      if(item && item.marker) item.marker.remove();
+      else if(item && item.remove) item.remove();
+    }catch(e){}
+  });
 
+  aisMarkerMap.clear();
+
+  if(aisVesselCache){
+    aisVesselCache.clear();
+  }
+}
 function normalizeAisCourse(v){
   var n = Number(v);
   if(!isFinite(n)) return 0;
@@ -2711,8 +2726,8 @@ function getExpandedAisBbox(){
   var lonSpan = Math.abs(east - west);
   var latSpan = Math.abs(north - south);
 
-  var lonPad = Math.max(lonSpan * 0.65, 0.25);
-  var latPad = Math.max(latSpan * 0.65, 0.18);
+  var lonPad = Math.max(lonSpan * 0.20, 0.06);
+  var latPad = Math.max(latSpan * 0.20, 0.05);
 
   west = Math.max(-180, west - lonPad);
   east = Math.min(180, east + lonPad);
@@ -2751,10 +2766,9 @@ function pruneOldAisMarkers(activeBbox){
     if(!item) return;
 
     var tooOld = item.lastSeenAt && now - item.lastSeenAt > AIS_MARKER_TTL_MS;
+    var outsideView = activeBbox && !isAisPointInsideBbox(item, activeBbox);
 
-    // Ta bara bort fartyg som inte setts på ett tag.
-    // Ta INTE bort dem bara för att de ligger utanför nuvarande bbox.
-    if(tooOld){
+    if(tooOld || outsideView){
       try{
         if(item.marker) item.marker.remove();
       }catch(e){}
@@ -2764,7 +2778,28 @@ function pruneOldAisMarkers(activeBbox){
     }
   });
 }
+function limitAisMarkers(){
+  if(!aisMarkerMap || aisMarkerMap.size <= AIS_MAX_MARKERS) return;
 
+  var items = Array.from(aisMarkerMap.entries()).sort(function(a, b){
+    var at = Number(a[1].lastSeenAt || 0);
+    var bt = Number(b[1].lastSeenAt || 0);
+    return at - bt;
+  });
+
+  while(aisMarkerMap.size > AIS_MAX_MARKERS && items.length){
+    var entry = items.shift();
+    var key = entry[0];
+    var item = entry[1];
+
+    try{
+      if(item && item.marker) item.marker.remove();
+    }catch(e){}
+
+    aisMarkerMap.delete(key);
+    aisVesselCache.delete(key);
+  }
+}
 function updateAisMarkerRotation(item, cog){
   if(!item || !item.element) return;
 
@@ -2885,6 +2920,7 @@ function updateAisMarkers(vessels, activeBbox){
   });
 
   pruneOldAisMarkers(activeBbox);
+limitAisMarkers();
 }
 
 function scheduleAisDataLoad(force){
@@ -2933,9 +2969,14 @@ function stopAisAutoRefresh(){
 async function loadAisData(force){
   if(!maptilerMap || !showAisObjects) return;
 
+  var zoom = maptilerMap.getZoom ? maptilerMap.getZoom() : 0;
+
+  if(zoom < AIS_MIN_ZOOM){
+    clearAisMarkersOnly();
+    return;
+  }
+
   if(aisFetchInFlight){
-    // Om användaren zoomar/pannar medan en sökning redan pågår,
-    // kör en ny sökning när den aktuella är klar.
     if(force){
       aisPendingLoadAfterCurrent = true;
     }
@@ -2953,6 +2994,7 @@ async function loadAisData(force){
   aisFetchInFlight = true;
   aisLastFetchAt = now;
 
+  var requestId = ++aisLatestRequestId;
   var activeBbox = getExpandedAisBbox();
 
   try{
@@ -2965,27 +3007,28 @@ async function loadAisData(force){
     var res = await fetch(url);
     var data = await res.json();
 
+    if(requestId !== aisLatestRequestId){
+      return;
+    }
+
     if(!res.ok){
       throw new Error((data && data.error) || "AIS-fel");
     }
 
-    // Viktigt: om AIS hunnit stängas av medan fetch väntade,
-    // ska vi inte lägga tillbaka markörer.
-    if(!showAisObjects) return;
+    if(!showAisObjects || requestId !== aisLatestRequestId){
+      return;
+    }
 
-   var vesselsWithPosition = (data.vessels || []).filter(function(v){
-  var lat = Number(getAisLat(v));
-  var lon = Number(getAisLon(v));
+    var vesselsWithPosition = (data.vessels || []).filter(function(v){
+      var lat = Number(getAisLat(v));
+      var lon = Number(getAisLon(v));
 
-  return isFinite(lat) && isFinite(lon);
-});
+      return isFinite(lat) && isFinite(lon);
+    });
 
-updateAisMarkers(vesselsWithPosition, activeBbox);
+    updateAisMarkers(vesselsWithPosition, activeBbox);
   }catch(err){
     console.error("AIS kunde inte hämtas", err);
-
-    // Rensa inte markörer vid tillfälligt fel.
-    // De ligger kvar tills AIS_MARKER_TTL_MS har passerat.
   }finally{
     aisFetchInFlight = false;
 
@@ -3027,7 +3070,15 @@ updateAisMarkers(vesselsWithPosition, activeBbox);
     var mobileSearchResults=document.getElementById('mobileSearchResults');
     var mobileSearchCloseBtn=document.getElementById('mobileSearchCloseBtn');
     var mobileFilterCloseBtn=document.getElementById('mobileFilterCloseBtn');
-
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden){
+    aisLatestRequestId++;
+    aisPendingLoadAfterCurrent = false;
+    stopAisAutoRefresh();
+  }else if(showAisObjects){
+    startAisAutoRefresh();
+  }
+});
     function refreshMobileNavState(){
       var filterOpen=mobileFilterSheet && mobileFilterSheet.classList.contains('is-open');
       var searchOpen=mobileSearchSheet && mobileSearchSheet.classList.contains('is-open');
