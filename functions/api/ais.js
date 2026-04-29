@@ -4,9 +4,9 @@ import {
   getCachedAisVesselsForBbox,
   mergeAisVessels
 } from "../_ais-cache.js";
+
 const DEFAULT_LISTEN_MS = 9000;
 const MAX_LISTEN_MS = 10000;
-const CACHE_TTL_SECONDS = 20; // 20 sekunder
 
 function clampNumber(value, min, max) {
   const n = Number(value);
@@ -48,7 +48,7 @@ function getMmsi(report) {
   );
 }
 
-function normalizeIncomingData(data) {
+async function normalizeIncomingData(data) {
   if (typeof data === "string") return data;
 
   if (data instanceof ArrayBuffer) {
@@ -56,7 +56,7 @@ function normalizeIncomingData(data) {
   }
 
   if (data && typeof data.text === "function") {
-    return data.text();
+    return await data.text();
   }
 
   return String(data || "");
@@ -242,57 +242,14 @@ function vesselKeyFromPosition(position) {
   return `${Number(position.lat).toFixed(5)}:${Number(position.lon).toFixed(5)}`;
 }
 
-function roundBboxCoord(value) {
-  const n = Number(value);
-
-  if (!Number.isFinite(n)) {
-    return 0;
-  }
-
-  return Math.round(n * 10) / 10;
-}
-
-function makeCacheKey(minLon, minLat, maxLon, maxLat) {
-  return [
-    "https://weatherbear-cache.local/api/ais",
-    roundBboxCoord(minLon),
-    roundBboxCoord(minLat),
-    roundBboxCoord(maxLon),
-    roundBboxCoord(maxLat)
-  ].join("/");
-}
-
 function jsonResponse(payload, status = 200, cacheStatus = "BYPASS") {
   return Response.json(payload, {
     status,
     headers: {
-      "cache-control": `public, max-age=${CACHE_TTL_SECONDS}`,
+      "cache-control": "no-store",
       "x-weatherbear-cache": cacheStatus
     }
   });
-}
-
-async function getCachedResponse(context, cacheKey, fetchFreshData) {
-  const cache = caches.default;
-  const cacheRequest = new Request(cacheKey, {
-    method: "GET"
-  });
-
-  const cached = await cache.match(cacheRequest);
-
-  if (cached) {
-    const response = new Response(cached.body, cached);
-    response.headers.set("x-weatherbear-cache", "HIT");
-    return response;
-  }
-
-  const freshPayload = await fetchFreshData();
-
-  const response = jsonResponse(freshPayload, 200, "MISS");
-
-  context.waitUntil(cache.put(cacheRequest, response.clone()));
-
-  return response;
 }
 
 async function fetchFreshAis({
@@ -509,21 +466,24 @@ async function fetchFreshAis({
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
 
-  const bbox = url.searchParams.get("bbox");
+  const bboxRaw = url.searchParams.get("bbox");
   const listenMs = url.searchParams.get("listenMs");
   const debug = url.searchParams.get("debug") === "1";
 
-  if (!bbox) {
+  if (!bboxRaw) {
     return jsonResponse({ error: "bbox required" }, 400, "BYPASS");
   }
 
-  const [minLon, minLat, maxLon, maxLat] = String(bbox)
-    .split(",")
-    .map(Number);
+  const requestedBbox = parseBbox(bboxRaw);
 
-  if ([minLon, minLat, maxLon, maxLat].some((v) => Number.isNaN(v))) {
+  if (!requestedBbox) {
     return jsonResponse({ error: "invalid bbox" }, 400, "BYPASS");
   }
+
+  const minLon = requestedBbox.west;
+  const minLat = requestedBbox.south;
+  const maxLon = requestedBbox.east;
+  const maxLat = requestedBbox.north;
 
   const safeListenMs =
     clampNumber(listenMs, 1000, MAX_LISTEN_MS) || DEFAULT_LISTEN_MS;
@@ -534,34 +494,53 @@ export async function onRequestGet(context) {
     return jsonResponse({ error: "AISSTREAM_API_KEY missing" }, 500, "BYPASS");
   }
 
-  const cacheKey = makeCacheKey(minLon, minLat, maxLon, maxLat);
+  if (!context.env.AIS_CACHE) {
+    return jsonResponse({ error: "AIS_CACHE KV binding missing" }, 500, "BYPASS");
+  }
 
   try {
-    if (debug) {
-      const freshPayload = await fetchFreshAis({
-        apiKey,
-        minLon,
-        minLat,
-        maxLon,
-        maxLat,
-        safeListenMs,
-        debug
-      });
+    const freshPayload = await fetchFreshAis({
+      apiKey,
+      minLon,
+      minLat,
+      maxLon,
+      maxLat,
+      safeListenMs,
+      debug
+    });
 
-      return jsonResponse(freshPayload, 200, "BYPASS");
+    const liveVessels = Array.isArray(freshPayload.vessels)
+      ? freshPayload.vessels
+      : [];
+
+    const cacheWriteResult = await saveAisVesselsToCache(
+      context.env.AIS_CACHE,
+      liveVessels
+    );
+
+    const cachedVessels = await getCachedAisVesselsForBbox(
+      context.env.AIS_CACHE,
+      requestedBbox
+    );
+
+    const mergedVessels = mergeAisVessels(liveVessels, cachedVessels);
+
+    const payload = {
+      vessels: mergedVessels,
+      cache: {
+        mode: "KV_HOSTING_CACHE",
+        liveCount: liveVessels.length,
+        cachedCount: cachedVessels.length,
+        mergedCount: mergedVessels.length,
+        savedCount: cacheWriteResult.saved || 0
+      }
+    };
+
+    if (debug) {
+      payload.debug = freshPayload.debug || null;
     }
 
-    return await getCachedResponse(context, cacheKey, () =>
-      fetchFreshAis({
-        apiKey,
-        minLon,
-        minLat,
-        maxLon,
-        maxLat,
-        safeListenMs,
-        debug: false
-      })
-    );
+    return jsonResponse(payload, 200, "KV");
   } catch (error) {
     return jsonResponse(
       {
