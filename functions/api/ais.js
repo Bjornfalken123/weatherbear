@@ -2,45 +2,57 @@ const AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream";
 
 const DEFAULT_LISTEN_MS = 9000;
 const MAX_LISTEN_MS = 10000;
-const MAX_AGE_SECONDS = 60 * 60; // visa cacheade fartyg upp till 1 timme
+
+const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 timme
 const KV_KEY_PREFIX = "ais-region:";
 
-const REGIONS = [
-  {
-    id: "oresund",
-    name: "Öresund",
-    bbox: [[55.25, 12.0], [56.25, 13.1]]
-  },
+const MANAGED_REGIONS = [
   {
     id: "sweden-west",
     name: "Svenska västkusten",
-    bbox: [[55.0, 10.0], [59.6, 13.3]]
+    bbox: {
+      minLon: 10.0,
+      minLat: 55.0,
+      maxLon: 13.3,
+      maxLat: 59.6
+    }
   },
   {
     id: "sweden-east",
     name: "Svenska ostkusten",
-    bbox: [[55.0, 13.0], [66.0, 25.0]]
+    bbox: {
+      minLon: 13.0,
+      minLat: 55.0,
+      maxLon: 25.0,
+      maxLat: 66.0
+    }
   },
   {
     id: "malta",
     name: "Malta",
-    bbox: [[35.5, 13.7], [36.3, 15.0]]
+    bbox: {
+      minLon: 13.7,
+      minLat: 35.5,
+      maxLon: 15.0,
+      maxLat: 36.3
+    }
   }
 ];
 
-function jsonResponse(payload, status = 200, cacheStatus = "BYPASS") {
+function jsonResponse(payload, status = 200) {
   return Response.json(payload, {
     status,
     headers: {
       "cache-control": "no-store",
-      "x-weatherbear-cache": cacheStatus,
       "content-type": "application/json; charset=utf-8"
     }
   });
 }
 
-function nowMs() {
-  return Date.now();
+function clampNumber(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(min, Math.min(max, n));
 }
 
 function cleanString(value) {
@@ -58,30 +70,116 @@ function firstDefined(...values) {
   return null;
 }
 
-function clampNumber(value, min, max) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return Math.max(min, Math.min(max, n));
-}
-
 function normalizeShipType(value) {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : cleanString(value);
 }
 
-function normalizeIncomingData(data) {
-  if (typeof data === "string") return Promise.resolve(data);
+function parseBbox(raw) {
+  if (!raw) return null;
 
-  if (data instanceof ArrayBuffer) {
-    return Promise.resolve(new TextDecoder().decode(data));
+  const parts = String(raw)
+    .split(",")
+    .map((v) => Number(v.trim()));
+
+  if (parts.length !== 4) return null;
+  if (parts.some((v) => !Number.isFinite(v))) return null;
+
+  let [minLon, minLat, maxLon, maxLat] = parts;
+
+  minLon = clampNumber(minLon, -180, 180);
+  maxLon = clampNumber(maxLon, -180, 180);
+  minLat = clampNumber(minLat, -90, 90);
+  maxLat = clampNumber(maxLat, -90, 90);
+
+  if (
+    minLon == null ||
+    maxLon == null ||
+    minLat == null ||
+    maxLat == null
+  ) {
+    return null;
   }
 
-  if (data && typeof data.text === "function") {
-    return data.text();
+  if (minLon > maxLon) {
+    const tmp = minLon;
+    minLon = maxLon;
+    maxLon = tmp;
   }
 
-  return Promise.resolve(String(data || ""));
+  if (minLat > maxLat) {
+    const tmp = minLat;
+    minLat = maxLat;
+    maxLat = tmp;
+  }
+
+  return {
+    minLon,
+    minLat,
+    maxLon,
+    maxLat
+  };
+}
+
+function bboxOverlaps(a, b) {
+  return !(
+    a.maxLon < b.minLon ||
+    a.minLon > b.maxLon ||
+    a.maxLat < b.minLat ||
+    a.minLat > b.maxLat
+  );
+}
+
+function isPointInsideBbox(vessel, bbox) {
+  const lat = Number(vessel && vessel.lat);
+  const lon = Number(vessel && vessel.lon);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+
+  return (
+    lon >= bbox.minLon &&
+    lon <= bbox.maxLon &&
+    lat >= bbox.minLat &&
+    lat <= bbox.maxLat
+  );
+}
+
+function isPointInsideRegion(vessel, region) {
+  return isPointInsideBbox(vessel, region.bbox);
+}
+
+function getManagedRegionsForBbox(bbox) {
+  return MANAGED_REGIONS.filter((region) => bboxOverlaps(bbox, region.bbox));
+}
+
+function getKv(env) {
+  return env.AIS_CACHE || null;
+}
+
+async function readRegionCache(env, regionId) {
+  const kv = getKv(env);
+  if (!kv) return null;
+
+  const raw = await kv.get(KV_KEY_PREFIX + regionId, "json");
+
+  if (!raw || !Array.isArray(raw.vessels)) {
+    return {
+      regionId,
+      updatedAt: null,
+      vessels: []
+    };
+  }
+
+  return raw;
+}
+
+async function writeRegionCache(env, regionId, payload) {
+  const kv = getKv(env);
+  if (!kv) return false;
+
+  await kv.put(KV_KEY_PREFIX + regionId, JSON.stringify(payload));
+  return true;
 }
 
 function getMessagePayload(msg) {
@@ -92,26 +190,40 @@ function getMessagePayload(msg) {
 
 function getMmsi(report) {
   return firstDefined(
-    report?.UserID,
-    report?.UserId,
-    report?.userId,
-    report?.MMSI,
-    report?.Mmsi,
-    report?.mmsi,
-    report?.MmsiNumber,
-    report?.mmsiNumber
+    report && report.UserID,
+    report && report.UserId,
+    report && report.userId,
+    report && report.MMSI,
+    report && report.Mmsi,
+    report && report.mmsi,
+    report && report.MmsiNumber,
+    report && report.mmsiNumber
   );
+}
+
+async function normalizeIncomingData(data) {
+  if (typeof data === "string") return data;
+
+  if (data instanceof ArrayBuffer) {
+    return new TextDecoder().decode(data);
+  }
+
+  if (data && typeof data.text === "function") {
+    return data.text();
+  }
+
+  return String(data || "");
 }
 
 function extractPosition(payload, metadata) {
   const report =
-    payload?.PositionReport ||
-    payload?.StandardClassBPositionReport ||
-    payload?.ExtendedClassBPositionReport ||
-    payload?.LongRangeAisBroadcastMessage ||
-    payload?.BaseStationReport ||
-    payload?.AidsToNavigationReport ||
-    payload?.SearchAndRescueAircraftPositionReport ||
+    (payload && payload.PositionReport) ||
+    (payload && payload.StandardClassBPositionReport) ||
+    (payload && payload.ExtendedClassBPositionReport) ||
+    (payload && payload.LongRangeAisBroadcastMessage) ||
+    (payload && payload.BaseStationReport) ||
+    (payload && payload.AidsToNavigationReport) ||
+    (payload && payload.SearchAndRescueAircraftPositionReport) ||
     null;
 
   if (!report) return null;
@@ -140,9 +252,9 @@ function extractPosition(payload, metadata) {
 
   const mmsi = firstDefined(
     getMmsi(report),
-    metadata?.MMSI,
-    metadata?.MMSI_String,
-    metadata?.mmsi
+    metadata && metadata.MMSI,
+    metadata && metadata.MMSI_String,
+    metadata && metadata.mmsi
   );
 
   return {
@@ -177,21 +289,21 @@ function extractPosition(payload, metadata) {
       report.navStatus
     ),
     name:
-      cleanString(metadata?.ShipName) ||
-      cleanString(metadata?.shipName) ||
+      cleanString(metadata && metadata.ShipName) ||
+      cleanString(metadata && metadata.shipName) ||
       null,
     callsign:
-      cleanString(metadata?.CallSign) ||
-      cleanString(metadata?.callsign) ||
+      cleanString(metadata && metadata.CallSign) ||
+      cleanString(metadata && metadata.callsign) ||
       null
   };
 }
 
 function extractStaticData(payload, metadata) {
   const ship =
-    payload?.ShipStaticData ||
-    payload?.StaticDataReport ||
-    payload?.StaticVoyageData ||
+    (payload && payload.ShipStaticData) ||
+    (payload && payload.StaticDataReport) ||
+    (payload && payload.StaticVoyageData) ||
     null;
 
   if (!ship) return null;
@@ -208,9 +320,9 @@ function extractStaticData(payload, metadata) {
 
   const mmsi = firstDefined(
     source && getMmsi(source),
-    metadata?.MMSI,
-    metadata?.MMSI_String,
-    metadata?.mmsi
+    metadata && metadata.MMSI,
+    metadata && metadata.MMSI_String,
+    metadata && metadata.mmsi
   );
 
   if (!mmsi) return null;
@@ -218,61 +330,64 @@ function extractStaticData(payload, metadata) {
   return {
     mmsi: String(mmsi),
     name:
-      cleanString(source?.Name) ||
-      cleanString(source?.ShipName) ||
-      cleanString(source?.VesselName) ||
-      cleanString(metadata?.ShipName) ||
-      cleanString(metadata?.shipName),
+      cleanString(source && source.Name) ||
+      cleanString(source && source.ShipName) ||
+      cleanString(source && source.VesselName) ||
+      cleanString(metadata && metadata.ShipName) ||
+      cleanString(metadata && metadata.shipName),
     callsign:
-      cleanString(source?.CallSign) ||
-      cleanString(source?.Callsign) ||
-      cleanString(source?.CallsSignName) ||
-      cleanString(metadata?.CallSign) ||
-      cleanString(metadata?.callsign),
+      cleanString(source && source.CallSign) ||
+      cleanString(source && source.Callsign) ||
+      cleanString(source && source.CallsSignName) ||
+      cleanString(metadata && metadata.CallSign) ||
+      cleanString(metadata && metadata.callsign),
     imo: firstDefined(
-      source?.ImoNumber,
-      source?.IMO,
-      source?.Imo,
-      source?.imo,
-      metadata?.IMO,
-      metadata?.imo
+      source && source.ImoNumber,
+      source && source.IMO,
+      source && source.Imo,
+      source && source.imo,
+      metadata && metadata.IMO,
+      metadata && metadata.imo
     ),
     shipType: normalizeShipType(
       firstDefined(
-        source?.Type,
-        source?.ShipType,
-        source?.ShipAndCargoType,
-        source?.shipType
+        source && source.Type,
+        source && source.ShipType,
+        source && source.ShipAndCargoType,
+        source && source.shipType
       )
     ),
     destination:
-      cleanString(source?.Destination) ||
-      cleanString(source?.destination),
+      cleanString(source && source.Destination) ||
+      cleanString(source && source.destination),
     eta: firstDefined(
-      source?.Eta,
-      source?.ETA,
-      source?.eta
+      source && source.Eta,
+      source && source.ETA,
+      source && source.eta
     ),
-    dimensionToBow: firstDefined(source?.DimensionToBow, source?.ToBow),
-    dimensionToStern: firstDefined(source?.DimensionToStern, source?.ToStern),
-    dimensionToPort: firstDefined(source?.DimensionToPort, source?.ToPort),
+    dimensionToBow: firstDefined(source && source.DimensionToBow, source && source.ToBow),
+    dimensionToStern: firstDefined(source && source.DimensionToStern, source && source.ToStern),
+    dimensionToPort: firstDefined(source && source.DimensionToPort, source && source.ToPort),
     dimensionToStarboard: firstDefined(
-      source?.DimensionToStarboard,
-      source?.ToStarboard
+      source && source.DimensionToStarboard,
+      source && source.ToStarboard
     )
   };
 }
 
 function vesselKey(vessel) {
-  if (vessel?.mmsi != null && vessel.mmsi !== "") {
-    return "mmsi:" + String(vessel.mmsi);
-  }
+  if (vessel && vessel.mmsi) return "mmsi:" + String(vessel.mmsi);
 
-  const lat = Number(vessel?.lat);
-  const lon = Number(vessel?.lon);
-
-  if (Number.isFinite(lat) && Number.isFinite(lon)) {
-    return "pos:" + lat.toFixed(5) + ":" + lon.toFixed(5);
+  if (
+    Number.isFinite(Number(vessel && vessel.lat)) &&
+    Number.isFinite(Number(vessel && vessel.lon))
+  ) {
+    return (
+      "pos:" +
+      Number(vessel.lat).toFixed(5) +
+      ":" +
+      Number(vessel.lon).toFixed(5)
+    );
   }
 
   return "";
@@ -290,248 +405,84 @@ function mergeVessel(existing, next) {
   };
 
   merged.name =
-    next?.name ||
-    existing?.name ||
-    merged.static?.name ||
+    (next && next.name) ||
+    (existing && existing.name) ||
+    (merged.static && merged.static.name) ||
     null;
 
   merged.callsign =
-    next?.callsign ||
-    existing?.callsign ||
-    merged.static?.callsign ||
+    (next && next.callsign) ||
+    (existing && existing.callsign) ||
+    (merged.static && merged.static.callsign) ||
     null;
 
   merged.imo =
-    next?.imo ||
-    existing?.imo ||
-    merged.static?.imo ||
+    (next && next.imo) ||
+    (existing && existing.imo) ||
+    (merged.static && merged.static.imo) ||
     null;
 
   merged.shipType =
-    next?.shipType ??
-    existing?.shipType ??
-    merged.static?.shipType ??
+    (next && next.shipType) ??
+    (existing && existing.shipType) ??
+    (merged.static && merged.static.shipType) ??
     null;
 
   merged.destination =
-    next?.destination ||
-    existing?.destination ||
-    merged.static?.destination ||
+    (next && next.destination) ||
+    (existing && existing.destination) ||
+    (merged.static && merged.static.destination) ||
     null;
 
   merged.eta =
-    next?.eta ||
-    existing?.eta ||
-    merged.static?.eta ||
+    (next && next.eta) ||
+    (existing && existing.eta) ||
+    (merged.static && merged.static.eta) ||
     null;
 
   return merged;
 }
 
-function parseBbox(value) {
-  if (!value) return null;
+function pruneOldVessels(vessels) {
+  const cutoff = Date.now() - CACHE_MAX_AGE_MS;
 
-  const parts = String(value).split(",").map(Number);
+  return vessels.filter((vessel) => {
+    const t = Number(
+      vessel.lastSeenAt ||
+      vessel.receivedAt ||
+      vessel.cachedAt ||
+      vessel.createdAt ||
+      0
+    );
 
-  if (parts.length !== 4 || parts.some((v) => !Number.isFinite(v))) {
-    return null;
-  }
-
-  const [minLon, minLat, maxLon, maxLat] = parts;
-
-  if (
-    Math.abs(minLat) > 90 ||
-    Math.abs(maxLat) > 90 ||
-    Math.abs(minLon) > 180 ||
-    Math.abs(maxLon) > 180
-  ) {
-    return null;
-  }
-
-  return {
-    minLon: Math.min(minLon, maxLon),
-    minLat: Math.min(minLat, maxLat),
-    maxLon: Math.max(minLon, maxLon),
-    maxLat: Math.max(minLat, maxLat),
-    query: [
-      Math.min(minLon, maxLon),
-      Math.min(minLat, maxLat),
-      Math.max(minLon, maxLon),
-      Math.max(minLat, maxLat)
-    ].join(",")
-  };
-}
-
-function bboxIntersectsRegion(bbox, region) {
-  const [[rMinLat, rMinLon], [rMaxLat, rMaxLon]] = region.bbox;
-
-  return !(
-    bbox.maxLon < rMinLon ||
-    bbox.minLon > rMaxLon ||
-    bbox.maxLat < rMinLat ||
-    bbox.minLat > rMaxLat
-  );
-}
-
-function vesselInsideBbox(vessel, bbox) {
-  const lat = Number(vessel?.lat);
-  const lon = Number(vessel?.lon);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-
-  return (
-    lat >= bbox.minLat &&
-    lat <= bbox.maxLat &&
-    lon >= bbox.minLon &&
-    lon <= bbox.maxLon
-  );
-}
-
-function vesselInsideRegion(vessel, region) {
-  const lat = Number(vessel?.lat);
-  const lon = Number(vessel?.lon);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-
-  const [[minLat, minLon], [maxLat, maxLon]] = region.bbox;
-
-  return (
-    lat >= minLat &&
-    lat <= maxLat &&
-    lon >= minLon &&
-    lon <= maxLon
-  );
-}
-
-function pruneOld(vessels) {
-  const cutoff = nowMs() - MAX_AGE_SECONDS * 1000;
-
-  return vessels.filter((v) => {
-    const t = Number(v.lastSeenAt || v.receivedAt || v.cachedAt || 0);
     return Number.isFinite(t) && t >= cutoff;
   });
 }
 
-function getKv(env) {
-  return env.AIS_CACHE || null;
+function sortVessels(vessels) {
+  return vessels.sort((a, b) => {
+    const at = Number(a.lastSeenAt || a.receivedAt || a.cachedAt || 0);
+    const bt = Number(b.lastSeenAt || b.receivedAt || b.cachedAt || 0);
+    return bt - at;
+  });
 }
 
-async function readRegionCache(env, regionId) {
-  const kv = getKv(env);
-  if (!kv) return null;
-
-  const raw = await kv.get(KV_KEY_PREFIX + regionId, "json");
-
-  if (!raw || !Array.isArray(raw.vessels)) {
-    return {
-      regionId,
-      updatedAt: null,
-      vessels: []
-    };
-  }
-
-  return raw;
+function aisStreamBboxFromBbox(bbox) {
+  // AISStream vill ha: [[[minLat, minLon], [maxLat, maxLon]]]
+  return [
+    [
+      [bbox.minLat, bbox.minLon],
+      [bbox.maxLat, bbox.maxLon]
+    ]
+  ];
 }
 
-async function writeRegionCache(env, regionId, payload) {
-  const kv = getKv(env);
-  if (!kv) return;
-
-  await kv.put(KV_KEY_PREFIX + regionId, JSON.stringify(payload));
-}
-
-async function getCachedVesselsForBbox(env, bbox) {
-  const kv = getKv(env);
-  if (!kv) return [];
-
-  const vessels = [];
-
-  for (const region of REGIONS) {
-    if (!bboxIntersectsRegion(bbox, region)) continue;
-
-    const cached = await readRegionCache(env, region.id);
-    const cachedVessels = Array.isArray(cached?.vessels)
-      ? cached.vessels
-      : [];
-
-    for (const vessel of cachedVessels) {
-      if (!vesselInsideBbox(vessel, bbox)) continue;
-
-      vessels.push({
-        ...vessel,
-        fromHostingCache: true,
-        cacheRegion: vessel.cacheRegion || region.id
-      });
-    }
-  }
-
-  return pruneOld(vessels);
-}
-
-async function saveLiveVesselsToRegionCaches(env, liveVessels) {
-  const kv = getKv(env);
-  if (!kv) return;
-
-  const byRegion = new Map();
-
-  for (const region of REGIONS) {
-    const matching = liveVessels.filter((v) => vesselInsideRegion(v, region));
-    if (matching.length) {
-      byRegion.set(region.id, { region, vessels: matching });
-    }
-  }
-
-  for (const { region, vessels } of byRegion.values()) {
-    const oldCache = await readRegionCache(env, region.id);
-    const oldVessels = Array.isArray(oldCache?.vessels)
-      ? oldCache.vessels
-      : [];
-
-    const merged = new Map();
-
-    for (const oldVessel of oldVessels) {
-      if (!vesselInsideRegion(oldVessel, region)) continue;
-
-      const key = vesselKey(oldVessel);
-      if (!key) continue;
-
-      merged.set(key, {
-        ...oldVessel,
-        fromHostingCache: true,
-        cacheRegion: oldVessel.cacheRegion || region.id
-      });
-    }
-
-    for (const liveVessel of vessels) {
-      const key = vesselKey(liveVessel);
-      if (!key) continue;
-
-      const existing = merged.get(key);
-
-      merged.set(
-        key,
-        mergeVessel(existing, {
-          ...liveVessel,
-          cachedAt: nowMs(),
-          cacheRegion: region.id,
-          fromHostingCache: false
-        })
-      );
-    }
-
-    const mergedVessels = pruneOld(Array.from(merged.values()));
-
-    await writeRegionCache(env, region.id, {
-      regionId: region.id,
-      regionName: region.name,
-      updatedAt: new Date().toISOString(),
-      vesselCount: mergedVessels.length,
-      vessels: mergedVessels
-    });
-  }
-}
-
-async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
+async function fetchFreshAis({
+  apiKey,
+  bbox,
+  safeListenMs,
+  debug
+}) {
   const vessels = new Map();
 
   const debugInfo = {
@@ -543,23 +494,24 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
     staticMessages: 0,
     ignoredMessages: 0,
     messageTypes: {},
+    firstMessages: [],
     lastError: null,
-    bbox: bbox.query,
+    bbox: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
     listenMs: safeListenMs
   };
 
   return new Promise((resolve) => {
     let finished = false;
+    let finishTimer = null;
     let ws = null;
-    let timer = null;
 
     function finish() {
       if (finished) return;
       finished = true;
 
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
+      if (finishTimer) {
+        clearTimeout(finishTimer);
+        finishTimer = null;
       }
 
       try {
@@ -572,7 +524,9 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
         vessels: Array.from(vessels.values())
       };
 
-      if (debug) payload.debug = debugInfo;
+      if (debug) {
+        payload.debug = debugInfo;
+      }
 
       resolve(payload);
     }
@@ -586,12 +540,7 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
         ws.send(
           JSON.stringify({
             APIKey: apiKey,
-            BoundingBoxes: [
-              [
-                [bbox.minLat, bbox.minLon],
-                [bbox.maxLat, bbox.maxLon]
-              ]
-            ],
+            BoundingBoxes: aisStreamBboxFromBbox(bbox),
             FilterMessageTypes: [
               "PositionReport",
               "StandardClassBPositionReport",
@@ -604,31 +553,36 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
           })
         );
 
-        timer = setTimeout(finish, safeListenMs);
+        finishTimer = setTimeout(finish, safeListenMs);
       });
 
       ws.addEventListener("message", async (event) => {
         try {
           const rawText = await normalizeIncomingData(event.data);
+
+          if (debug && debugInfo.firstMessages.length < 3) {
+            debugInfo.firstMessages.push(rawText);
+          }
+
           const msg = JSON.parse(rawText);
 
           debugInfo.messages += 1;
 
           const messageType =
-            msg?.MessageType ||
-            msg?.messageType ||
+            msg.MessageType ||
+            msg.messageType ||
             "unknown";
 
           debugInfo.messageTypes[messageType] =
             (debugInfo.messageTypes[messageType] || 0) + 1;
 
-          if (msg?.Error || msg?.error) {
+          if (msg.Error || msg.error) {
             debugInfo.lastError = msg.Error || msg.error;
             return;
           }
 
           const payload = getMessagePayload(msg);
-          const metadata = msg?.MetaData || msg?.metadata || null;
+          const metadata = msg.MetaData || msg.metadata || null;
 
           if (!payload) {
             debugInfo.ignoredMessages += 1;
@@ -645,10 +599,12 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
 
             const existing = vessels.get(key);
 
+            const now = Date.now();
+
             const merged = mergeVessel(existing, {
               ...position,
-              receivedAt: nowMs(),
-              lastSeenAt: nowMs(),
+              receivedAt: now,
+              lastSeenAt: now,
               fromHostingCache: false
             });
 
@@ -660,19 +616,23 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
           if (staticData) {
             debugInfo.staticMessages += 1;
 
-            const key = "mmsi:" + String(staticData.mmsi);
+            const key = vesselKey(staticData);
+            if (!key) return;
+
             const existing = vessels.get(key);
+
+            const now = Date.now();
 
             const merged = mergeVessel(existing, {
               mmsi: staticData.mmsi,
-              name: staticData.name || existing?.name || null,
-              callsign: staticData.callsign || existing?.callsign || null,
-              imo: staticData.imo || existing?.imo || null,
-              shipType: staticData.shipType ?? existing?.shipType ?? null,
-              destination: staticData.destination || existing?.destination || null,
-              eta: staticData.eta || existing?.eta || null,
+              name: staticData.name || (existing && existing.name) || null,
+              callsign: staticData.callsign || (existing && existing.callsign) || null,
+              imo: staticData.imo || (existing && existing.imo) || null,
+              shipType: staticData.shipType ?? ((existing && existing.shipType) ?? null),
+              destination: staticData.destination || (existing && existing.destination) || null,
+              eta: staticData.eta || (existing && existing.eta) || null,
               static: staticData,
-              receivedAt: nowMs(),
+              receivedAt: now,
               fromHostingCache: false
             });
 
@@ -684,7 +644,7 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
           }
         } catch (error) {
           debugInfo.ignoredMessages += 1;
-          debugInfo.lastError = error?.message || String(error);
+          debugInfo.lastError = error && error.message ? error.message : String(error);
         }
       });
 
@@ -699,13 +659,105 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
       });
     } catch (error) {
       debugInfo.errored = true;
-      debugInfo.lastError = error?.message || String(error);
+      debugInfo.lastError = error && error.message ? error.message : String(error);
       finish();
     }
   });
 }
 
-function mergeLiveAndCached(liveVessels, cachedVessels) {
+async function getCachedVesselsForRequestBbox(env, requestBbox, overlappingRegions) {
+  const cached = [];
+
+  for (const region of overlappingRegions) {
+    const regionCache = await readRegionCache(env, region.id);
+
+    if (!regionCache || !Array.isArray(regionCache.vessels)) {
+      continue;
+    }
+
+    for (const vessel of regionCache.vessels) {
+      if (!isPointInsideBbox(vessel, requestBbox)) continue;
+
+      cached.push({
+        ...vessel,
+        cacheRegion: vessel.cacheRegion || region.id,
+        fromHostingCache: true
+      });
+    }
+  }
+
+  return pruneOldVessels(cached);
+}
+
+async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
+  const kv = getKv(env);
+  if (!kv || !Array.isArray(liveVessels) || !liveVessels.length) {
+    return 0;
+  }
+
+  let savedCount = 0;
+
+  for (const region of MANAGED_REGIONS) {
+    const liveInRegion = liveVessels.filter((vessel) =>
+      isPointInsideRegion(vessel, region)
+    );
+
+    if (!liveInRegion.length) continue;
+
+    const oldCache = await readRegionCache(env, region.id);
+    const oldVessels =
+      oldCache && Array.isArray(oldCache.vessels)
+        ? oldCache.vessels
+        : [];
+
+    const merged = new Map();
+
+    for (const oldVessel of oldVessels) {
+      if (!isPointInsideRegion(oldVessel, region)) continue;
+
+      const key = vesselKey(oldVessel);
+      if (!key) continue;
+
+      merged.set(key, {
+        ...oldVessel,
+        fromHostingCache: true
+      });
+    }
+
+    for (const liveVessel of liveInRegion) {
+      const key = vesselKey(liveVessel);
+      if (!key) continue;
+
+      const existing = merged.get(key);
+
+      merged.set(
+        key,
+        mergeVessel(existing, {
+          ...liveVessel,
+          cachedAt: Date.now(),
+          cacheRegion: region.id,
+          fromHostingCache: false
+        })
+      );
+    }
+
+    const payloadVessels = pruneOldVessels(Array.from(merged.values()));
+
+    await writeRegionCache(env, region.id, {
+      regionId: region.id,
+      regionName: region.name,
+      updatedAt: new Date().toISOString(),
+      vesselCount: payloadVessels.length,
+      vessels: payloadVessels
+    });
+
+    savedCount += liveInRegion.length;
+  }
+
+  return savedCount;
+}
+
+function mergeCachedAndLive(cachedVessels, liveVessels) {
   const merged = new Map();
 
   for (const cached of cachedVessels) {
@@ -733,17 +785,17 @@ function mergeLiveAndCached(liveVessels, cachedVessels) {
     );
   }
 
-  return Array.from(merged.values()).filter((v) => {
-    return Number.isFinite(Number(v.lat)) && Number.isFinite(Number(v.lon));
-  });
+  return sortVessels(pruneOldVessels(Array.from(merged.values())));
 }
 
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
 
-  const bbox = parseBbox(url.searchParams.get("bbox"));
-  const listenMs = url.searchParams.get("listenMs");
   const debug = url.searchParams.get("debug") === "1";
+  const bbox = parseBbox(url.searchParams.get("bbox"));
+  const safeListenMs =
+    clampNumber(url.searchParams.get("listenMs"), 1000, MAX_LISTEN_MS) ||
+    DEFAULT_LISTEN_MS;
 
   if (!bbox) {
     return jsonResponse(
@@ -767,53 +819,81 @@ export async function onRequestGet(context) {
     );
   }
 
-  const safeListenMs =
-    clampNumber(listenMs, 1000, MAX_LISTEN_MS) || DEFAULT_LISTEN_MS;
+  const overlappingRegions = getManagedRegionsForBbox(bbox);
+  const kvAvailable = !!getKv(context.env);
+
+  let cachedVessels = [];
+  let livePayload;
+  let liveVessels = [];
+  let savedCount = 0;
 
   try {
-    const cachedVessels = await getCachedVesselsForBbox(context.env, bbox);
+    if (overlappingRegions.length && kvAvailable) {
+      cachedVessels = await getCachedVesselsForRequestBbox(
+        context.env,
+        bbox,
+        overlappingRegions
+      );
+    }
 
-    const freshPayload = await fetchFreshAis({
+    // Viktigt:
+    // Vi lyssnar ALLTID live på användarens aktuella bbox.
+    // Det gör att global AIS fortsätter fungera utanför Sverige/Malta.
+    livePayload = await fetchFreshAis({
       apiKey,
       bbox,
       safeListenMs,
       debug
     });
 
-    const liveVessels = Array.isArray(freshPayload.vessels)
-      ? freshPayload.vessels.filter((v) => vesselInsideBbox(v, bbox))
+    liveVessels = Array.isArray(livePayload.vessels)
+      ? livePayload.vessels.filter((vessel) => isPointInsideBbox(vessel, bbox))
       : [];
 
-    const mergedVessels = mergeLiveAndCached(liveVessels, cachedVessels);
-
-    if (liveVessels.length && context.waitUntil) {
-      context.waitUntil(
-        saveLiveVesselsToRegionCaches(context.env, liveVessels)
+    if (kvAvailable && liveVessels.length) {
+      savedCount = await saveLiveVesselsToManagedRegionCaches(
+        context.env,
+        liveVessels
       );
     }
 
-    const payload = {
+    const mergedVessels = mergeCachedAndLive(cachedVessels, liveVessels);
+
+    const response = {
       vessels: mergedVessels,
       cache: {
-        mode: getKv(context.env) ? "KV_HOSTING_CACHE" : "NO_KV_BINDING",
+        mode:
+          overlappingRegions.length && kvAvailable
+            ? "KV_HOSTING_CACHE_PLUS_LIVE"
+            : "LIVE_GLOBAL_ONLY",
+        kvAvailable,
+        overlappingRegions: overlappingRegions.map((r) => r.id),
         liveCount: liveVessels.length,
         cachedCount: cachedVessels.length,
         mergedCount: mergedVessels.length,
-        savedCount: liveVessels.length
+        savedCount
       }
     };
 
     if (debug) {
-      payload.debug = freshPayload.debug;
+      response.debug = livePayload.debug || null;
     }
 
-    return jsonResponse(payload, 200, cachedVessels.length ? "KV_MERGED" : "LIVE");
+    return jsonResponse(response);
   } catch (error) {
     return jsonResponse(
       {
         error: true,
-        message: error?.message || String(error),
-        vessels: []
+        message: error && error.message ? error.message : String(error),
+        vessels: [],
+        cache: {
+          mode: "ERROR",
+          kvAvailable,
+          overlappingRegions: overlappingRegions.map((r) => r.id),
+          liveCount: liveVessels.length,
+          cachedCount: cachedVessels.length,
+          savedCount
+        }
       },
       500
     );
