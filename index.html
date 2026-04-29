@@ -1100,13 +1100,14 @@ openMeteoCloudPendingTime=null,
 openMeteoCloudLastAppliedAt=0,
 openMeteoCloudSourceCache=new Map();
 
-var OPEN_METEO_CLOUD_APPLY_INTERVAL_MS = 120;
-var OPEN_METEO_CLOUD_MAX_CACHED_STEPS = 9;
-var OPEN_METEO_CLOUD_PRELOAD_RADIUS = 3;
-var OPEN_METEO_CLOUD_WARMUP_DELAY_MS = 180;
+var OPEN_METEO_CLOUD_APPLY_INTERVAL_MS = 120;    
+var OPEN_METEO_CLOUD_MAX_CACHED_STEPS = isMobileView() ? 9 : 15;
+var OPEN_METEO_CLOUD_PRELOAD_RADIUS = isMobileView() ? 3 : 6;
+var OPEN_METEO_CLOUD_WARMUP_DELAY_MS = isMobileView() ? 900 : 600;
+var OPEN_METEO_CLOUD_PRELOAD_STEP_DELAY_MS = isMobileView() ? 260 : 180;
 var openMeteoCloudWarmupTimer = null;
 var openMeteoCloudWarmupPendingTime = null;
-var OPEN_METEO_CLOUD_PRELOAD_OPACITY = 0.001;
+var OPEN_METEO_CLOUD_PRELOAD_OPACITY = 0.01;
 var OPEN_METEO_CLOUD_VISIBLE_OPACITY = 0.62;
 
 var windLayerVisible = false,
@@ -1468,7 +1469,12 @@ function showCachedOpenMeteoCloudLayerForTime(timeValue){
       );
 
       cached.lastUsedAt = Date.now();
+      cached.wasShownAtLeastOnce = true;
       openMeteoCloudSourceActiveKey = timeStep;
+
+      // När vi visar ett steg, börja värma upp grannstegen igen.
+      scheduleOpenMeteoCloudWarmup(timeValue);
+
       return true;
     }
   }catch(e){
@@ -1484,16 +1490,22 @@ function warmupOpenMeteoCloudWindow(timeValue){
   var centerIndex = getNearestOpenMeteoIndex(timeValue);
   if(centerIndex < 0) return;
 
-  var indexes = [centerIndex];
+  var indexes = [];
 
-  for(var offset = 1; offset <= OPEN_METEO_CLOUD_PRELOAD_RADIUS; offset++){
-    indexes.push(centerIndex - offset);
+  for(var offset = 0; offset <= OPEN_METEO_CLOUD_PRELOAD_RADIUS; offset++){
     indexes.push(centerIndex + offset);
+    if(offset > 0){
+      indexes.push(centerIndex - offset);
+    }
   }
 
-  indexes = indexes.filter(function(index){
-    return index >= 0 && index < openMeteoCloudValidTimes.length;
-  });
+  indexes = indexes
+    .filter(function(index){
+      return index >= 0 && index < openMeteoCloudValidTimes.length;
+    })
+    .filter(function(index, pos, arr){
+      return arr.indexOf(index) === pos;
+    });
 
   indexes.forEach(function(index, order){
     var preloadTime = new Date(openMeteoCloudValidTimes[index]).getTime();
@@ -1506,10 +1518,9 @@ function warmupOpenMeteoCloudWindow(timeValue){
         show: false,
         preload: true
       });
-    }, order * 90);
+    }, order * OPEN_METEO_CLOUD_PRELOAD_STEP_DELAY_MS);
   });
 }
-
 function scheduleOpenMeteoCloudWarmup(timeValue){
   if(!satelliteLayerVisible) return;
 
@@ -4034,6 +4045,18 @@ function initializeForecastTimeline(){
   if(satelliteLayerVisible && typeof scheduleOpenMeteoCloudWarmup === "function"){
     scheduleOpenMeteoCloudWarmup(selectedForecastTime);
   }
+  if(satelliteLayerVisible && typeof syncOpenMeteoCloudLayerForSelectedTime === "function"){
+  setTimeout(function(){
+    syncOpenMeteoCloudLayerForSelectedTime(selectedForecastTime, {
+      immediate: true,
+      preload: true
+    });
+  }, 700);
+
+  setTimeout(function(){
+    scheduleOpenMeteoCloudWarmup(selectedForecastTime);
+  }, 1800);
+}
 
   refreshMapSizeSoon();
 
