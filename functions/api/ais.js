@@ -1,3 +1,9 @@
+import {
+  parseBbox,
+  saveAisVesselsToCache,
+  getCachedAisVesselsForBbox,
+  mergeAisVessels
+} from "../_ais-cache.js";
 const DEFAULT_LISTEN_MS = 9000;
 const MAX_LISTEN_MS = 10000;
 const CACHE_TTL_SECONDS = 20; // 20 sekunder
