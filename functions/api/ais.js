@@ -8,6 +8,16 @@ const KV_KEY_PREFIX = "ais-region:";
 
 const MANAGED_REGIONS = [
   {
+    id: "oresund",
+    name: "Öresund / Malmö / Köpenhamn",
+    bbox: {
+      minLon: 12.35,
+      minLat: 55.55,
+      maxLon: 12.85,
+      maxLat: 55.85
+    }
+  },
+  {
     id: "sweden-west",
     name: "Svenska västkusten",
     bbox: {
@@ -72,6 +82,7 @@ function firstDefined(...values) {
 
 function normalizeShipType(value) {
   if (value == null || value === "") return null;
+
   const n = Number(value);
   return Number.isFinite(n) ? n : cleanString(value);
 }
@@ -81,7 +92,7 @@ function parseBbox(raw) {
 
   const parts = String(raw)
     .split(",")
-    .map((v) => Number(v.trim()));
+    .map((v) => Number(String(v).trim()));
 
   if (parts.length !== 4) return null;
   if (parts.some((v) => !Number.isFinite(v))) return null;
@@ -184,8 +195,7 @@ async function writeRegionCache(env, regionId, payload) {
 
 function getMessagePayload(msg) {
   if (!msg) return null;
-  if (msg.Message) return msg.Message;
-  return msg;
+  return msg.Message || msg;
 }
 
 function getMmsi(report) {
@@ -232,7 +242,9 @@ function extractPosition(payload, metadata) {
     report.Latitude,
     report.latitude,
     report.Lat,
-    report.lat
+    report.lat,
+    metadata && metadata.latitude,
+    metadata && metadata.Latitude
   );
 
   const lon = firstDefined(
@@ -241,7 +253,9 @@ function extractPosition(payload, metadata) {
     report.Lon,
     report.lon,
     report.Lng,
-    report.lng
+    report.lng,
+    metadata && metadata.longitude,
+    metadata && metadata.Longitude
   );
 
   const latNum = Number(lat);
@@ -365,9 +379,18 @@ function extractStaticData(payload, metadata) {
       source && source.ETA,
       source && source.eta
     ),
-    dimensionToBow: firstDefined(source && source.DimensionToBow, source && source.ToBow),
-    dimensionToStern: firstDefined(source && source.DimensionToStern, source && source.ToStern),
-    dimensionToPort: firstDefined(source && source.DimensionToPort, source && source.ToPort),
+    dimensionToBow: firstDefined(
+      source && source.DimensionToBow,
+      source && source.ToBow
+    ),
+    dimensionToStern: firstDefined(
+      source && source.DimensionToStern,
+      source && source.ToStern
+    ),
+    dimensionToPort: firstDefined(
+      source && source.DimensionToPort,
+      source && source.ToPort
+    ),
     dimensionToStarboard: firstDefined(
       source && source.DimensionToStarboard,
       source && source.ToStarboard
@@ -468,7 +491,6 @@ function sortVessels(vessels) {
 }
 
 function aisStreamBboxFromBbox(bbox) {
-  // AISStream vill ha: [[[minLat, minLon], [maxLat, maxLon]]]
   return [
     [
       [bbox.minLat, bbox.minLon],
@@ -477,12 +499,7 @@ function aisStreamBboxFromBbox(bbox) {
   ];
 }
 
-async function fetchFreshAis({
-  apiKey,
-  bbox,
-  safeListenMs,
-  debug
-}) {
+async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
   const vessels = new Map();
 
   const debugInfo = {
@@ -497,6 +514,7 @@ async function fetchFreshAis({
     firstMessages: [],
     lastError: null,
     bbox: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
+    aisStreamBbox: aisStreamBboxFromBbox(bbox),
     listenMs: safeListenMs
   };
 
@@ -537,19 +555,13 @@ async function fetchFreshAis({
       ws.addEventListener("open", () => {
         debugInfo.connected = true;
 
+        // Viktigt:
+        // Ingen FilterMessageTypes här. Du testade tidigare att AISStream gav 0
+        // med filter, men gav messages utan filter.
         ws.send(
           JSON.stringify({
             APIKey: apiKey,
-            BoundingBoxes: aisStreamBboxFromBbox(bbox),
-            FilterMessageTypes: [
-              "PositionReport",
-              "StandardClassBPositionReport",
-              "ExtendedClassBPositionReport",
-              "LongRangeAisBroadcastMessage",
-              "ShipStaticData",
-              "StaticDataReport",
-              "StaticVoyageData"
-            ]
+            BoundingBoxes: aisStreamBboxFromBbox(bbox)
           })
         );
 
@@ -561,7 +573,7 @@ async function fetchFreshAis({
           const rawText = await normalizeIncomingData(event.data);
 
           if (debug && debugInfo.firstMessages.length < 3) {
-            debugInfo.firstMessages.push(rawText);
+            debugInfo.firstMessages.push(rawText.slice(0, 1200));
           }
 
           const msg = JSON.parse(rawText);
@@ -594,11 +606,14 @@ async function fetchFreshAis({
           if (position) {
             debugInfo.positionMessages += 1;
 
+            if (!isPointInsideBbox(position, bbox)) {
+              return;
+            }
+
             const key = vesselKey(position);
             if (!key) return;
 
             const existing = vessels.get(key);
-
             const now = Date.now();
 
             const merged = mergeVessel(existing, {
@@ -620,7 +635,6 @@ async function fetchFreshAis({
             if (!key) return;
 
             const existing = vessels.get(key);
-
             const now = Date.now();
 
             const merged = mergeVessel(existing, {
@@ -644,7 +658,8 @@ async function fetchFreshAis({
           }
         } catch (error) {
           debugInfo.ignoredMessages += 1;
-          debugInfo.lastError = error && error.message ? error.message : String(error);
+          debugInfo.lastError =
+            error && error.message ? error.message : String(error);
         }
       });
 
@@ -659,7 +674,8 @@ async function fetchFreshAis({
       });
     } catch (error) {
       debugInfo.errored = true;
-      debugInfo.lastError = error && error.message ? error.message : String(error);
+      debugInfo.lastError =
+        error && error.message ? error.message : String(error);
       finish();
     }
   });
@@ -691,6 +707,7 @@ async function getCachedVesselsForRequestBbox(env, requestBbox, overlappingRegio
 
 async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
   const kv = getKv(env);
+
   if (!kv || !Array.isArray(liveVessels) || !liveVessels.length) {
     return 0;
   }
@@ -705,6 +722,7 @@ async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
     if (!liveInRegion.length) continue;
 
     const oldCache = await readRegionCache(env, region.id);
+
     const oldVessels =
       oldCache && Array.isArray(oldCache.vessels)
         ? oldCache.vessels
@@ -793,6 +811,7 @@ export async function onRequestGet(context) {
 
   const debug = url.searchParams.get("debug") === "1";
   const bbox = parseBbox(url.searchParams.get("bbox"));
+
   const safeListenMs =
     clampNumber(url.searchParams.get("listenMs"), 1000, MAX_LISTEN_MS) ||
     DEFAULT_LISTEN_MS;
@@ -823,7 +842,7 @@ export async function onRequestGet(context) {
   const kvAvailable = !!getKv(context.env);
 
   let cachedVessels = [];
-  let livePayload;
+  let livePayload = null;
   let liveVessels = [];
   let savedCount = 0;
 
@@ -836,9 +855,7 @@ export async function onRequestGet(context) {
       );
     }
 
-    // Viktigt:
-    // Vi lyssnar ALLTID live på användarens aktuella bbox.
-    // Det gör att global AIS fortsätter fungera utanför Sverige/Malta.
+    // Alltid live. Det här gör att global AIS fortsätter fungera.
     livePayload = await fetchFreshAis({
       apiKey,
       bbox,
@@ -850,6 +867,7 @@ export async function onRequestGet(context) {
       ? livePayload.vessels.filter((vessel) => isPointInsideBbox(vessel, bbox))
       : [];
 
+    // Spara bara live-fartyg till KV om de råkar ligga i våra managed regions.
     if (kvAvailable && liveVessels.length) {
       savedCount = await saveLiveVesselsToManagedRegionCaches(
         context.env,
@@ -876,7 +894,7 @@ export async function onRequestGet(context) {
     };
 
     if (debug) {
-      response.debug = livePayload.debug || null;
+      response.debug = livePayload && livePayload.debug ? livePayload.debug : null;
     }
 
     return jsonResponse(response);
