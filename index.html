@@ -1263,6 +1263,7 @@ function createShipElement(rotation){
 } 
 
 var OPEN_METEO_CLOUD_METADATA_URL = "https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
+    var OPEN_METEO_CLOUD_METADATA_PROXY_URL = "/api/openmeteo-cloud-metadata";
 var OPEN_METEO_CLOUD_VARIABLE = "cloud_cover";
 var OPEN_METEO_CLOUD_SOURCE_ID = "openmeteo-cloud-source";
 var OPEN_METEO_CLOUD_LAYER_ID = "openmeteo-cloud-layer";
@@ -1298,7 +1299,7 @@ function registerOpenMeteoProtocol(){
 async function ensureOpenMeteoCloudMetadata(){
   if(openMeteoCloudMetadataPromise) return openMeteoCloudMetadataPromise;
 
-  openMeteoCloudMetadataPromise = fetch(OPEN_METEO_CLOUD_METADATA_URL)
+  openMeteoCloudMetadataPromise = fetch(OPEN_METEO_CLOUD_METADATA_PROXY_URL)
     .then(function(res){
       if(!res.ok) throw new Error("Open-Meteo metadata kunde inte hämtas");
       return res.json();
