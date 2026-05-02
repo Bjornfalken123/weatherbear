@@ -4146,11 +4146,11 @@ async function showDepthOnly(lat, lon){
 
   try{
     var res = await fetch(
-      "/api/depth?lat=" +
-      encodeURIComponent(lat) +
-      "&lon=" +
-      encodeURIComponent(lon)
-    );
+  "/api/oceandepth?lat=" +
+  encodeURIComponent(lat) +
+  "&lon=" +
+  encodeURIComponent(lon)
+);
 
     var data = await res.json();
 
