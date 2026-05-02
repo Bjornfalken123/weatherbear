@@ -391,36 +391,40 @@
     .layer-dot.chart{background:#e8d7a8;}
     .layer-dot.heading{background:#98f0db;}
 
-    .heading-marker{
-      width:34px;
-      height:34px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      pointer-events:none;
-    }
+  .heading-marker{
+  width:56px;
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
 
-    .heading-marker-inner{
-      width:30px;
-      height:30px;
-      border-radius:999px;
-      background:rgba(5,11,22,0.82);
-      border:2px solid rgba(255,255,255,0.82);
-      box-shadow:0 0 0 5px rgba(123,199,255,0.14),0 8px 18px rgba(0,0,0,0.35);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
+.heading-marker-inner{
+  width:42px;
+  height:42px;
+  border-radius:999px;
+  background:rgba(5,11,22,0.68);
+  border:2px solid rgba(255,255,255,0.9);
+  box-shadow:
+    0 0 0 7px rgba(123,199,255,0.16),
+    0 10px 24px rgba(0,0,0,0.42);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 
-    .heading-marker-arrow{
-      width:0;
-      height:0;
-      border-left:7px solid transparent;
-      border-right:7px solid transparent;
-      border-bottom:17px solid #98f0db;
-      transform-origin:50% 65%;
-      filter:drop-shadow(0 0 5px rgba(152,240,219,0.75));
-    }
+.heading-marker-arrow{
+  width:0;
+  height:0;
+  border-left:10px solid transparent;
+  border-right:10px solid transparent;
+  border-bottom:26px solid #98f0db;
+  transform-origin:50% 68%;
+  filter:
+    drop-shadow(0 0 7px rgba(152,240,219,0.95))
+    drop-shadow(0 2px 3px rgba(0,0,0,0.55));
+}
 #timeControl{
   position:absolute;
   left:50%;
