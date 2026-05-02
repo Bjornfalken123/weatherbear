@@ -1173,6 +1173,10 @@ var baseMapMode = "standard";
 
 var nauticalBaseSourceId = "nautical-light-base-source";
 var nauticalBaseLayerId = "nautical-light-base-layer";
+
+var nauticalDepthSourceId = "nautical-depth-source";
+var nauticalDepthLayerId = "nautical-depth-layer";
+
 var nauticalSeamarkSourceId = "nautical-seamark-source";
 var nauticalSeamarkLayerId = "nautical-seamark-layer";
 
@@ -1180,7 +1184,14 @@ var NAUTICAL_LIGHT_BASE_TILE_URL =
   "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
 
 var NAUTICAL_SEAMARK_TILE_URL =
-  "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
+  "https://t1.openseamap.org/seamark/{z}/{x}/{y}.png";
+
+/*
+  EMODnet djupkarta.
+  OBS: layer-namn i WMTS kan behöva justeras efter test mot GetCapabilities.
+*/
+var EMODNET_DEPTH_TILE_URL =
+  "https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png";
 
 var headingEnabled = false;
 var headingMarker = null;
@@ -1244,7 +1255,10 @@ var windLayerVisible = false,
     waveSelectionMarker=null,
     lighthouseSelectionMarker=null,
     aisMarkerMap=new Map();
-
+var depthMarker = null;
+var longPressTimer = null;
+var longPressTriggered = false;
+var LONG_PRESS_MS = 650;
 var aisVesselCache = new Map();
 var aisLoadTimer = null;
 var aisRefreshInterval = null;
@@ -2010,6 +2024,8 @@ function ensureNauticalChartLayers(){
   if(!maptilerMap) return false;
 
   try{
+    var visible = baseMapMode === "nautical" ? "visible" : "none";
+
     if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalBaseSourceId))){
       maptilerMap.addSource(nauticalBaseSourceId, {
         type: "raster",
@@ -2024,11 +2040,29 @@ function ensureNauticalChartLayers(){
         id: nauticalBaseLayerId,
         type: "raster",
         source: nauticalBaseSourceId,
-        layout: {
-          visibility: baseMapMode === "nautical" ? "visible" : "none"
-        },
+        layout: { visibility: visible },
+        paint: { "raster-opacity": 1 }
+      }, getFirstWeatherOverlayLayerId() || undefined);
+    }
+
+    if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalDepthSourceId))){
+      maptilerMap.addSource(nauticalDepthSourceId, {
+        type: "raster",
+        tiles: [EMODNET_DEPTH_TILE_URL],
+        tileSize: 256,
+        attribution: "EMODnet Bathymetry"
+      });
+    }
+
+    if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthLayerId))){
+      maptilerMap.addLayer({
+        id: nauticalDepthLayerId,
+        type: "raster",
+        source: nauticalDepthSourceId,
+        layout: { visibility: visible },
         paint: {
-          "raster-opacity": 1
+          "raster-opacity": 0.72,
+          "raster-resampling": "linear"
         }
       }, getFirstWeatherOverlayLayerId() || undefined);
     }
@@ -2047,12 +2081,8 @@ function ensureNauticalChartLayers(){
         id: nauticalSeamarkLayerId,
         type: "raster",
         source: nauticalSeamarkSourceId,
-        layout: {
-          visibility: baseMapMode === "nautical" ? "visible" : "none"
-        },
-        paint: {
-          "raster-opacity": 1
-        }
+        layout: { visibility: visible },
+        paint: { "raster-opacity": 1 }
       }, getFirstWeatherOverlayLayerId() || undefined);
     }
 
@@ -2071,17 +2101,17 @@ function setBaseMapMode(mode){
 
     var visibility = baseMapMode === "nautical" ? "visible" : "none";
 
-    try{
-      if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalBaseLayerId)){
-        maptilerMap.setLayoutProperty(nauticalBaseLayerId, "visibility", visibility);
-      }
-
-      if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalSeamarkLayerId)){
-        maptilerMap.setLayoutProperty(nauticalSeamarkLayerId, "visibility", visibility);
-      }
-    }catch(e){
-      console.warn("Kunde inte byta kartläge", e);
-    }
+    [
+      nauticalBaseLayerId,
+      nauticalDepthLayerId,
+      nauticalSeamarkLayerId
+    ].forEach(function(layerId){
+      try{
+        if(maptilerMap.getLayer && maptilerMap.getLayer(layerId)){
+          maptilerMap.setLayoutProperty(layerId, "visibility", visibility);
+        }
+      }catch(e){}
+    });
   }
 
   syncBaseMapButtons();
@@ -4078,7 +4108,79 @@ applyWeatherOverlay(
     });
 
     function setMaptilerWeatherMarker(lat,lon){ if(!maptilerMap || !window.maptilersdk) return; if(maptilerWeatherMarker) maptilerWeatherMarker.remove(); maptilerWeatherMarker=new maptilersdk.Marker().setLngLat([lon,lat]).addTo(maptilerMap); }
+function setDepthMarker(lat, lon){
+  if(!maptilerMap || !window.maptilersdk) return;
 
+  if(depthMarker){
+    try{ depthMarker.remove(); }catch(e){}
+    depthMarker = null;
+  }
+
+  var el = document.createElement("div");
+
+  el.style.width = "18px";
+  el.style.height = "18px";
+  el.style.borderRadius = "999px";
+  el.style.background = "#98f0db";
+  el.style.border = "2px solid rgba(255,255,255,0.95)";
+  el.style.boxShadow = "0 0 0 6px rgba(152,240,219,0.22), 0 6px 16px rgba(0,0,0,0.35)";
+
+  depthMarker = new maptilersdk.Marker({
+    element: el,
+    anchor: "center"
+  })
+    .setLngLat([lon, lat])
+    .addTo(maptilerMap);
+}
+
+async function showDepthOnly(lat, lon){
+  markObjectInteraction();
+
+  setDepthMarker(lat, lon);
+  setOverlayHeaderDot("loading");
+
+  updateMapOverlay(
+    "Djup här",
+    "Hämtar djup för " + formatCoord(lat) + ", " + formatCoord(lon) + "..."
+  );
+
+  try{
+    var res = await fetch(
+      "/api/depth?lat=" +
+      encodeURIComponent(lat) +
+      "&lon=" +
+      encodeURIComponent(lon)
+    );
+
+    var data = await res.json();
+
+    if(!res.ok){
+      throw new Error((data && data.error) || "Kunde inte hämta djup");
+    }
+
+    var depthText = data.depthMeters == null
+      ? "Djup saknas här"
+      : "Ca " + Number(data.depthMeters).toFixed(1) + " m";
+
+    updateMapOverlay(
+      "Djup här",
+      buildOverlayDataGrid([
+        { label: "Djup", value: depthText, highlight: true },
+        { label: "Källa", value: data.source || "EMODnet" },
+        { label: "Koordinater", value: formatCoord(lat) + ", " + formatCoord(lon) }
+      ])
+    );
+  }catch(e){
+    console.warn("Djup kunde inte hämtas", e);
+
+    updateMapOverlay(
+      "Djup här",
+      "Det gick inte att hämta djup för vald punkt."
+    );
+  }finally{
+    setOverlayHeaderDot("ready");
+  }
+}
     async function handlePrimaryMapClick(lat,lon){
       if(Date.now()-lastObjectInteractionAt<500) return;
 
@@ -4835,7 +4937,53 @@ if(
   }, 0);
 });
 
-      maptilerMap.on('click',function(e){ if(e.lngLat) handlePrimaryMapClick(e.lngLat.lat,e.lngLat.lng); });
+      maptilerMap.on("click", function(e){
+  if(!e.lngLat) return;
+
+  if(longPressTriggered){
+    longPressTriggered = false;
+    return;
+  }
+
+  handlePrimaryMapClick(e.lngLat.lat, e.lngLat.lng);
+});
+      maptilerMap.on("touchstart", function(e){
+  longPressTriggered = false;
+
+  if(longPressTimer){
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+
+  if(!e.lngLat) return;
+
+  var lat = e.lngLat.lat;
+  var lon = e.lngLat.lng;
+
+  longPressTimer = setTimeout(function(){
+    longPressTriggered = true;
+    showDepthOnly(lat, lon);
+  }, LONG_PRESS_MS);
+});
+
+["touchmove", "touchend", "touchcancel", "dragstart"].forEach(function(eventName){
+  maptilerMap.on(eventName, function(){
+    if(longPressTimer){
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  });
+});
+      maptilerMap.on("contextmenu", function(e){
+  if(!e.lngLat) return;
+
+  if(e.originalEvent && e.originalEvent.preventDefault){
+    e.originalEvent.preventDefault();
+  }
+
+  showDepthOnly(e.lngLat.lat, e.lngLat.lng);
+});
+      
     }else{
       console.error('MapTiler SDK ej tillgänglig');
     }
