@@ -1191,7 +1191,7 @@ var NAUTICAL_SEAMARK_TILE_URL =
   OBS: layer-namn i WMTS kan behöva justeras efter test mot GetCapabilities.
 */
 var EMODNET_DEPTH_TILE_URL =
-  "https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png";
+  "https://tiles.emodnet-bathymetry.eu/2020/mean_multicolour_noland/web_mercator/{z}/{x}/{y}.png";
 
 var headingEnabled = false;
 var headingMarker = null;
@@ -2061,7 +2061,7 @@ function ensureNauticalChartLayers(){
         source: nauticalDepthSourceId,
         layout: { visibility: visible },
         paint: {
-          "raster-opacity": 0.72,
+          "raster-opacity": 0.78,
           "raster-resampling": "linear"
         }
       }, getFirstWeatherOverlayLayerId() || undefined);
