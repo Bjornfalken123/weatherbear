@@ -1198,7 +1198,7 @@ var EMODNET_MEAN_DEPTH_WMS_URL =
   "?service=WMS" +
   "&version=1.1.1" +
   "&request=GetMap" +
-  "&layers=emodnet:mean" +
+  "&layers=mean_atlas_land" +
   "&styles=" +
   "&format=image/png" +
   "&transparent=true" +
@@ -1212,7 +1212,7 @@ var EMODNET_DEPTH_CONTOURS_WMS_URL =
   "?service=WMS" +
   "&version=1.1.1" +
   "&request=GetMap" +
-  "&layers=emodnet:contours" +
+  "&layers=contours" +
   "&styles=" +
   "&format=image/png" +
   "&transparent=true" +
@@ -2047,7 +2047,26 @@ function getFirstWeatherOverlayLayerId(){
 
   return null;
 }
+function moveLayerIfExists(layerId, beforeId){
+  try{
+    if(maptilerMap && maptilerMap.getLayer && maptilerMap.getLayer(layerId)){
+      maptilerMap.moveLayer(layerId, beforeId);
+    }
+  }catch(e){
+    console.warn("Kunde inte flytta lager:", layerId, e);
+  }
+}
 
+function orderNauticalLayers(){
+  if(!maptilerMap) return;
+
+  var beforeWeather = getFirstWeatherOverlayLayerId() || undefined;
+
+  moveLayerIfExists(nauticalBaseLayerId, beforeWeather);
+  moveLayerIfExists(nauticalDepthMeanLayerId, beforeWeather);
+  moveLayerIfExists(nauticalDepthContourLayerId, beforeWeather);
+  moveLayerIfExists(nauticalSeamarkLayerId, beforeWeather);
+}
 function ensureNauticalChartLayers(){
   if(!maptilerMap) return false;
 
@@ -2090,7 +2109,7 @@ if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthMeanLayerId))){
     source: nauticalDepthMeanSourceId,
     layout: { visibility: visible },
     paint: {
-      "raster-opacity": 0.18,
+      "raster-opacity": 0.85,
       "raster-resampling": "linear"
     }
   }, beforeLayerId);
@@ -2136,7 +2155,7 @@ if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthContourLayerId)))
         paint: { "raster-opacity": 1 }
       }, beforeLayerId);
     }
-
+orderNauticalLayers();
     return true;
   }catch(e){
     console.warn("Sjökortslagret kunde inte läggas till", e);
