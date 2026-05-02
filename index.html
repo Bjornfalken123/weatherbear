@@ -1174,8 +1174,11 @@ var baseMapMode = "standard";
 var nauticalBaseSourceId = "nautical-light-base-source";
 var nauticalBaseLayerId = "nautical-light-base-layer";
 
-var nauticalDepthSourceId = "nautical-depth-source";
-var nauticalDepthLayerId = "nautical-depth-layer";
+var nauticalDepthMeanSourceId = "nautical-depth-mean-source";
+var nauticalDepthMeanLayerId = "nautical-depth-mean-layer";
+
+var nauticalDepthContourSourceId = "nautical-depth-contour-source";
+var nauticalDepthContourLayerId = "nautical-depth-contour-layer";
 
 var nauticalSeamarkSourceId = "nautical-seamark-source";
 var nauticalSeamarkLayerId = "nautical-seamark-layer";
@@ -1190,12 +1193,26 @@ var NAUTICAL_SEAMARK_TILE_URL =
   EMODnet djupkarta.
   OBS: layer-namn i WMTS kan behöva justeras efter test mot GetCapabilities.
 */
-var EMODNET_DEPTH_WMS_URL =
+var EMODNET_MEAN_DEPTH_WMS_URL =
   "https://ows.emodnet-bathymetry.eu/wms" +
   "?service=WMS" +
   "&version=1.1.1" +
   "&request=GetMap" +
-  "&layers=mean_multicolour" +
+  "&layers=emodnet:mean" +
+  "&styles=" +
+  "&format=image/png" +
+  "&transparent=true" +
+  "&srs=EPSG:3857" +
+  "&bbox={bbox-epsg-3857}" +
+  "&width=256" +
+  "&height=256";
+
+var EMODNET_DEPTH_CONTOURS_WMS_URL =
+  "https://ows.emodnet-bathymetry.eu/wms" +
+  "?service=WMS" +
+  "&version=1.1.1" +
+  "&request=GetMap" +
+  "&layers=emodnet:contours" +
   "&styles=" +
   "&format=image/png" +
   "&transparent=true" +
@@ -2057,27 +2074,49 @@ function ensureNauticalChartLayers(){
       }, beforeLayerId);
     }
 
-if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalDepthSourceId))){
-  maptilerMap.addSource(nauticalDepthSourceId, {
+if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalDepthMeanSourceId))){
+  maptilerMap.addSource(nauticalDepthMeanSourceId, {
     type: "raster",
-    tiles: [EMODNET_DEPTH_WMS_URL],
+    tiles: [EMODNET_MEAN_DEPTH_WMS_URL],
     tileSize: 256,
     attribution: "EMODnet Bathymetry"
   });
 }
 
-    if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthLayerId))){
-      maptilerMap.addLayer({
-        id: nauticalDepthLayerId,
-        type: "raster",
-        source: nauticalDepthSourceId,
-        layout: { visibility: visible },
-        paint: {
-          "raster-opacity": 0.78,
-          "raster-resampling": "linear"
-        }
-      }, beforeLayerId);
+if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthMeanLayerId))){
+  maptilerMap.addLayer({
+    id: nauticalDepthMeanLayerId,
+    type: "raster",
+    source: nauticalDepthMeanSourceId,
+    layout: { visibility: visible },
+    paint: {
+      "raster-opacity": 0.18,
+      "raster-resampling": "linear"
     }
+  }, beforeLayerId);
+}
+
+if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalDepthContourSourceId))){
+  maptilerMap.addSource(nauticalDepthContourSourceId, {
+    type: "raster",
+    tiles: [EMODNET_DEPTH_CONTOURS_WMS_URL],
+    tileSize: 256,
+    attribution: "EMODnet Bathymetry"
+  });
+}
+
+if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthContourLayerId))){
+  maptilerMap.addLayer({
+    id: nauticalDepthContourLayerId,
+    type: "raster",
+    source: nauticalDepthContourSourceId,
+    layout: { visibility: visible },
+    paint: {
+      "raster-opacity": 0.88,
+      "raster-resampling": "linear"
+    }
+  }, beforeLayerId);
+}
 
     if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalSeamarkSourceId))){
       maptilerMap.addSource(nauticalSeamarkSourceId, {
@@ -2113,11 +2152,12 @@ function setBaseMapMode(mode){
 
     var visibility = baseMapMode === "nautical" ? "visible" : "none";
 
-    [
-      nauticalBaseLayerId,
-      nauticalDepthLayerId,
-      nauticalSeamarkLayerId
-    ].forEach(function(layerId){
+  [
+  nauticalBaseLayerId,
+  nauticalDepthMeanLayerId,
+  nauticalDepthContourLayerId,
+  nauticalSeamarkLayerId
+].forEach(function(layerId){
       try{
         if(maptilerMap.getLayer && maptilerMap.getLayer(layerId)){
           maptilerMap.setLayoutProperty(layerId, "visibility", visibility);
