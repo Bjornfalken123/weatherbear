@@ -1190,8 +1190,19 @@ var NAUTICAL_SEAMARK_TILE_URL =
   EMODnet djupkarta.
   OBS: layer-namn i WMTS kan behöva justeras efter test mot GetCapabilities.
 */
-var EMODNET_DEPTH_TILE_URL =
-  "https://tiles.emodnet-bathymetry.eu/wmts/1.0.0/mean_multicolour/default/inspire_quad/{z}/{y}/{x}.png";
+var EMODNET_DEPTH_WMS_URL =
+  "https://ows.emodnet-bathymetry.eu/wms" +
+  "?service=WMS" +
+  "&version=1.1.1" +
+  "&request=GetMap" +
+  "&layers=mean_multicolour" +
+  "&styles=" +
+  "&format=image/png" +
+  "&transparent=true" +
+  "&srs=EPSG:3857" +
+  "&bbox={bbox-epsg-3857}" +
+  "&width=256" +
+  "&height=256";
 
 var headingEnabled = false;
 var headingMarker = null;
@@ -2046,15 +2057,14 @@ function ensureNauticalChartLayers(){
       }, beforeLayerId);
     }
 
-    if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalDepthSourceId))){
-      maptilerMap.addSource(nauticalDepthSourceId, {
-        type: "raster",
-        tiles: [EMODNET_DEPTH_TILE_URL],
-        tileSize: 256,
-        scheme: "xyz",
-        attribution: "EMODnet Bathymetry"
-      });
-    }
+if(!(maptilerMap.getSource && maptilerMap.getSource(nauticalDepthSourceId))){
+  maptilerMap.addSource(nauticalDepthSourceId, {
+    type: "raster",
+    tiles: [EMODNET_DEPTH_WMS_URL],
+    tileSize: 256,
+    attribution: "EMODnet Bathymetry"
+  });
+}
 
     if(!(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthLayerId))){
       maptilerMap.addLayer({
