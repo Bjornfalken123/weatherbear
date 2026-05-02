@@ -1075,23 +1075,24 @@
     <button class="tab-btn" id="tabSearch" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="16.65" y1="16.65" x2="21" y2="21"></line></svg>Sök</button>
   </nav>
 
-  <div id="mobileFilterSheet">
-    <div class="sheet-header">
-      <button id="mobileFilterCloseBtn" type="button" class="sheet-close-btn">Stäng</button>
-      <div class="sheet-title">Visa på kartan</div>
-    </div>
-    <div class="sheet-body">
-      <div class="sheet-group">
-         <div class="sheet-group">
-        <div class="sheet-group-title">Kartlager</div>
+ <div id="mobileFilterSheet">
+  <div class="sheet-header">
+    <button id="mobileFilterCloseBtn" type="button" class="sheet-close-btn">Stäng</button>
+    <div class="sheet-title">Visa på kartan</div>
+  </div>
 
-        <div class="sheet-row">
-          <div class="sheet-row-left">
-            <span class="layer-dot chart"></span>
-            <span>Sjökort</span>
-          </div>
-          <button class="sheet-toggle" id="mobileToggleBaseMapBtn" type="button"></button>
+  <div class="sheet-body">
+    <div class="sheet-group">
+      <div class="sheet-group-title">Kartlager</div>
+
+      <div class="sheet-row">
+        <div class="sheet-row-left">
+          <span class="layer-dot chart"></span>
+          <span>Sjökort</span>
         </div>
+        <button class="sheet-toggle" id="mobileToggleBaseMapBtn" type="button"></button>
+      </div>
+
 
         <div class="sheet-row">
           <div class="sheet-row-left">
@@ -4236,10 +4237,20 @@ if(temperatureLayerVisible){ maptilerMap.addLayer(maptilerTemperatureLayer); }
           var timeSlider=document.getElementById('timeSlider'), timeValueLabel=document.getElementById('timeValueLabel'), timePlayPauseBtn=document.getElementById('timePlayPauseBtn'), playIcon=document.getElementById('playIcon'), playBtnText=document.getElementById('playBtnText');
           var forecastStartTime=null, forecastEndTime=null, isTimePlaying=false;
 
-          function setDeskBtn(id,on){ var b=document.getElementById(id); if(!b) return; b.textContent=on ? 'På' : 'Av'; b.classList.toggle('is-on',on); b.classList.toggle('is-off',!on); }
-          function setMobToggle(id,on){ var b=document.getElementById(id); if(b) b.classList.toggle('is-on',on); }
-         function syncAllLayerButtons(){
-         function syncAllLayerButtons(){
+   function setDeskBtn(id,on){
+  var b=document.getElementById(id);
+  if(!b) return;
+  b.textContent=on ? 'På' : 'Av';
+  b.classList.toggle('is-on',on);
+  b.classList.toggle('is-off',!on);
+}
+
+function setMobToggle(id,on){
+  var b=document.getElementById(id);
+  if(b) b.classList.toggle('is-on',on);
+}
+
+function syncAllLayerButtons(){
   setDeskBtn('toggleWindLayerBtn',windLayerVisible);
   setDeskBtn('togglePrecipLayerBtn',precipitationLayerVisible);
   setDeskBtn('toggleSatelliteLayerBtn',satelliteLayerVisible);
