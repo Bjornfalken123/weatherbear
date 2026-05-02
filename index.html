@@ -1009,7 +1009,7 @@
                   <span class="layer-dot chart"></span>
                   <span>Karta</span>
                 </div>
-                <button id="toggleBaseMapBtn" type="button" class="is-off">Standard</button>
+                <button id="toggleBaseMapBtn" type="button" class="is-off">Av</button>
               </div>
 
               <div class="filter-row">
@@ -2128,7 +2128,7 @@ function syncBaseMapButtons(){
   var nautical = baseMapMode === "nautical";
 
   if(desktopBtn){
-    desktopBtn.textContent = nautical ? "Sjökort" : "Standard";
+    desktopBtn.textContent = nautical ? "På" : "Av";
     desktopBtn.classList.toggle("is-on", nautical);
     desktopBtn.classList.toggle("is-off", !nautical);
   }
