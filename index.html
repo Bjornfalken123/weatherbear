@@ -2172,26 +2172,24 @@ function syncBaseMapButtons(){
 }
 
 function syncHeadingWithNauticalMode(){
-  // Riktning ska fungera i både standardkarta och sjökort.
-  // Därför ska den inte kopplas till baseMapMode längre.
-  if(latestUserPosition){
-    enableHeadingMode();
-  }
+  // Positionssymbolen ska finnas i både standardkarta och sjökort.
+  // Den ska inte starta om kompass/heading när man bara byter kartläge.
+  updateHeadingMarker();
 }
 function createHeadingMarkerElement(){
   var outer = document.createElement("div");
-  outer.className = "heading-marker";
+  outer.className = "heading-marker user-location-marker";
 
   outer.innerHTML =
     '<div class="heading-marker-inner">' +
-      '<div class="heading-marker-arrow"></div>' +
+      '<div class="heading-marker-arrow" style="display:none;"></div>' +
     '</div>';
 
   return outer;
 }
 
 function updateHeadingMarker(){
-  if(!maptilerMap || !headingEnabled || !latestUserPosition) return;
+  if(!maptilerMap || !latestUserPosition) return;
 
   if(!headingMarker){
     var el = createHeadingMarkerElement();
@@ -2209,9 +2207,19 @@ function updateHeadingMarker(){
   var markerEl = headingMarker.getElement && headingMarker.getElement();
   var arrow = markerEl && markerEl.querySelector(".heading-marker-arrow");
 
-if(arrow && latestDeviceHeading != null && isFinite(latestDeviceHeading)){
-  arrow.style.transform = "translateX(-50%) rotate(" + latestDeviceHeading + "deg)";
-}
+  if(!arrow) return;
+
+  var hasHeading =
+    headingEnabled &&
+    latestDeviceHeading != null &&
+    isFinite(latestDeviceHeading);
+
+  arrow.style.display = hasHeading ? "block" : "none";
+
+  if(hasHeading){
+    arrow.style.transform =
+      "translateX(-50%) rotate(" + latestDeviceHeading + "deg)";
+  }
 }
 
 function removeHeadingMarker(){
@@ -2340,10 +2348,15 @@ function disableHeadingMode(){
   headingEnabled = false;
   userFollowEnabled = false;
   hasCenteredOnUserLocation = false;
+  latestDeviceHeading = null;
 
   stopHeadingPositionWatch();
   detachHeadingListener();
-  removeHeadingMarker();
+
+  // Ta inte bort positionssymbolen här.
+  // Den ska kunna visas även utan kompass/riktning.
+  updateHeadingMarker();
+
   syncHeadingButtons();
 }
 
@@ -4445,18 +4458,25 @@ weatherGeolocateControl.on('geolocate', function(e){
   lastUserFollowLon = null;
   lastUserFollowAt = 0;
 
-  lastUserWeatherLat = null;
-  lastUserWeatherLon = null;
-  lastUserWeatherAt = 0;
+lastUserWeatherLat = null;
+lastUserWeatherLon = null;
+lastUserWeatherAt = 0;
 
-  enableHeadingMode();
+latestUserPosition = {
+  lat: lat,
+  lon: lon
+};
 
-  handleUserLocationUpdate(lat, lon, {
-    enableFollow:true,
-    initial:true,
-    forceCenter:true,
-    forceWeather:true
-  });
+updateHeadingMarker();
+
+enableHeadingMode();
+
+handleUserLocationUpdate(lat, lon, {
+  enableFollow:true,
+  initial:true,
+  forceCenter:true,
+  forceWeather:true
+});
 });
 weatherGeolocateControl.on('trackuserlocationstart', function(){
   userFollowEnabled = true;
