@@ -2299,12 +2299,13 @@ function startHeadingPositionWatch(){
 
       if(!isFinite(lat) || !isFinite(lon)) return;
 
-      handleUserLocationUpdate(lat, lon, {
-        enableFollow:false,
-        initial:false,
-        forceCenter:false,
-        forceWeather:false
-      });
+   handleUserLocationUpdate(lat, lon, {
+  enableFollow:false,
+  initial:false,
+  forceCenter:false,
+  forceWeather:false,
+  suppressWeather:true
+});
     },
     function(err){
       console.warn("Kunde inte läsa position för riktningspil", err);
@@ -2740,6 +2741,10 @@ function handleUserLocationUpdate(lat, lon, options){
       force:options.forceCenter === true
     });
   }
+
+if(options.suppressWeather){
+  return;
+}
 
 if(options.forceWeather){
   lastUserWeatherLat = lat;
@@ -4442,7 +4447,35 @@ var weatherGeolocateControl = new maptilersdk.GeolocateControl({
 });
 
 maptilerMap.addControl(weatherGeolocateControl, 'top-right');
+function bindHeadingToGeolocateButton(){
+  var attempts = 0;
 
+  function bind(){
+    attempts++;
+
+    var button =
+      document.querySelector(".maplibregl-ctrl-geolocate") ||
+      document.querySelector(".mapboxgl-ctrl-geolocate");
+
+    if(!button){
+      if(attempts < 20){
+        setTimeout(bind, 100);
+      }
+      return;
+    }
+
+    if(button.dataset.headingBound === "true") return;
+    button.dataset.headingBound = "true";
+
+    button.addEventListener("pointerdown", function(){
+      enableHeadingMode();
+    }, { passive:true });
+  }
+
+  bind();
+}
+
+bindHeadingToGeolocateButton();
 weatherGeolocateControl.on('geolocate', function(e){
   if(!e || !e.coords) return;
 
@@ -4469,8 +4502,6 @@ latestUserPosition = {
 
 updateHeadingMarker();
 
-enableHeadingMode();
-
 handleUserLocationUpdate(lat, lon, {
   enableFollow:true,
   initial:true,
@@ -4480,7 +4511,6 @@ handleUserLocationUpdate(lat, lon, {
 });
 weatherGeolocateControl.on('trackuserlocationstart', function(){
   userFollowEnabled = true;
-  enableHeadingMode();
 });
 
 weatherGeolocateControl.on('trackuserlocationend', function(){
@@ -5167,7 +5197,6 @@ if(
       if (appRoot) {
         appRoot.style.visibility = "visible";
       }
-
       
       if (splash) {
         splash.classList.add("is-hidden");
