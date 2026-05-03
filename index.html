@@ -1145,6 +1145,11 @@ var NAUTICAL_SEAMARK_TILE_URL =
 var lastUserWeatherLat = null;
 var lastUserWeatherLon = null;
 var lastUserWeatherAt = 0;
+    var weatherSelectionMode = "manual";
+var lastGeolocateWeatherLat = null;
+var lastGeolocateWeatherLon = null;
+var lastGeolocateWeatherAt = 0;
+var GEOLOCATE_CLICK_WINDOW_MS = 2500;
 
 var USER_WEATHER_MIN_MOVE_KM = 0.5;
 var USER_WEATHER_MIN_INTERVAL_MS = 60 * 1000;
@@ -2314,6 +2319,8 @@ function shouldRefreshWeatherForUserLocation(lat, lon){
 
 
 async function updateWeatherFromUserLocation(lat, lon){
+  weatherSelectionMode = "user";
+
   clearWeatherSelectionMarker();
 
   saveSelection('weather', {
@@ -2340,11 +2347,16 @@ function handleUserLocationUpdate(lat, lon, options){
     return;
   }
 
-  if(options.forceWeather){
-    updateWeatherFromUserLocation(lat, lon);
+  if(options.fromLocateButton){
     lastUserWeatherLat = lat;
     lastUserWeatherLon = lon;
     lastUserWeatherAt = Date.now();
+
+    updateWeatherFromUserLocation(lat, lon);
+    return;
+  }
+
+  if(weatherSelectionMode !== "user"){
     return;
   }
 
@@ -3943,28 +3955,31 @@ applyWeatherOverlay(
 
     function setMaptilerWeatherMarker(lat,lon){ if(!maptilerMap || !window.maptilersdk) return; if(maptilerWeatherMarker) maptilerWeatherMarker.remove(); maptilerWeatherMarker=new maptilersdk.Marker().setLngLat([lon,lat]).addTo(maptilerMap); }
 
-  async function handlePrimaryMapClick(lat,lon){
-  if(Date.now()-lastObjectInteractionAt<500) return;
+async function handlePrimaryMapClick(lat, lon){
+  if(Date.now() - lastObjectInteractionAt < 500) return;
 
+  weatherSelectionMode = "manual";
+  lastGeolocateWeatherAt = 0;
 
   weatherDetailsExpanded = false;
-      syncWeatherOverlayExpandedState();
+  syncWeatherOverlayExpandedState();
 
-      saveSelection('weather',{lat:lat,lon:lon});
-      setWeatherMarker(lat,lon);
-      setMaptilerWeatherMarker(lat,lon);
+  saveSelection('weather', { lat:lat, lon:lon });
 
-      selectedPlaceName = "";
-      updateMapOverlay("Laddar plats...", "Söker närmaste ort...");
+  setWeatherMarker(lat, lon);
+  setMaptilerWeatherMarker(lat, lon);
 
-      try{
-        selectedPlaceName = await reverseGeocodePlace(lat, lon);
-      }catch(e){
-        selectedPlaceName = "";
-      }
+  selectedPlaceName = "";
+  updateMapOverlay("Laddar plats...", "Söker närmaste ort...");
 
-      loadWeatherForPoint(lat,lon);
-    }
+  try{
+    selectedPlaceName = await reverseGeocodePlace(lat, lon);
+  }catch(e){
+    selectedPlaceName = "";
+  }
+
+  loadWeatherForPoint(lat, lon);
+}
 
     map.on('click',function(e){ handlePrimaryMapClick(e.latlng.lat,e.latlng.lng); });
     window.addEventListener('resize',refreshMapSizeSoon);
@@ -4044,6 +4059,22 @@ var weatherGeolocateControl = new maptilersdk.GeolocateControl({
 
 maptilerMap.addControl(weatherGeolocateControl, 'top-right');
 
+setTimeout(function(){
+  var geolocateButton = document.querySelector(
+    ".maplibregl-ctrl-geolocate, .mapboxgl-ctrl-geolocate"
+  );
+
+if(geolocateButton){
+  var markLocateButtonPressed = function(){
+    lastGeolocateWeatherAt = Date.now();
+  };
+
+  geolocateButton.addEventListener("pointerdown", markLocateButtonPressed, true);
+  geolocateButton.addEventListener("touchstart", markLocateButtonPressed, true);
+  geolocateButton.addEventListener("click", markLocateButtonPressed, true);
+}
+}, 0);
+
 weatherGeolocateControl.on('geolocate', function(e){
   if(!e || !e.coords) return;
 
@@ -4052,15 +4083,26 @@ weatherGeolocateControl.on('geolocate', function(e){
 
   if(!isFinite(lat) || !isFinite(lon)) return;
 
+  var clickedLocateRecently =
+    Date.now() - lastGeolocateWeatherAt < GEOLOCATE_CLICK_WINDOW_MS;
+
+  if(clickedLocateRecently){
+    handleUserLocationUpdate(lat, lon, {
+      fromLocateButton: true
+    });
+
+    lastGeolocateWeatherLat = lat;
+    lastGeolocateWeatherLon = lon;
+    return;
+  }
+
   handleUserLocationUpdate(lat, lon, {
-    forceWeather: true
+    fromLocateButton: false
   });
 });
 
-
 weatherGeolocateControl.on('error', function(e){
   console.warn("Min plats kunde inte aktiveras", e);
- 
 });
       maptilerMap.on('load',function(){
         if(!window.maptilerweather){ console.error('MapTiler Weather ej tillgänglig'); return; }
