@@ -2097,11 +2097,8 @@ function setBaseMapMode(mode){
     }
   }
 
-  if(baseMapMode !== "nautical"){
-  disableHeadingMode();
-}
-
-syncBaseMapButtons();
+  syncHeadingWithNauticalMode();
+  syncBaseMapButtons();
 }
 
 function toggleBaseMapMode(){
@@ -2125,6 +2122,16 @@ function syncBaseMapButtons(){
   }
 }
 
+function syncHeadingWithNauticalMode(){
+  if(baseMapMode !== "nautical"){
+    disableHeadingMode();
+    return;
+  }
+
+  if(latestUserPosition){
+    enableHeadingMode();
+  }
+}
 function createHeadingMarkerElement(){
   var outer = document.createElement("div");
   outer.className = "heading-marker";
@@ -4181,13 +4188,17 @@ applyWeatherOverlay(
 
 var weatherGeolocateControl = new maptilersdk.GeolocateControl({
   positionOptions: {
-    enableHighAccuracy: true
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 10000
   },
   fitBoundsOptions: {
     maxZoom: 12
   },
-  trackUserLocation: false,
-  showUserLocation: true
+  trackUserLocation: true,
+  showUserLocation: true,
+  showAccuracyCircle: true,
+  showUserHeading: true
 });
 
 maptilerMap.addControl(weatherGeolocateControl, 'top-right');
@@ -4213,6 +4224,20 @@ weatherGeolocateControl.on('geolocate', function(e){
 
   focusMapOnPoint(lat, lon, 10);
   handlePrimaryMapClick(lat, lon);
+});
+      weatherGeolocateControl.on('trackuserlocationstart', function(){
+  syncHeadingWithNauticalMode();
+});
+
+weatherGeolocateControl.on('trackuserlocationend', function(){
+  if(baseMapMode !== "nautical"){
+    disableHeadingMode();
+  }
+});
+
+weatherGeolocateControl.on('error', function(e){
+  console.warn("Min plats kunde inte aktiveras", e);
+  disableHeadingMode();
 });
       maptilerMap.on('load',function(){
         if(!window.maptilerweather){ console.error('MapTiler Weather ej tillgänglig'); return; }
