@@ -1135,6 +1135,49 @@ var nauticalBaseSourceId = "nautical-light-base-source";
 var nauticalBaseLayerId = "nautical-light-base-layer";
 var nauticalSeamarkSourceId = "nautical-seamark-source";
 var nauticalSeamarkLayerId = "nautical-seamark-layer";
+    var nauticalLayerOrderTimer = null;
+
+function refreshNauticalLayerOrder(){
+  if(!maptilerMap) return;
+
+  try{
+    var hasBase = maptilerMap.getLayer && maptilerMap.getLayer(nauticalBaseLayerId);
+    var hasSeamark = maptilerMap.getLayer && maptilerMap.getLayer(nauticalSeamarkLayerId);
+
+    /*
+      Bas-sjökortet ska ligga under väderlagren.
+      Sjömärken/symboler ska ligga över väderlagren.
+    */
+    if(hasBase){
+      var firstWeatherLayerId = getFirstWeatherOverlayLayerId();
+
+      if(firstWeatherLayerId && firstWeatherLayerId !== nauticalBaseLayerId){
+        maptilerMap.moveLayer(nauticalBaseLayerId, firstWeatherLayerId);
+      }else if(hasSeamark){
+        maptilerMap.moveLayer(nauticalBaseLayerId, nauticalSeamarkLayerId);
+      }
+    }
+
+    if(hasSeamark){
+      maptilerMap.moveLayer(nauticalSeamarkLayerId);
+    }
+  }catch(e){
+    console.warn("Kunde inte justera sjökortets lagerordning", e);
+  }
+}
+
+function scheduleNauticalLayerOrderRefresh(){
+  if(nauticalLayerOrderTimer){
+    clearTimeout(nauticalLayerOrderTimer);
+  }
+
+  nauticalLayerOrderTimer = setTimeout(function(){
+    nauticalLayerOrderTimer = null;
+    refreshNauticalLayerOrder();
+  }, 0);
+
+  setTimeout(refreshNauticalLayerOrder, 180);
+}
 
 var NAUTICAL_LIGHT_BASE_TILE_URL =
   "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
@@ -1530,7 +1573,8 @@ function showCachedOpenMeteoCloudLayerForTime(timeValue){
 
       cached.lastUsedAt = Date.now();
       cached.wasShownAtLeastOnce = true;
-      openMeteoCloudSourceActiveKey = timeStep;
+          openMeteoCloudSourceActiveKey = timeStep;
+      scheduleNauticalLayerOrderRefresh();
 
       return true;
     }
@@ -1794,6 +1838,7 @@ var cached = openMeteoCloudSourceCache.get(timeStep);
             "raster-resampling": "linear"
           }
         });
+                scheduleNauticalLayerOrderRefresh();
       }
 
       cached = {
@@ -1845,8 +1890,9 @@ var cached = openMeteoCloudSourceCache.get(timeStep);
       );
     }
 
-    openMeteoCloudSourceActiveKey = timeStep;
+       openMeteoCloudSourceActiveKey = timeStep;
     trimOpenMeteoCloudCache();
+    scheduleNauticalLayerOrderRefresh();
 
     return true;
   }catch(e){
@@ -2021,6 +2067,7 @@ function ensureNauticalChartLayers(){
       }, getFirstWeatherOverlayLayerId() || undefined);
     }
 
+      scheduleNauticalLayerOrderRefresh();
     return true;
   }catch(e){
     console.warn("Sjökortslagret kunde inte läggas till", e);
@@ -2036,7 +2083,7 @@ function setBaseMapMode(mode){
 
     var visibility = baseMapMode === "nautical" ? "visible" : "none";
 
-    try{
+     try{
       if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalBaseLayerId)){
         maptilerMap.setLayoutProperty(nauticalBaseLayerId, "visibility", visibility);
       }
@@ -2044,6 +2091,8 @@ function setBaseMapMode(mode){
       if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalSeamarkLayerId)){
         maptilerMap.setLayoutProperty(nauticalSeamarkLayerId, "visibility", visibility);
       }
+
+      scheduleNauticalLayerOrderRefresh();
     }catch(e){
       console.warn("Kunde inte byta kartläge", e);
     }
@@ -4459,7 +4508,8 @@ function safeAddWeatherLayer(layer, layerId){
   try{
     if(isMapLayerAdded(layerId)) return true;
 
-    maptilerMap.addLayer(layer);
+       maptilerMap.addLayer(layer);
+    scheduleNauticalLayerOrderRefresh();
 
     if(selectedForecastTime && layer.setAnimationTime){
       layer.setAnimationTime(selectedForecastTime / 1000);
@@ -4509,7 +4559,8 @@ function onPrecipToggle(){
     }catch(e){}
   }else{
     try{
-      maptilerMap.addLayer(maptilerPrecipitationLayer);
+          maptilerMap.addLayer(maptilerPrecipitationLayer);
+      scheduleNauticalLayerOrderRefresh();
 
       if(selectedForecastTime){
         maptilerPrecipitationLayer.setAnimationTime(selectedForecastTime / 1000);
@@ -4547,8 +4598,16 @@ function onSatelliteToggle(){
 
   syncAllLayerButtons();
 }
-          function onRadarToggle(){ if(!maptilerRadarLayer) return; if(radarLayerVisible){ maptilerMap.removeLayer('main-radar-layer'); } else { maptilerMap.addLayer(maptilerRadarLayer); if(selectedForecastTime) maptilerRadarLayer.setAnimationTime(selectedForecastTime/1000); } radarLayerVisible=!radarLayerVisible; syncAllLayerButtons(); }
-          function onTemperatureToggle(){ if(!maptilerTemperatureLayer) return; if(temperatureLayerVisible){ maptilerMap.removeLayer('main-temperature-layer'); } else { maptilerMap.addLayer(maptilerTemperatureLayer); if(selectedForecastTime) maptilerTemperatureLayer.setAnimationTime(selectedForecastTime/1000); } temperatureLayerVisible=!temperatureLayerVisible; syncAllLayerButtons(); }
+          function onRadarToggle(){ if(!maptilerRadarLayer) return; if(radarLayerVisible){ maptilerMap.removeLayer('main-radar-layer'); } else {
+  maptilerMap.addLayer(maptilerRadarLayer);
+  scheduleNauticalLayerOrderRefresh();
+  if(selectedForecastTime) maptilerRadarLayer.setAnimationTime(selectedForecastTime/1000);
+} radarLayerVisible=!radarLayerVisible; syncAllLayerButtons(); }
+          function onTemperatureToggle(){ if(!maptilerTemperatureLayer) return; if(temperatureLayerVisible){ maptilerMap.removeLayer('main-temperature-layer'); } else {
+  maptilerMap.addLayer(maptilerTemperatureLayer);
+  scheduleNauticalLayerOrderRefresh();
+  if(selectedForecastTime) maptilerTemperatureLayer.setAnimationTime(selectedForecastTime/1000);
+} temperatureLayerVisible=!temperatureLayerVisible; syncAllLayerButtons(); }
 
                   ['toggleBaseMapBtn','mobileToggleBaseMapBtn'].forEach(function(id){
             var el=document.getElementById(id);
