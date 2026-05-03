@@ -391,9 +391,9 @@
     .layer-dot.chart{background:#e8d7a8;}
     .layer-dot.heading{background:#98f0db;}
 
-  .heading-marker{
-  width:56px;
-  height:56px;
+.heading-marker{
+  width:58px;
+  height:58px;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -401,29 +401,61 @@
 }
 
 .heading-marker-inner{
-  width:42px;
-  height:42px;
+  position:relative;
+  width:36px;
+  height:36px;
   border-radius:999px;
-  background:rgba(5,11,22,0.68);
-  border:2px solid rgba(255,255,255,0.9);
+  background:
+    radial-gradient(circle at 50% 50%, #ffffff 0 3px, #7bc7ff 4px, transparent 6px),
+    rgba(5,11,22,0.78);
+  border:2px solid rgba(255,255,255,0.92);
   box-shadow:
-    0 0 0 7px rgba(123,199,255,0.16),
-    0 10px 24px rgba(0,0,0,0.42);
-  display:flex;
-  align-items:center;
-  justify-content:center;
+    0 0 0 5px rgba(123,199,255,0.18),
+    0 0 24px rgba(123,199,255,0.36),
+    0 12px 28px rgba(0,0,0,0.42);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+
+.heading-marker-inner::after{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.24);
 }
 
 .heading-marker-arrow{
-  width:0;
-  height:0;
-  border-left:10px solid transparent;
-  border-right:10px solid transparent;
-  border-bottom:26px solid #98f0db;
-  transform-origin:50% 68%;
+  position:absolute;
+  left:50%;
+  top:-18px;
+  width:20px;
+  height:28px;
+  transform:translateX(-50%) rotate(0deg);
+  transform-origin:50% 36px;
   filter:
-    drop-shadow(0 0 7px rgba(152,240,219,0.95))
-    drop-shadow(0 2px 3px rgba(0,0,0,0.55));
+    drop-shadow(0 0 8px rgba(123,199,255,0.95))
+    drop-shadow(0 3px 5px rgba(0,0,0,0.48));
+}
+
+.heading-marker-arrow::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  clip-path:polygon(50% 0%, 100% 100%, 50% 78%, 0% 100%);
+  background:linear-gradient(180deg,#ffffff 0%,#7bc7ff 48%,#4098ff 100%);
+}
+
+.heading-marker-arrow::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:6px;
+  width:5px;
+  height:11px;
+  transform:translateX(-50%);
+  border-radius:999px;
+  background:rgba(4,9,19,0.34);
 }
 #timeControl{
   position:absolute;
@@ -1201,6 +1233,23 @@ var headingWatchId = null;
 var latestUserPosition = null;
 var latestDeviceHeading = null;
 var headingListenerAttached = false;
+
+var userFollowEnabled = false;
+var hasCenteredOnUserLocation = false;
+var lastUserFollowLat = null;
+var lastUserFollowLon = null;
+var lastUserFollowAt = 0;
+
+var lastUserWeatherLat = null;
+var lastUserWeatherLon = null;
+var lastUserWeatherAt = 0;
+
+var USER_FOLLOW_MIN_MOVE_KM = isMobileView() ? 0.035 : 0.05;
+var USER_FOLLOW_MAX_DRIFT_KM = isMobileView() ? 0.09 : 0.12;
+var USER_FOLLOW_MAX_INTERVAL_MS = 8000;
+
+var USER_WEATHER_MIN_MOVE_KM = 0.5;
+var USER_WEATHER_MIN_INTERVAL_MS = 60 * 1000;
 
 var OPEN_METEO_CLOUD_APPLY_INTERVAL_MS = 120;
 
@@ -2160,9 +2209,9 @@ function updateHeadingMarker(){
   var markerEl = headingMarker.getElement && headingMarker.getElement();
   var arrow = markerEl && markerEl.querySelector(".heading-marker-arrow");
 
-  if(arrow && latestDeviceHeading != null && isFinite(latestDeviceHeading)){
-    arrow.style.transform = "rotate(" + latestDeviceHeading + "deg)";
-  }
+if(arrow && latestDeviceHeading != null && isFinite(latestDeviceHeading)){
+  arrow.style.transform = "translateX(-50%) rotate(" + latestDeviceHeading + "deg)";
+}
 }
 
 function removeHeadingMarker(){
@@ -2237,19 +2286,24 @@ function startHeadingPositionWatch(){
     function(pos){
       if(!pos || !pos.coords) return;
 
-      latestUserPosition = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude
-      };
+      var lat = Number(pos.coords.latitude);
+      var lon = Number(pos.coords.longitude);
 
-      updateHeadingMarker();
+      if(!isFinite(lat) || !isFinite(lon)) return;
+
+      handleUserLocationUpdate(lat, lon, {
+        enableFollow:false,
+        initial:false,
+        forceCenter:false,
+        forceWeather:false
+      });
     },
     function(err){
       console.warn("Kunde inte läsa position för riktningspil", err);
     },
     {
       enableHighAccuracy: true,
-      maximumAge: 4000,
+      maximumAge: 2500,
       timeout: 12000
     }
   );
@@ -2284,6 +2338,8 @@ async function enableHeadingMode(){
 
 function disableHeadingMode(){
   headingEnabled = false;
+  userFollowEnabled = false;
+  hasCenteredOnUserLocation = false;
 
   stopHeadingPositionWatch();
   detachHeadingListener();
@@ -2511,6 +2567,176 @@ function distanceKmBetween(lat1, lon1, lat2, lon2){
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+    function clearWeatherSelectionMarker(){
+  try{
+    if(weatherMarker){
+      map.removeLayer(weatherMarker);
+      weatherMarker = null;
+    }
+  }catch(e){}
+
+  try{
+    if(maptilerWeatherMarker){
+      maptilerWeatherMarker.remove();
+      maptilerWeatherMarker = null;
+    }
+  }catch(e){}
+}
+
+function shouldRefreshWeatherForUserLocation(lat, lon){
+  var now = Date.now();
+
+  if(lastUserWeatherLat == null || lastUserWeatherLon == null){
+    lastUserWeatherLat = lat;
+    lastUserWeatherLon = lon;
+    lastUserWeatherAt = now;
+    return true;
+  }
+
+  var movedKm = distanceKmBetween(
+    lastUserWeatherLat,
+    lastUserWeatherLon,
+    lat,
+    lon
+  );
+
+  var movedEnough = movedKm >= USER_WEATHER_MIN_MOVE_KM;
+  var waitedEnough = now - lastUserWeatherAt >= USER_WEATHER_MIN_INTERVAL_MS;
+
+  if(movedEnough || waitedEnough){
+    lastUserWeatherLat = lat;
+    lastUserWeatherLon = lon;
+    lastUserWeatherAt = now;
+    return true;
+  }
+
+  return false;
+}
+
+function shouldRecenterUserLocation(lat, lon){
+  if(!maptilerMap) return false;
+
+  if(!hasCenteredOnUserLocation){
+    return true;
+  }
+
+  var now = Date.now();
+
+  var center = maptilerMap.getCenter && maptilerMap.getCenter();
+  var centerLat = center ? Number(center.lat) : null;
+  var centerLon = center ? Number(center.lng) : null;
+
+  var driftKm = 0;
+
+  if(isFinite(centerLat) && isFinite(centerLon)){
+    driftKm = distanceKmBetween(centerLat, centerLon, lat, lon);
+  }
+
+  var movedSinceLastCenterKm = 0;
+
+  if(lastUserFollowLat != null && lastUserFollowLon != null){
+    movedSinceLastCenterKm = distanceKmBetween(
+      lastUserFollowLat,
+      lastUserFollowLon,
+      lat,
+      lon
+    );
+  }
+
+  var movedEnough = movedSinceLastCenterKm >= USER_FOLLOW_MIN_MOVE_KM;
+  var driftedTooFar = driftKm >= USER_FOLLOW_MAX_DRIFT_KM;
+  var staleEnough = now - lastUserFollowAt >= USER_FOLLOW_MAX_INTERVAL_MS && driftKm >= USER_FOLLOW_MIN_MOVE_KM;
+
+  return movedEnough || driftedTooFar || staleEnough;
+}
+
+function smoothlyCenterOnUserLocation(lat, lon, options){
+  if(!maptilerMap) return;
+
+  options = options || {};
+
+  if(!shouldRecenterUserLocation(lat, lon) && !options.force){
+    return;
+  }
+
+  var currentZoom = maptilerMap.getZoom ? maptilerMap.getZoom() : 10;
+  var targetZoom = options.initial ? Math.max(currentZoom, 10) : currentZoom;
+
+  lastUserFollowLat = lat;
+  lastUserFollowLon = lon;
+  lastUserFollowAt = Date.now();
+  hasCenteredOnUserLocation = true;
+
+  try{
+    maptilerMap.easeTo({
+      center:[lon, lat],
+      zoom:targetZoom,
+      duration:options.initial ? 700 : 950,
+      easing:function(t){
+        return t * (2 - t);
+      },
+      essential:true
+    });
+  }catch(e){
+    try{
+      maptilerMap.jumpTo({
+        center:[lon, lat],
+        zoom:targetZoom
+      });
+    }catch(err){}
+  }
+}
+
+async function updateWeatherFromUserLocation(lat, lon){
+  clearWeatherSelectionMarker();
+
+  saveSelection('weather', {
+    lat:lat,
+    lon:lon
+  });
+
+  selectedPlaceName = "";
+  updateMapOverlay("Laddar plats...", "Söker närmaste ort...");
+
+  try{
+    selectedPlaceName = await reverseGeocodePlace(lat, lon);
+  }catch(e){
+    selectedPlaceName = "";
+  }
+
+  loadWeatherForPoint(lat, lon);
+}
+
+function handleUserLocationUpdate(lat, lon, options){
+  options = options || {};
+
+  latestUserPosition = {
+    lat:lat,
+    lon:lon
+  };
+
+  updateHeadingMarker();
+
+  if(options.enableFollow){
+    userFollowEnabled = true;
+  }
+
+  if(userFollowEnabled){
+    smoothlyCenterOnUserLocation(lat, lon, {
+      initial:options.initial === true,
+      force:options.forceCenter === true
+    });
+  }
+
+if(options.forceWeather){
+  lastUserWeatherLat = lat;
+  lastUserWeatherLon = lon;
+  lastUserWeatherAt = Date.now();
+  updateWeatherFromUserLocation(lat, lon);
+}else if(shouldRefreshWeatherForUserLocation(lat, lon)){
+  updateWeatherFromUserLocation(lat, lon);
+}
+}
 
 function extractPlaceLabel(feature){
   if(!feature) return "";
@@ -2698,6 +2924,8 @@ function renderFavoritesList(){
 }
 
 function focusMapOnPoint(lat, lon, zoomLevel){
+  userFollowEnabled = false;
+
   var zoom = zoomLevel || 9;
 
   try{
@@ -4100,10 +4328,12 @@ applyWeatherOverlay(
 
     function setMaptilerWeatherMarker(lat,lon){ if(!maptilerMap || !window.maptilersdk) return; if(maptilerWeatherMarker) maptilerWeatherMarker.remove(); maptilerWeatherMarker=new maptilersdk.Marker().setLngLat([lon,lat]).addTo(maptilerMap); }
 
-    async function handlePrimaryMapClick(lat,lon){
-      if(Date.now()-lastObjectInteractionAt<500) return;
+  async function handlePrimaryMapClick(lat,lon){
+  if(Date.now()-lastObjectInteractionAt<500) return;
 
-      weatherDetailsExpanded = false;
+  userFollowEnabled = false;
+
+  weatherDetailsExpanded = false;
       syncWeatherOverlayExpandedState();
 
       saveSelection('weather',{lat:lat,lon:lon});
@@ -4192,10 +4422,10 @@ var weatherGeolocateControl = new maptilersdk.GeolocateControl({
   fitBoundsOptions: {
     maxZoom: 12
   },
-  trackUserLocation: true,
- showUserLocation: false,
-showAccuracyCircle: false,
-showUserHeading: false
+  trackUserLocation: false,
+  showUserLocation: false,
+  showAccuracyCircle: false,
+  showUserHeading: false
 });
 
 maptilerMap.addControl(weatherGeolocateControl, 'top-right');
@@ -4203,27 +4433,38 @@ maptilerMap.addControl(weatherGeolocateControl, 'top-right');
 weatherGeolocateControl.on('geolocate', function(e){
   if(!e || !e.coords) return;
 
-  var lat = e.coords.latitude;
-  var lon = e.coords.longitude;
+  var lat = Number(e.coords.latitude);
+  var lon = Number(e.coords.longitude);
 
   if(!isFinite(lat) || !isFinite(lon)) return;
 
-  latestUserPosition = {
-    lat: lat,
-    lon: lon
-  };
+  userFollowEnabled = true;
+  hasCenteredOnUserLocation = false;
+
+  lastUserFollowLat = null;
+  lastUserFollowLon = null;
+  lastUserFollowAt = 0;
+
+  lastUserWeatherLat = null;
+  lastUserWeatherLon = null;
+  lastUserWeatherAt = 0;
 
   enableHeadingMode();
 
-  focusMapOnPoint(lat, lon, 10);
-  handlePrimaryMapClick(lat, lon);
+  handleUserLocationUpdate(lat, lon, {
+    enableFollow:true,
+    initial:true,
+    forceCenter:true,
+    forceWeather:true
+  });
 });
 weatherGeolocateControl.on('trackuserlocationstart', function(){
+  userFollowEnabled = true;
   enableHeadingMode();
 });
 
 weatherGeolocateControl.on('trackuserlocationend', function(){
-  disableHeadingMode();
+  userFollowEnabled = false;
 });
 
 weatherGeolocateControl.on('error', function(e){
@@ -4842,7 +5083,7 @@ if(timePlayPauseBtn){
       });
 
       var isSyncMT=false,isSyncL=false;
-  maptilerMap.on('moveend',function(){
+      maptilerMap.on('moveend',function(){
   if(isSyncL) return;
 
   isSyncMT = true;
@@ -4871,6 +5112,10 @@ if(
     isSyncMT = false;
   }, 0);
 });
+
+      maptilerMap.on('dragstart', function(){
+        userFollowEnabled = false;
+      });
 
       maptilerMap.on('click',function(e){ if(e.lngLat) handlePrimaryMapClick(e.lngLat.lat,e.lngLat.lng); });
     }else{
