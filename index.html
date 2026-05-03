@@ -389,74 +389,9 @@
     .layer-dot.precip{background:#7bc7ff;}
     .layer-dot.cloud{background:#b7c5d9;}
     .layer-dot.chart{background:#e8d7a8;}
-    .layer-dot.heading{background:#98f0db;}
+   
 
-.heading-marker{
-  width:58px;
-  height:58px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  pointer-events:none;
-}
 
-.heading-marker-inner{
-  position:relative;
-  width:36px;
-  height:36px;
-  border-radius:999px;
-  background:
-    radial-gradient(circle at 50% 50%, #ffffff 0 3px, #7bc7ff 4px, transparent 6px),
-    rgba(5,11,22,0.78);
-  border:2px solid rgba(255,255,255,0.92);
-  box-shadow:
-    0 0 0 5px rgba(123,199,255,0.18),
-    0 0 24px rgba(123,199,255,0.36),
-    0 12px 28px rgba(0,0,0,0.42);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-}
-
-.heading-marker-inner::after{
-  content:"";
-  position:absolute;
-  inset:8px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,0.24);
-}
-
-.heading-marker-arrow{
-  position:absolute;
-  left:50%;
-  top:-18px;
-  width:20px;
-  height:28px;
-  transform:translateX(-50%) rotate(0deg);
-  transform-origin:50% 36px;
-  filter:
-    drop-shadow(0 0 8px rgba(123,199,255,0.95))
-    drop-shadow(0 3px 5px rgba(0,0,0,0.48));
-}
-
-.heading-marker-arrow::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  clip-path:polygon(50% 0%, 100% 100%, 50% 78%, 0% 100%);
-  background:linear-gradient(180deg,#ffffff 0%,#7bc7ff 48%,#4098ff 100%);
-}
-
-.heading-marker-arrow::after{
-  content:"";
-  position:absolute;
-  left:50%;
-  top:6px;
-  width:5px;
-  height:11px;
-  transform:translateX(-50%);
-  border-radius:999px;
-  background:rgba(4,9,19,0.34);
-}
 #timeControl{
   position:absolute;
   left:50%;
@@ -989,15 +924,7 @@
 #appRoot{
   visibility:hidden;
 }
-    #toggleHeadingBtn,
-#mobileToggleHeadingBtn{
-  display:none !important;
-}
 
-.filter-row:has(#toggleHeadingBtn),
-.sheet-row:has(#mobileToggleHeadingBtn){
-  display:none !important;
-}
   </style>
 </head>
 <body>
@@ -1057,13 +984,7 @@
                 <button id="toggleBaseMapBtn" type="button" class="is-off">Standard</button>
               </div>
 
-              <div class="filter-row">
-                <div class="filter-row-left">
-                  <span class="layer-dot heading"></span>
-                  <span>Riktning</span>
-                </div>
-                <button id="toggleHeadingBtn" type="button" class="is-off">Av</button>
-              </div>
+      
 
               <div class="filter-row"><div class="filter-row-left"><span class="layer-dot wind"></span><span>Vind</span></div><button id="toggleWindLayerBtn" type="button" class="is-off">Av</button></div>
               <div class="filter-row"><div class="filter-row-left"><span class="layer-dot precip"></span><span>Nederbörd</span></div><button id="togglePrecipLayerBtn" type="button" class="is-off">Av</button></div>
@@ -1139,13 +1060,7 @@
       </div>
 
 
-        <div class="sheet-row">
-          <div class="sheet-row-left">
-            <span class="layer-dot heading"></span>
-            <span>Riktning</span>
-          </div>
-          <button class="sheet-toggle" id="mobileToggleHeadingBtn" type="button"></button>
-        </div>
+    
 
         <div class="sheet-row"><div class="sheet-row-left"><span class="layer-dot wind"></span><span>Vind</span></div><button class="sheet-toggle" id="mobileToggleWindBtn" type="button"></button></div>
         <div class="sheet-row"><div class="sheet-row-left"><span class="layer-dot precip"></span><span>Nederbörd</span></div><button class="sheet-toggle" id="mobileTogglePrecipBtn" type="button"></button></div>
@@ -1227,26 +1142,9 @@ var NAUTICAL_LIGHT_BASE_TILE_URL =
 var NAUTICAL_SEAMARK_TILE_URL =
   "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
 
-var headingEnabled = false;
-var headingMarker = null;
-var headingWatchId = null;
-var latestUserPosition = null;
-var latestDeviceHeading = null;
-var headingListenerAttached = false;
-
-var userFollowEnabled = false;
-var hasCenteredOnUserLocation = false;
-var lastUserFollowLat = null;
-var lastUserFollowLon = null;
-var lastUserFollowAt = 0;
-
 var lastUserWeatherLat = null;
 var lastUserWeatherLon = null;
 var lastUserWeatherAt = 0;
-
-var USER_FOLLOW_MIN_MOVE_KM = isMobileView() ? 0.035 : 0.05;
-var USER_FOLLOW_MAX_DRIFT_KM = isMobileView() ? 0.09 : 0.12;
-var USER_FOLLOW_MAX_INTERVAL_MS = 8000;
 
 var USER_WEATHER_MIN_MOVE_KM = 0.5;
 var USER_WEATHER_MIN_INTERVAL_MS = 60 * 1000;
@@ -2146,7 +2044,7 @@ function setBaseMapMode(mode){
     }
   }
 
-  syncHeadingWithNauticalMode();
+
   syncBaseMapButtons();
 }
 
@@ -2168,247 +2066,6 @@ function syncBaseMapButtons(){
 
   if(mobileBtn){
     mobileBtn.classList.toggle("is-on", nautical);
-  }
-}
-
-function syncHeadingWithNauticalMode(){
-  // Positionssymbolen ska finnas i både standardkarta och sjökort.
-  // Den ska inte starta om kompass/heading när man bara byter kartläge.
-  updateHeadingMarker();
-}
-function createHeadingMarkerElement(){
-  var outer = document.createElement("div");
-  outer.className = "heading-marker user-location-marker";
-
-  outer.innerHTML =
-    '<div class="heading-marker-inner">' +
-      '<div class="heading-marker-arrow" style="display:none;"></div>' +
-    '</div>';
-
-  return outer;
-}
-
-function updateHeadingMarker(){
-  if(!maptilerMap || !latestUserPosition) return;
-
-  if(!headingMarker){
-    var el = createHeadingMarkerElement();
-
-    headingMarker = new maptilersdk.Marker({
-      element: el,
-      anchor: "center"
-    })
-      .setLngLat([latestUserPosition.lon, latestUserPosition.lat])
-      .addTo(maptilerMap);
-  }else{
-    headingMarker.setLngLat([latestUserPosition.lon, latestUserPosition.lat]);
-  }
-
-  var markerEl = headingMarker.getElement && headingMarker.getElement();
-  var arrow = markerEl && markerEl.querySelector(".heading-marker-arrow");
-
-  if(!arrow) return;
-
-  var hasHeading =
-    headingEnabled &&
-    latestDeviceHeading != null &&
-    isFinite(latestDeviceHeading);
-
-  arrow.style.display = hasHeading ? "block" : "none";
-
-  if(hasHeading){
-    arrow.style.transform =
-      "translateX(-50%) rotate(" + latestDeviceHeading + "deg)";
-  }
-}
-
-function removeHeadingMarker(){
-  if(headingMarker){
-    try{
-      headingMarker.remove();
-    }catch(e){}
-
-    headingMarker = null;
-  }
-}
-
-function handleDeviceOrientation(e){
-  var heading = null;
-  var shouldApplyScreenAngle = false;
-
-  if(e && typeof e.webkitCompassHeading === "number" && isFinite(e.webkitCompassHeading)){
-    // iOS Safari: redan kompassriktning mot norr.
-    heading = e.webkitCompassHeading;
-    shouldApplyScreenAngle = false;
-  }else if(e && e.absolute === true && typeof e.alpha === "number" && isFinite(e.alpha)){
-    heading = 360 - e.alpha;
-    shouldApplyScreenAngle = true;
-  }else if(e && typeof e.alpha === "number" && isFinite(e.alpha)){
-    heading = 360 - e.alpha;
-    shouldApplyScreenAngle = true;
-  }
-
-  if(heading == null || !isFinite(heading)) return;
-
-  if(shouldApplyScreenAngle){
-    var screenAngle = 0;
-
-    try{
-      if(window.screen && window.screen.orientation && typeof window.screen.orientation.angle === "number"){
-        screenAngle = window.screen.orientation.angle;
-      }else if(typeof window.orientation === "number"){
-        screenAngle = window.orientation;
-      }
-    }catch(err){}
-
-    heading = heading + screenAngle;
-  }
-
-  latestDeviceHeading = ((heading % 360) + 360) % 360;
-
-  updateHeadingMarker();
-}
-
-async function requestHeadingPermission(){
-  if(
-    typeof DeviceOrientationEvent !== "undefined" &&
-    typeof DeviceOrientationEvent.requestPermission === "function"
-  ){
-    try{
-      var result = await DeviceOrientationEvent.requestPermission();
-      return result === "granted";
-    }catch(e){
-      console.warn("Riktningsbehörighet nekades eller misslyckades", e);
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function attachHeadingListener(){
-  if(headingListenerAttached) return;
-
-  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-  window.addEventListener("deviceorientation", handleDeviceOrientation, true);
-
-  headingListenerAttached = true;
-}
-
-function detachHeadingListener(){
-  if(!headingListenerAttached) return;
-
-  window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-  window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
-
-  headingListenerAttached = false;
-}
-
-function startHeadingPositionWatch(){
-  if(!navigator.geolocation){
-    console.warn("Geolocation stöds inte i denna webbläsare");
-    return;
-  }
-
-  if(headingWatchId != null) return;
-
-  headingWatchId = navigator.geolocation.watchPosition(
-    function(pos){
-      if(!pos || !pos.coords) return;
-
-      var lat = Number(pos.coords.latitude);
-      var lon = Number(pos.coords.longitude);
-
-      if(!isFinite(lat) || !isFinite(lon)) return;
-
-   handleUserLocationUpdate(lat, lon, {
-  enableFollow:false,
-  initial:false,
-  forceCenter:false,
-  forceWeather:false,
-  suppressWeather:true
-});
-    },
-    function(err){
-      console.warn("Kunde inte läsa position för riktningspil", err);
-    },
-    {
-      enableHighAccuracy: true,
-      maximumAge: 2500,
-      timeout: 12000
-    }
-  );
-}
-
-function stopHeadingPositionWatch(){
-  if(headingWatchId != null && navigator.geolocation){
-    try{
-      navigator.geolocation.clearWatch(headingWatchId);
-    }catch(e){}
-  }
-
-  headingWatchId = null;
-}
-
-async function enableHeadingMode(){
-  var ok = await requestHeadingPermission();
-
-  if(!ok){
-    headingEnabled = false;
-    latestDeviceHeading = null;
-    syncHeadingButtons();
-    updateHeadingMarker();
-    return;
-  }
-
-  headingEnabled = true;
-
-  attachHeadingListener();
-  startHeadingPositionWatch();
-
-  if(latestUserPosition){
-    updateHeadingMarker();
-  }
-
-  syncHeadingButtons();
-}
-
-function disableHeadingMode(){
-  headingEnabled = false;
-  userFollowEnabled = false;
-  hasCenteredOnUserLocation = false;
-  latestDeviceHeading = null;
-
-  stopHeadingPositionWatch();
-  detachHeadingListener();
-
-  // Ta inte bort positionssymbolen här.
-  // Den ska kunna visas även utan kompass/riktning.
-  updateHeadingMarker();
-
-  syncHeadingButtons();
-}
-
-function toggleHeadingMode(){
-  if(headingEnabled){
-    disableHeadingMode();
-  }else{
-    enableHeadingMode();
-  }
-}
-
-function syncHeadingButtons(){
-  var desktopBtn = document.getElementById("toggleHeadingBtn");
-  var mobileBtn = document.getElementById("mobileToggleHeadingBtn");
-
-  if(desktopBtn){
-    desktopBtn.textContent = headingEnabled ? "På" : "Av";
-    desktopBtn.classList.toggle("is-on", headingEnabled);
-    desktopBtn.classList.toggle("is-off", !headingEnabled);
-  }
-
-  if(mobileBtn){
-    mobileBtn.classList.toggle("is-on", headingEnabled);
   }
 }
    
@@ -2655,79 +2312,6 @@ function shouldRefreshWeatherForUserLocation(lat, lon){
   return false;
 }
 
-function shouldRecenterUserLocation(lat, lon){
-  if(!maptilerMap) return false;
-
-  if(!hasCenteredOnUserLocation){
-    return true;
-  }
-
-  var now = Date.now();
-
-  var center = maptilerMap.getCenter && maptilerMap.getCenter();
-  var centerLat = center ? Number(center.lat) : null;
-  var centerLon = center ? Number(center.lng) : null;
-
-  var driftKm = 0;
-
-  if(isFinite(centerLat) && isFinite(centerLon)){
-    driftKm = distanceKmBetween(centerLat, centerLon, lat, lon);
-  }
-
-  var movedSinceLastCenterKm = 0;
-
-  if(lastUserFollowLat != null && lastUserFollowLon != null){
-    movedSinceLastCenterKm = distanceKmBetween(
-      lastUserFollowLat,
-      lastUserFollowLon,
-      lat,
-      lon
-    );
-  }
-
-  var movedEnough = movedSinceLastCenterKm >= USER_FOLLOW_MIN_MOVE_KM;
-  var driftedTooFar = driftKm >= USER_FOLLOW_MAX_DRIFT_KM;
-  var staleEnough = now - lastUserFollowAt >= USER_FOLLOW_MAX_INTERVAL_MS && driftKm >= USER_FOLLOW_MIN_MOVE_KM;
-
-  return movedEnough || driftedTooFar || staleEnough;
-}
-
-function smoothlyCenterOnUserLocation(lat, lon, options){
-  if(!maptilerMap) return;
-
-  options = options || {};
-
-  if(!shouldRecenterUserLocation(lat, lon) && !options.force){
-    return;
-  }
-
-  var currentZoom = maptilerMap.getZoom ? maptilerMap.getZoom() : 10;
-  var targetZoom = options.initial ? Math.max(currentZoom, 10) : currentZoom;
-
-  lastUserFollowLat = lat;
-  lastUserFollowLon = lon;
-  lastUserFollowAt = Date.now();
-  hasCenteredOnUserLocation = true;
-
-  try{
-    maptilerMap.easeTo({
-      center:[lon, lat],
-      zoom:targetZoom,
-      duration:options.initial ? 700 : 950,
-      easing:function(t){
-        return t * (2 - t);
-      },
-      essential:true
-    });
-  }catch(e){
-    try{
-      maptilerMap.jumpTo({
-        center:[lon, lat],
-        zoom:targetZoom
-      });
-    }catch(err){}
-  }
-}
 
 async function updateWeatherFromUserLocation(lat, lon){
   clearWeatherSelectionMarker();
@@ -2752,36 +2336,21 @@ async function updateWeatherFromUserLocation(lat, lon){
 function handleUserLocationUpdate(lat, lon, options){
   options = options || {};
 
-  latestUserPosition = {
-    lat:lat,
-    lon:lon
-  };
-
-  updateHeadingMarker();
-
-  if(options.enableFollow){
-    userFollowEnabled = true;
+  if(options.suppressWeather){
+    return;
   }
 
-  if(userFollowEnabled){
-    smoothlyCenterOnUserLocation(lat, lon, {
-      initial:options.initial === true,
-      force:options.forceCenter === true
-    });
+  if(options.forceWeather){
+    updateWeatherFromUserLocation(lat, lon);
+    lastUserWeatherLat = lat;
+    lastUserWeatherLon = lon;
+    lastUserWeatherAt = Date.now();
+    return;
   }
 
-if(options.suppressWeather){
-  return;
-}
-
-if(options.forceWeather){
-  lastUserWeatherLat = lat;
-  lastUserWeatherLon = lon;
-  lastUserWeatherAt = Date.now();
-  updateWeatherFromUserLocation(lat, lon);
-}else if(shouldRefreshWeatherForUserLocation(lat, lon)){
-  updateWeatherFromUserLocation(lat, lon);
-}
+  if(shouldRefreshWeatherForUserLocation(lat, lon)){
+    updateWeatherFromUserLocation(lat, lon);
+  }
 }
 
 function extractPlaceLabel(feature){
@@ -2970,7 +2539,7 @@ function renderFavoritesList(){
 }
 
 function focusMapOnPoint(lat, lon, zoomLevel){
-  userFollowEnabled = false;
+  
 
   var zoom = zoomLevel || 9;
 
@@ -4377,7 +3946,6 @@ applyWeatherOverlay(
   async function handlePrimaryMapClick(lat,lon){
   if(Date.now()-lastObjectInteractionAt<500) return;
 
-  userFollowEnabled = false;
 
   weatherDetailsExpanded = false;
       syncWeatherOverlayExpandedState();
@@ -4468,42 +4036,14 @@ var weatherGeolocateControl = new maptilersdk.GeolocateControl({
   fitBoundsOptions: {
     maxZoom: 12
   },
-  trackUserLocation: false,
-  showUserLocation: false,
-  showAccuracyCircle: false,
-  showUserHeading: false
+  trackUserLocation: true,
+  showUserLocation: true,
+  showAccuracyCircle: true,
+  showUserHeading: true
 });
 
 maptilerMap.addControl(weatherGeolocateControl, 'top-right');
-function bindHeadingToGeolocateButton(){
-  var attempts = 0;
 
-  function bind(){
-    attempts++;
-
-    var button =
-      document.querySelector(".maplibregl-ctrl-geolocate") ||
-      document.querySelector(".mapboxgl-ctrl-geolocate");
-
-    if(!button){
-      if(attempts < 40){
-        setTimeout(bind, 100);
-      }
-      return;
-    }
-
-    if(button.dataset.headingBound === "true") return;
-    button.dataset.headingBound = "true";
-
-    button.addEventListener("click", function(){
-      enableHeadingMode();
-    });
-  }
-
-  bind();
-}
-
-bindHeadingToGeolocateButton();
 weatherGeolocateControl.on('geolocate', function(e){
   if(!e || !e.coords) return;
 
@@ -4512,38 +4052,11 @@ weatherGeolocateControl.on('geolocate', function(e){
 
   if(!isFinite(lat) || !isFinite(lon)) return;
 
-  userFollowEnabled = true;
-  hasCenteredOnUserLocation = false;
-
-  lastUserFollowLat = null;
-  lastUserFollowLon = null;
-  lastUserFollowAt = 0;
-
-lastUserWeatherLat = null;
-lastUserWeatherLon = null;
-lastUserWeatherAt = 0;
-
-latestUserPosition = {
-  lat: lat,
-  lon: lon
-};
-
-updateHeadingMarker();
-
-handleUserLocationUpdate(lat, lon, {
-  enableFollow:true,
-  initial:true,
-  forceCenter:true,
-  forceWeather:true
-});
-});
-weatherGeolocateControl.on('trackuserlocationstart', function(){
-  userFollowEnabled = true;
+  handleUserLocationUpdate(lat, lon, {
+    forceWeather: true
+  });
 });
 
-weatherGeolocateControl.on('trackuserlocationend', function(){
-  userFollowEnabled = false;
-});
 
 weatherGeolocateControl.on('error', function(e){
   console.warn("Min plats kunde inte aktiveras", e);
@@ -4624,7 +4137,7 @@ function syncAllLayerButtons(){
   setMobToggle('mobileToggleLighthouseBtn',showLighthouseObjects);
 
   syncBaseMapButtons();
-  syncHeadingButtons();
+  
 
   updateActiveLayersBadge();
   refreshMobileNavState();
@@ -5005,15 +4518,7 @@ function onSatelliteToggle(){
             }
           });
 
-          ['toggleHeadingBtn','mobileToggleHeadingBtn'].forEach(function(id){
-            var el=document.getElementById(id);
-            if(el){
-              el.addEventListener('click',function(e){
-                e.stopPropagation();
-                toggleHeadingMode();
-              });
-            }
-          });
+      
 
           ['toggleWindLayerBtn','mobileToggleWindBtn'].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener('click',onWindToggle); });
           ['togglePrecipLayerBtn','mobileTogglePrecipBtn'].forEach(function(id){ var el=document.getElementById(id); if(el) el.addEventListener('click',onPrecipToggle); });
@@ -5191,9 +4696,7 @@ if(
   }, 0);
 });
 
-      maptilerMap.on('dragstart', function(){
-        userFollowEnabled = false;
-      });
+    
 
       maptilerMap.on('click',function(e){ if(e.lngLat) handlePrimaryMapClick(e.lngLat.lat,e.lngLat.lng); });
     }else{
