@@ -2234,16 +2234,38 @@ function removeHeadingMarker(){
 
 function handleDeviceOrientation(e){
   var heading = null;
+  var shouldApplyScreenAngle = false;
 
-  if(e && typeof e.webkitCompassHeading === "number"){
+  if(e && typeof e.webkitCompassHeading === "number" && isFinite(e.webkitCompassHeading)){
+    // iOS Safari: redan kompassriktning mot norr.
     heading = e.webkitCompassHeading;
-  }else if(e && typeof e.alpha === "number"){
+    shouldApplyScreenAngle = false;
+  }else if(e && e.absolute === true && typeof e.alpha === "number" && isFinite(e.alpha)){
     heading = 360 - e.alpha;
+    shouldApplyScreenAngle = true;
+  }else if(e && typeof e.alpha === "number" && isFinite(e.alpha)){
+    heading = 360 - e.alpha;
+    shouldApplyScreenAngle = true;
   }
 
   if(heading == null || !isFinite(heading)) return;
 
+  if(shouldApplyScreenAngle){
+    var screenAngle = 0;
+
+    try{
+      if(window.screen && window.screen.orientation && typeof window.screen.orientation.angle === "number"){
+        screenAngle = window.screen.orientation.angle;
+      }else if(typeof window.orientation === "number"){
+        screenAngle = window.orientation;
+      }
+    }catch(err){}
+
+    heading = heading + screenAngle;
+  }
+
   latestDeviceHeading = ((heading % 360) + 360) % 360;
+
   updateHeadingMarker();
 }
 
@@ -2333,7 +2355,9 @@ async function enableHeadingMode(){
 
   if(!ok){
     headingEnabled = false;
+    latestDeviceHeading = null;
     syncHeadingButtons();
+    updateHeadingMarker();
     return;
   }
 
@@ -2341,7 +2365,11 @@ async function enableHeadingMode(){
 
   attachHeadingListener();
   startHeadingPositionWatch();
-  updateHeadingMarker();
+
+  if(latestUserPosition){
+    updateHeadingMarker();
+  }
+
   syncHeadingButtons();
 }
 
@@ -4458,7 +4486,7 @@ function bindHeadingToGeolocateButton(){
       document.querySelector(".mapboxgl-ctrl-geolocate");
 
     if(!button){
-      if(attempts < 20){
+      if(attempts < 40){
         setTimeout(bind, 100);
       }
       return;
@@ -4467,9 +4495,9 @@ function bindHeadingToGeolocateButton(){
     if(button.dataset.headingBound === "true") return;
     button.dataset.headingBound = "true";
 
-    button.addEventListener("pointerdown", function(){
+    button.addEventListener("click", function(){
       enableHeadingMode();
-    }, { passive:true });
+    });
   }
 
   bind();
@@ -4519,7 +4547,7 @@ weatherGeolocateControl.on('trackuserlocationend', function(){
 
 weatherGeolocateControl.on('error', function(e){
   console.warn("Min plats kunde inte aktiveras", e);
-  disableHeadingMode();
+ 
 });
       maptilerMap.on('load',function(){
         if(!window.maptilerweather){ console.error('MapTiler Weather ej tillgänglig'); return; }
