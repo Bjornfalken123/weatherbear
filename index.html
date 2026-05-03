@@ -957,6 +957,15 @@
 #appRoot{
   visibility:hidden;
 }
+    #toggleHeadingBtn,
+#mobileToggleHeadingBtn{
+  display:none !important;
+}
+
+.filter-row:has(#toggleHeadingBtn),
+.sheet-row:has(#mobileToggleHeadingBtn){
+  display:none !important;
+}
   </style>
 </head>
 <body>
@@ -2088,7 +2097,11 @@ function setBaseMapMode(mode){
     }
   }
 
-  syncBaseMapButtons();
+  if(baseMapMode !== "nautical"){
+  disableHeadingMode();
+}
+
+syncBaseMapButtons();
 }
 
 function toggleBaseMapMode(){
@@ -4192,7 +4205,11 @@ weatherGeolocateControl.on('geolocate', function(e){
     lon: lon
   };
 
-  updateHeadingMarker();
+  if(baseMapMode === "nautical"){
+    enableHeadingMode();
+  }else{
+    updateHeadingMarker();
+  }
 
   focusMapOnPoint(lat, lon, 10);
   handlePrimaryMapClick(lat, lon);
