@@ -2123,11 +2123,8 @@ function syncBaseMapButtons(){
 }
 
 function syncHeadingWithNauticalMode(){
-  if(baseMapMode !== "nautical"){
-    disableHeadingMode();
-    return;
-  }
-
+  // Riktning ska fungera i både standardkarta och sjökort.
+  // Därför ska den inte kopplas till baseMapMode längre.
   if(latestUserPosition){
     enableHeadingMode();
   }
@@ -4196,9 +4193,9 @@ var weatherGeolocateControl = new maptilersdk.GeolocateControl({
     maxZoom: 12
   },
   trackUserLocation: true,
-  showUserLocation: true,
-  showAccuracyCircle: true,
-  showUserHeading: true
+ showUserLocation: false,
+showAccuracyCircle: false,
+showUserHeading: false
 });
 
 maptilerMap.addControl(weatherGeolocateControl, 'top-right');
@@ -4216,23 +4213,17 @@ weatherGeolocateControl.on('geolocate', function(e){
     lon: lon
   };
 
-  if(baseMapMode === "nautical"){
-    enableHeadingMode();
-  }else{
-    updateHeadingMarker();
-  }
+  enableHeadingMode();
 
   focusMapOnPoint(lat, lon, 10);
   handlePrimaryMapClick(lat, lon);
 });
-      weatherGeolocateControl.on('trackuserlocationstart', function(){
-  syncHeadingWithNauticalMode();
+weatherGeolocateControl.on('trackuserlocationstart', function(){
+  enableHeadingMode();
 });
 
 weatherGeolocateControl.on('trackuserlocationend', function(){
-  if(baseMapMode !== "nautical"){
-    disableHeadingMode();
-  }
+  disableHeadingMode();
 });
 
 weatherGeolocateControl.on('error', function(e){
