@@ -1332,6 +1332,8 @@
       weatherDetailsExpanded=false,
       timelineApplyTimer=null,
       pendingForecastTime=null;
+    var selectedSeaAreaData = null;
+var latestSeaAreaRequestId = 0;
 
     var savedSelections={weather:null,wave:null,lighthouse:null};
 
@@ -1360,7 +1362,45 @@ var nauticalBaseLayerId = "nautical-light-base-layer";
 var nauticalSeamarkSourceId = "nautical-seamark-source";
 var nauticalSeamarkLayerId = "nautical-seamark-layer";
     var nauticalLayerOrderTimer = null;
+async function loadSeaAreaData(lat, lon, radiusKm){
+  var requestId = ++latestSeaAreaRequestId;
 
+  selectedSeaAreaData = null;
+  renderSeaAreaPanel();
+
+  try{
+    var url =
+      "/api/sea-area?lat=" +
+      encodeURIComponent(String(lat)) +
+      "&lon=" +
+      encodeURIComponent(String(lon)) +
+      "&radiusKm=" +
+      encodeURIComponent(String(radiusKm));
+
+    var res = await fetch(url);
+    var data = await res.json();
+
+    if(requestId !== latestSeaAreaRequestId) return;
+
+    if(!res.ok){
+      throw new Error((data && data.error) || "Havsdata kunde inte hämtas");
+    }
+
+    selectedSeaAreaData = data;
+    renderSeaAreaPanel();
+  }catch(e){
+    if(requestId !== latestSeaAreaRequestId) return;
+
+    console.warn("Havsområdesdata kunde inte hämtas", e);
+
+    selectedSeaAreaData = {
+      error: true,
+      message: "Det gick inte att hämta havsdata för området."
+    };
+
+    renderSeaAreaPanel();
+  }
+}
 function refreshNauticalLayerOrder(){
   if(!maptilerMap) return;
 
@@ -2718,27 +2758,112 @@ function renderSeaAreaPanel(){
     return;
   }
 
+  if(!selectedSeaAreaData){
+    areaContent.className = "sea-area-card";
+    areaContent.innerHTML =
+      '<div class="sea-area-title">Hämtar havsdata...</div>' +
+      '<div class="sea-area-meta">' +
+        'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
+        'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
+        'Letar efter närliggande stationer och observationer.' +
+      '</div>' +
+      '<div class="sea-data-placeholder">' +
+        '<div class="sea-data-row"><span>Vattentemp</span><strong>Laddar...</strong></div>' +
+        '<div class="sea-data-row"><span>Våghöjd</span><strong>Laddar...</strong></div>' +
+        '<div class="sea-data-row"><span>Vattenstånd</span><strong>Laddar...</strong></div>' +
+        '<div class="sea-data-row"><span>Vind/byvind</span><strong>Laddar...</strong></div>' +
+      '</div>';
+
+    if(stationsContent){
+      stationsContent.innerHTML =
+        "Stationer inom " + selectedSeaArea.radiusKm + " km laddas...";
+    }
+
+    return;
+  }
+
+  if(selectedSeaAreaData.error){
+    areaContent.className = "sea-empty-state";
+    areaContent.innerHTML =
+      selectedSeaAreaData.message ||
+      "Det gick inte att hämta havsdata för området.";
+
+    if(stationsContent){
+      stationsContent.innerHTML =
+        "Stationer kunde inte hämtas just nu.";
+    }
+
+    return;
+  }
+
+  var waterTemp =
+    selectedSeaAreaData.waterTempText ||
+    selectedSeaAreaData.waterTemperatureText ||
+    selectedSeaAreaData.waterTemperature ||
+    "--";
+
+  var waveHeight =
+    selectedSeaAreaData.waveHeightText ||
+    selectedSeaAreaData.waveHeight ||
+    "--";
+
+  var waterLevel =
+    selectedSeaAreaData.waterLevelText ||
+    selectedSeaAreaData.waterLevel ||
+    "--";
+
+  var wind =
+    selectedSeaAreaData.windText ||
+    selectedSeaAreaData.wind ||
+    "--";
+
+  var gust =
+    selectedSeaAreaData.gustText ||
+    selectedSeaAreaData.gust ||
+    "";
+
+  var stationCount =
+    Array.isArray(selectedSeaAreaData.stations)
+      ? selectedSeaAreaData.stations.length
+      : 0;
+
   areaContent.className = "sea-area-card";
   areaContent.innerHTML =
     '<div class="sea-area-title">Havsområde valt</div>' +
     '<div class="sea-area-meta">' +
       'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
       'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
-      'Nästa steg: här kopplar vi in /api/sea-area och visar vattentemp, våghöjd, vattenstånd och vind.' +
+      'Stationer hittade: ' + stationCount +
     '</div>' +
     '<div class="sea-data-placeholder">' +
-      '<div class="sea-data-row"><span>Vattentemp</span><strong>Kommer snart</strong></div>' +
-      '<div class="sea-data-row"><span>Våghöjd</span><strong>Kommer snart</strong></div>' +
-      '<div class="sea-data-row"><span>Vattenstånd</span><strong>Kommer snart</strong></div>' +
-      '<div class="sea-data-row"><span>Vind/byvind</span><strong>Kommer snart</strong></div>' +
+      '<div class="sea-data-row"><span>Vattentemp</span><strong>' + waterTemp + '</strong></div>' +
+      '<div class="sea-data-row"><span>Våghöjd</span><strong>' + waveHeight + '</strong></div>' +
+      '<div class="sea-data-row"><span>Vattenstånd</span><strong>' + waterLevel + '</strong></div>' +
+      '<div class="sea-data-row"><span>Vind/byvind</span><strong>' + wind + (gust ? ' / ' + gust : '') + '</strong></div>' +
     '</div>';
 
   if(stationsContent){
-    stationsContent.innerHTML =
-      "Stationer inom " + selectedSeaArea.radiusKm + " km visas här när datakopplingen är klar.";
+    if(!stationCount){
+      stationsContent.innerHTML =
+        "Inga stationer hittades inom " + selectedSeaArea.radiusKm + " km.";
+    }else{
+      stationsContent.innerHTML = selectedSeaAreaData.stations.map(function(station){
+        var name = station.name || "Okänd station";
+        var type = station.type || station.source || "Station";
+        var distance = station.distanceKm != null
+          ? Number(station.distanceKm).toFixed(1) + " km"
+          : "";
+
+        return (
+          '<div class="sea-data-row">' +
+            '<span>' + name + '</span>' +
+            '<strong>' + type + (distance ? ' · ' + distance : '') + '</strong>' +
+          '</div>'
+        );
+      }).join("");
+    }
   }
 }
-
 function selectSeaArea(lat, lon){
   selectedSeaArea = {
     lat: lat,
@@ -2747,8 +2872,12 @@ function selectSeaArea(lat, lon){
     selectedAt: Date.now()
   };
 
+  selectedSeaAreaData = null;
+
   updateSeaAreaLayer();
   renderSeaAreaPanel();
+
+  loadSeaAreaData(lat, lon, seaAreaRadiusKm);
 
   try{
     if(maptilerMap){
