@@ -735,7 +735,7 @@
 
 .sea-svg-chart{
   width:100%;
-  height:128px;
+  height:150px;
   display:block;
   overflow:visible;
 }
@@ -1528,6 +1528,9 @@ function formatSeaChartTime(value){
   return d.toLocaleDateString("sv-SE", {
     day: "2-digit",
     month: "2-digit"
+  }) + " " + d.toLocaleTimeString("sv-SE", {
+    hour: "2-digit",
+    minute: "2-digit"
   });
 }
 
@@ -1547,15 +1550,17 @@ function buildSeaSvgChart(points, unit){
       '<div class="sea-chart-empty">' +
         'Endast senaste värdet finns ännu: <strong>' +
         formatSeaChartValue(points[0].value, unit) +
-        '</strong>' +
+        '</strong><br>' +
+        '<span>' + formatSeaChartTime(points[0].time) + '</span>' +
       '</div>'
     );
   }
 
   var width = 320;
-  var height = 128;
-  var padX = 12;
-  var padY = 14;
+  var height = 150;
+  var padX = 16;
+  var padTop = 14;
+  var padBottom = 30;
 
   var values = points
     .map(function(p){ return Number(p.value); })
@@ -1574,12 +1579,12 @@ function buildSeaSvgChart(points, unit){
   }
 
   var usableW = width - padX * 2;
-  var usableH = height - padY * 2;
+  var usableH = height - padTop - padBottom;
 
   var coords = points.map(function(point, index){
     var value = Number(point.value);
     var x = padX + (index / Math.max(points.length - 1, 1)) * usableW;
-    var y = padY + (1 - ((value - min) / (max - min))) * usableH;
+    var y = padTop + (1 - ((value - min) / (max - min))) * usableH;
 
     return {
       x: x,
@@ -1595,23 +1600,33 @@ function buildSeaSvgChart(points, unit){
 
   var areaPath =
     path +
-    " L " + coords[coords.length - 1].x.toFixed(1) + " " + (height - padY) +
-    " L " + coords[0].x.toFixed(1) + " " + (height - padY) +
+    " L " + coords[coords.length - 1].x.toFixed(1) + " " + (height - padBottom) +
+    " L " + coords[0].x.toFixed(1) + " " + (height - padBottom) +
     " Z";
 
   var first = coords[0];
+  var middle = coords[Math.floor(coords.length / 2)];
   var last = coords[coords.length - 1];
 
   return (
-    '<svg class="sea-svg-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Historikdiagram">' +
-      '<line x1="' + padX + '" y1="' + (height - padY) + '" x2="' + (width - padX) + '" y2="' + (height - padY) + '" stroke="rgba(255,255,255,0.16)" stroke-width="1"></line>' +
-      '<line x1="' + padX + '" y1="' + padY + '" x2="' + padX + '" y2="' + (height - padY) + '" stroke="rgba(255,255,255,0.12)" stroke-width="1"></line>' +
+    '<svg class="sea-svg-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Havsdiagram">' +
+
+      '<line x1="' + padX + '" y1="' + (height - padBottom) + '" x2="' + (width - padX) + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.16)" stroke-width="1"></line>' +
+      '<line x1="' + padX + '" y1="' + padTop + '" x2="' + padX + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.12)" stroke-width="1"></line>' +
+
+      '<text x="' + padX + '" y="10" fill="rgba(255,255,255,0.62)" font-size="9">' + formatSeaChartValue(max, unit) + '</text>' +
+      '<text x="' + padX + '" y="' + (height - padBottom - 3) + '" fill="rgba(255,255,255,0.62)" font-size="9">' + formatSeaChartValue(min, unit) + '</text>' +
+
       '<path d="' + areaPath + '" fill="rgba(123,199,255,0.13)"></path>' +
       '<path d="' + path + '" fill="none" stroke="rgba(123,199,255,0.95)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>' +
+
       '<circle cx="' + first.x + '" cy="' + first.y + '" r="3.2" fill="rgba(255,255,255,0.9)"></circle>' +
       '<circle cx="' + last.x + '" cy="' + last.y + '" r="4" fill="rgba(152,240,219,0.95)"></circle>' +
-      '<text x="' + padX + '" y="10" fill="rgba(255,255,255,0.58)" font-size="9">' + formatSeaChartValue(max, unit) + '</text>' +
-      '<text x="' + padX + '" y="' + (height - 2) + '" fill="rgba(255,255,255,0.58)" font-size="9">' + formatSeaChartValue(min, unit) + '</text>' +
+
+      '<text x="' + first.x + '" y="' + (height - 14) + '" text-anchor="start" fill="rgba(255,255,255,0.62)" font-size="8">' + formatSeaChartTime(first.time) + '</text>' +
+      '<text x="' + middle.x + '" y="' + (height - 4) + '" text-anchor="middle" fill="rgba(255,255,255,0.44)" font-size="8">' + formatSeaChartTime(middle.time) + '</text>' +
+      '<text x="' + last.x + '" y="' + (height - 14) + '" text-anchor="end" fill="rgba(255,255,255,0.62)" font-size="8">' + formatSeaChartTime(last.time) + '</text>' +
+
     '</svg>'
   );
 }
@@ -1693,12 +1708,15 @@ function renderSeaTimeseriesPanel(){
       chartHtml +
     '</div>';
 
-  container.querySelectorAll("[data-sea-metric]").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      activeSeaMetric = btn.getAttribute("data-sea-metric") || "waterTemp";
-      renderSeaTimeseriesPanel();
-    });
+container.querySelectorAll("[data-sea-metric]").forEach(function(btn){
+  btn.addEventListener("click", function(e){
+    e.preventDefault();
+    e.stopPropagation();
+
+    activeSeaMetric = btn.getAttribute("data-sea-metric") || "waterTemp";
+    renderSeaTimeseriesPanel();
   });
+});
 }
 function refreshNauticalLayerOrder(){
   if(!maptilerMap) return;
@@ -3117,15 +3135,7 @@ if(selectedSeaAreaData.error){
     selectedSeaAreaData.waterLevel ||
     "--";
 
-  var wind =
-    selectedSeaAreaData.windText ||
-    selectedSeaAreaData.wind ||
-    "--";
 
-  var gust =
-    selectedSeaAreaData.gustText ||
-    selectedSeaAreaData.gust ||
-    "";
 
   var stationCount =
     Array.isArray(selectedSeaAreaData.stations)
@@ -4337,6 +4347,11 @@ async function loadAisData(force){
    var mobileSeaSheet=document.getElementById('mobileSeaSheet');
 var mobileFilterSheet=document.getElementById('mobileFilterSheet');
 var mobileSearchSheet=document.getElementById('mobileSearchSheet');
+    if(mobileSeaSheet){
+  mobileSeaSheet.addEventListener("click", function(e){
+    e.stopPropagation();
+  });
+}
     var mobileSearchInput=document.getElementById('mobileSearchInput');
     var mobileSearchResults=document.getElementById('mobileSearchResults');
    var mobileSearchCloseBtn=document.getElementById('mobileSearchCloseBtn');
@@ -4900,9 +4915,11 @@ function closeSea(){
 
   mobileSeaSheet.classList.remove('is-open');
 
-  if(activeBottomTab !== "sea"){
-    setSeaAreaVisible(false);
+  if(activeBottomTab === "sea"){
+    activeBottomTab = "weather";
   }
+
+  setSeaAreaVisible(false);
 
   refreshMobileNavState();
   refreshMapSizeSoon();
