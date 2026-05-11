@@ -577,8 +577,15 @@
       overflow-y:auto;
       -webkit-overflow-scrolling:touch;
     }
-    #mobileSearchSheet{z-index:9100;}
-    #mobileFilterSheet.is-open,#mobileSearchSheet.is-open{display:block;animation:sheetUp 260ms cubic-bezier(0.22,1,0.36,1) both;}
+   #mobileSearchSheet{z-index:9100;}
+#mobileSeaSheet{z-index:9050;}
+
+#mobileFilterSheet.is-open,
+#mobileSearchSheet.is-open,
+#mobileSeaSheet.is-open{
+  display:block;
+  animation:sheetUp 260ms cubic-bezier(0.22,1,0.36,1) both;
+}
     @keyframes sheetUp{from{transform:translateY(100%);opacity:0.5;}to{transform:translateY(0);opacity:1;}}
 
     .sheet-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px 12px;border-bottom:1px solid rgba(255,255,255,0.07);}
@@ -595,6 +602,91 @@
     .sheet-toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:999px;background:rgba(255,255,255,0.5);transition:transform 200ms cubic-bezier(0.22,1,0.36,1),background 200ms ease;}
     .sheet-toggle.is-on{background:rgba(43,108,255,0.85);border-color:rgba(123,199,255,0.4);}
     .sheet-toggle.is-on::after{transform:translateX(20px);background:#fff;}
+    .sea-tabs{
+  display:flex;
+  gap:8px;
+  padding:12px 18px 0;
+}
+
+.sea-tab-btn{
+  flex:1;
+  appearance:none;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--muted-soft);
+  border-radius:14px;
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.sea-tab-btn.is-active{
+  background:rgba(43,108,255,0.85);
+  color:#fff;
+  border-color:rgba(123,199,255,0.35);
+}
+
+.sea-empty-state{
+  padding:14px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);
+  color:var(--muted-soft);
+  font-size:13px;
+  line-height:1.55;
+}
+
+.sea-area-card{
+  padding:14px;
+  border-radius:16px;
+  border:1px solid rgba(123,199,255,0.2);
+  background:rgba(123,199,255,0.08);
+}
+
+.sea-area-title{
+  color:var(--text);
+  font-size:15px;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.sea-area-meta{
+  color:var(--muted-soft);
+  font-size:12px;
+  line-height:1.45;
+}
+
+.sea-data-placeholder{
+  margin-top:12px;
+  display:grid;
+  gap:8px;
+}
+
+.sea-data-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:13px;
+  background:rgba(255,255,255,0.045);
+  border:1px solid rgba(255,255,255,0.065);
+  color:var(--text-soft);
+  font-size:13px;
+}
+
+.sea-data-row span:first-child{
+  color:var(--muted-soft);
+}
+
+.sea-stations-placeholder{
+  padding:14px;
+  border-radius:16px;
+  border:1px dashed rgba(255,255,255,0.16);
+  color:var(--muted-soft);
+  font-size:13px;
+  line-height:1.55;
+}
 
     .search-input-wrap{padding:14px 18px 10px;}
     #mobileSearchInput{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.06);color:#fff;outline:none;font-size:16px;}
@@ -684,8 +776,8 @@
   padding:4px 7px;
 }
 
-    @media (min-width:701px){
-      #bottomTabBar,#mobileFilterSheet,#mobileSearchSheet{display:none !important;}
+ @media (min-width:701px){
+      #bottomTabBar,#mobileFilterSheet,#mobileSearchSheet,#mobileSeaSheet{display:none !important;}
     }
 
    @media (max-width:700px){
@@ -1033,13 +1125,75 @@
     </section>
   </div>
 
-  <nav id="bottomTabBar">
-    <button class="tab-btn active" id="tabWeather" type="button"><svg viewBox="0 0 24 24"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path><circle cx="12" cy="12" r="4"></circle></svg>Väder</button>
-    <button class="tab-btn" id="tabWave" type="button"><svg viewBox="0 0 24 24"><path d="M2 12c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"></path><path d="M2 17c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"></path></svg>Boj / hav<span class="tab-btn-badge" id="waveBadge"></span></button>
-    <button class="tab-btn" id="tabLighthouse" type="button"><svg viewBox="0 0 24 24"><path d="M12 2L9 8h6L12 2z"></path><rect x="10" y="8" width="4" height="10" rx="1"></rect><path d="M8 18h8M6 21h12"></path></svg>Fyr<span class="tab-btn-badge" id="lighthouseBadge"></span></button>
-    <button class="tab-btn" id="tabFilter" type="button"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="11" y1="18" x2="13" y2="18"></line></svg>Filter<span class="tab-btn-badge" id="filterBadge"></span></button>
-    <button class="tab-btn" id="tabSearch" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="16.65" y1="16.65" x2="21" y2="21"></line></svg>Sök</button>
-  </nav>
+<nav id="bottomTabBar">
+  <button class="tab-btn active" id="tabWeather" type="button">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      <circle cx="12" cy="12" r="4"></circle>
+    </svg>
+    Väder
+  </button>
+
+  <button class="tab-btn" id="tabSea" type="button">
+    <svg viewBox="0 0 24 24">
+      <path d="M2 12c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"></path>
+      <path d="M2 17c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"></path>
+    </svg>
+    Hav
+    <span class="tab-btn-badge" id="seaBadge"></span>
+  </button>
+
+  <button class="tab-btn" id="tabFilter" type="button">
+    <svg viewBox="0 0 24 24">
+      <line x1="4" y1="6" x2="20" y2="6"></line>
+      <line x1="8" y1="12" x2="16" y2="12"></line>
+      <line x1="11" y1="18" x2="13" y2="18"></line>
+    </svg>
+    Filter
+    <span class="tab-btn-badge" id="filterBadge"></span>
+  </button>
+
+  <button class="tab-btn" id="tabSearch" type="button">
+    <svg viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7"></circle>
+      <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+    </svg>
+    Sök
+  </button>
+
+  <button class="tab-btn" id="tabPlaces" type="button">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 21s7-5.4 7-12a7 7 0 1 0-14 0c0 6.6 7 12 7 12z"></path>
+      <circle cx="12" cy="9" r="2.5"></circle>
+    </svg>
+    Platser
+  </button>
+</nav>
+  <div id="mobileSeaSheet">
+  <div class="sheet-header">
+    <button id="mobileSeaCloseBtn" type="button" class="sheet-close-btn">Stäng</button>
+    <div class="sheet-title">Hav</div>
+  </div>
+
+  <div class="sea-tabs">
+    <button id="seaAreaTabBtn" type="button" class="sea-tab-btn is-active">Område</button>
+    <button id="seaStationsTabBtn" type="button" class="sea-tab-btn">Stationer</button>
+  </div>
+
+  <div class="sheet-body">
+    <div id="seaAreaView">
+      <div id="seaAreaContent" class="sea-empty-state">
+        Tryck på kartan för att markera ett havsområde. Första versionen använder 30 km radie.
+      </div>
+    </div>
+
+    <div id="seaStationsView" style="display:none;">
+      <div id="seaStationsContent" class="sea-stations-placeholder">
+        När ett havsområde är valt kommer stationer i området visas här.
+      </div>
+    </div>
+  </div>
+</div>
 
  <div id="mobileFilterSheet">
   <div class="sheet-header">
@@ -1096,6 +1250,13 @@
   
   <script>
   var activeMode="weather",
+      activeBottomTab="weather",
+      seaMode="area",
+      selectedSeaArea=null,
+      seaAreaRadiusKm=30,
+      seaAreaSourceId="sea-area-source",
+      seaAreaFillLayerId="sea-area-fill-layer",
+      seaAreaLineLayerId="sea-area-line-layer",
       showWaveObjects=false,
       showLighthouseObjects=false,
       showAisObjects=false,
@@ -2335,6 +2496,200 @@ function distanceKmBetween(lat1, lon1, lat2, lon2){
     }
   }catch(e){}
 }
+function makeSeaCircleGeoJson(lat, lon, radiusKm, points){
+  points = points || 96;
+
+  var coords = [];
+  var earthRadiusKm = 6371;
+
+  var latRad = lat * Math.PI / 180;
+  var lonRad = lon * Math.PI / 180;
+  var distance = radiusKm / earthRadiusKm;
+
+  for(var i = 0; i <= points; i++){
+    var bearing = (i / points) * 2 * Math.PI;
+
+    var pointLat = Math.asin(
+      Math.sin(latRad) * Math.cos(distance) +
+      Math.cos(latRad) * Math.sin(distance) * Math.cos(bearing)
+    );
+
+    var pointLon = lonRad + Math.atan2(
+      Math.sin(bearing) * Math.sin(distance) * Math.cos(latRad),
+      Math.cos(distance) - Math.sin(latRad) * Math.sin(pointLat)
+    );
+
+    coords.push([
+      pointLon * 180 / Math.PI,
+      pointLat * 180 / Math.PI
+    ]);
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {
+          radiusKm: radiusKm
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [coords]
+        }
+      }
+    ]
+  };
+}
+
+function ensureSeaAreaLayers(){
+  if(!maptilerMap) return false;
+
+  try{
+    if(!(maptilerMap.getSource && maptilerMap.getSource(seaAreaSourceId))){
+      maptilerMap.addSource(seaAreaSourceId, {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: []
+        }
+      });
+    }
+
+    if(!(maptilerMap.getLayer && maptilerMap.getLayer(seaAreaFillLayerId))){
+      maptilerMap.addLayer({
+        id: seaAreaFillLayerId,
+        type: "fill",
+        source: seaAreaSourceId,
+        paint: {
+          "fill-color": "#7bc7ff",
+          "fill-opacity": 0.16
+        }
+      });
+    }
+
+    if(!(maptilerMap.getLayer && maptilerMap.getLayer(seaAreaLineLayerId))){
+      maptilerMap.addLayer({
+        id: seaAreaLineLayerId,
+        type: "line",
+        source: seaAreaSourceId,
+        paint: {
+          "line-color": "#7bc7ff",
+          "line-opacity": 0.9,
+          "line-width": 2
+        }
+      });
+    }
+
+    return true;
+  }catch(e){
+    console.warn("Kunde inte skapa havsområdeslager", e);
+    return false;
+  }
+}
+
+function updateSeaAreaLayer(){
+  if(!maptilerMap || !selectedSeaArea) return;
+  if(!ensureSeaAreaLayers()) return;
+
+  try{
+    var source = maptilerMap.getSource(seaAreaSourceId);
+
+    if(source && source.setData){
+      source.setData(
+        makeSeaCircleGeoJson(
+          selectedSeaArea.lat,
+          selectedSeaArea.lon,
+          selectedSeaArea.radiusKm
+        )
+      );
+    }
+
+    var seaBadge = document.getElementById("seaBadge");
+    if(seaBadge) seaBadge.classList.add("visible");
+  }catch(e){
+    console.warn("Kunde inte uppdatera havsområde", e);
+  }
+}
+
+function renderSeaAreaPanel(){
+  var areaContent = document.getElementById("seaAreaContent");
+  var stationsContent = document.getElementById("seaStationsContent");
+
+  if(!areaContent) return;
+
+  if(!selectedSeaArea){
+    areaContent.className = "sea-empty-state";
+    areaContent.innerHTML =
+      "Tryck på kartan för att markera ett havsområde. Första versionen använder 30 km radie.";
+
+    if(stationsContent){
+      stationsContent.innerHTML =
+        "När ett havsområde är valt kommer stationer i området visas här.";
+    }
+
+    return;
+  }
+
+  areaContent.className = "sea-area-card";
+  areaContent.innerHTML =
+    '<div class="sea-area-title">Havsområde valt</div>' +
+    '<div class="sea-area-meta">' +
+      'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
+      'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
+      'Nästa steg: här kopplar vi in /api/sea-area och visar vattentemp, våghöjd, vattenstånd och vind.' +
+    '</div>' +
+    '<div class="sea-data-placeholder">' +
+      '<div class="sea-data-row"><span>Vattentemp</span><strong>Kommer snart</strong></div>' +
+      '<div class="sea-data-row"><span>Våghöjd</span><strong>Kommer snart</strong></div>' +
+      '<div class="sea-data-row"><span>Vattenstånd</span><strong>Kommer snart</strong></div>' +
+      '<div class="sea-data-row"><span>Vind/byvind</span><strong>Kommer snart</strong></div>' +
+    '</div>';
+
+  if(stationsContent){
+    stationsContent.innerHTML =
+      "Stationer inom " + selectedSeaArea.radiusKm + " km visas här när datakopplingen är klar.";
+  }
+}
+
+function selectSeaArea(lat, lon){
+  selectedSeaArea = {
+    lat: lat,
+    lon: lon,
+    radiusKm: seaAreaRadiusKm,
+    selectedAt: Date.now()
+  };
+
+  updateSeaAreaLayer();
+  renderSeaAreaPanel();
+
+  try{
+    if(maptilerMap){
+      maptilerMap.easeTo({
+        center: [lon, lat],
+        zoom: Math.max(maptilerMap.getZoom ? maptilerMap.getZoom() : 8, 8),
+        duration: 350
+      });
+    }
+  }catch(e){}
+
+  openSea();
+}
+
+function setSeaMode(mode){
+  seaMode = mode === "stations" ? "stations" : "area";
+
+  var areaBtn = document.getElementById("seaAreaTabBtn");
+  var stationsBtn = document.getElementById("seaStationsTabBtn");
+  var areaView = document.getElementById("seaAreaView");
+  var stationsView = document.getElementById("seaStationsView");
+
+  if(areaBtn) areaBtn.classList.toggle("is-active", seaMode === "area");
+  if(stationsBtn) stationsBtn.classList.toggle("is-active", seaMode === "stations");
+
+  if(areaView) areaView.style.display = seaMode === "area" ? "block" : "none";
+  if(stationsView) stationsView.style.display = seaMode === "stations" ? "block" : "none";
+}    
 
 function shouldRefreshWeatherForUserLocation(lat, lon){
   var now = Date.now();
@@ -2532,9 +2887,9 @@ function renderFavoritesList(){
  main.onclick = function(){
   closeSearch();
   setTimeout(function(){
-    focusMapOnPoint(item.lat, item.lon, 9);
-    handlePrimaryMapClick(item.lat, item.lon);
-    refreshMapSizeSoon();
+   focusMapOnPoint(item.lat, item.lon, 9);
+handleMapClick(item.lat, item.lon);
+refreshMapSizeSoon();
   }, 120);
 };
 
@@ -3453,12 +3808,14 @@ async function loadAisData(force){
   refreshMobileNavState();
 }
 
-    var mobileFilterSheet=document.getElementById('mobileFilterSheet');
-    var mobileSearchSheet=document.getElementById('mobileSearchSheet');
+   var mobileSeaSheet=document.getElementById('mobileSeaSheet');
+var mobileFilterSheet=document.getElementById('mobileFilterSheet');
+var mobileSearchSheet=document.getElementById('mobileSearchSheet');
     var mobileSearchInput=document.getElementById('mobileSearchInput');
     var mobileSearchResults=document.getElementById('mobileSearchResults');
-    var mobileSearchCloseBtn=document.getElementById('mobileSearchCloseBtn');
-    var mobileFilterCloseBtn=document.getElementById('mobileFilterCloseBtn');
+   var mobileSearchCloseBtn=document.getElementById('mobileSearchCloseBtn');
+var mobileFilterCloseBtn=document.getElementById('mobileFilterCloseBtn');
+var mobileSeaCloseBtn=document.getElementById('mobileSeaCloseBtn');
 document.addEventListener("visibilitychange", function(){
   if(document.hidden){
     aisLatestRequestId++;
@@ -3468,15 +3825,32 @@ document.addEventListener("visibilitychange", function(){
     startAisAutoRefresh();
   }
 });
-    function refreshMobileNavState(){
-      var filterOpen=mobileFilterSheet && mobileFilterSheet.classList.contains('is-open');
-      var searchOpen=mobileSearchSheet && mobileSearchSheet.classList.contains('is-open');
-      if(searchOpen){ setActiveTab('tabSearch'); return; }
-      if(filterOpen){ setActiveTab('tabFilter'); return; }
-      if(showWaveObjects && !showLighthouseObjects){ setActiveTab('tabWave'); return; }
-      if(showLighthouseObjects && !showWaveObjects){ setActiveTab('tabLighthouse'); return; }
-      setActiveTab('tabWeather');
+ function refreshMobileNavState(){
+  var seaOpen = mobileSeaSheet && mobileSeaSheet.classList.contains('is-open');
+  var filterOpen = mobileFilterSheet && mobileFilterSheet.classList.contains('is-open');
+  var searchOpen = mobileSearchSheet && mobileSearchSheet.classList.contains('is-open');
+
+  if(searchOpen){
+    if(activeBottomTab === "places"){
+      setActiveTab('tabPlaces');
+    }else{
+      setActiveTab('tabSearch');
     }
+    return;
+  }
+
+  if(seaOpen || activeBottomTab === "sea"){
+    setActiveTab('tabSea');
+    return;
+  }
+
+  if(filterOpen){
+    setActiveTab('tabFilter');
+    return;
+  }
+
+  setActiveTab('tabWeather');
+}
 
     function updateModeUI(){
       waveMaptilerMarkerMap.forEach(function(d){ if(d.element) d.element.style.display=showWaveObjects ? 'block' : 'none'; });
@@ -3975,35 +4349,202 @@ applyWeatherOverlay(
     var toggleLighthouseModeBtn=document.getElementById('toggleLighthouseModeBtn');
     if(toggleLighthouseModeBtn){ toggleLighthouseModeBtn.addEventListener('click',function(){ showLighthouseObjects=!showLighthouseObjects; updateModeUI(); }); }
 
-    function openMobileFilterSheet(){ if(!mobileFilterSheet) return; if(mobileSearchSheet) mobileSearchSheet.classList.remove('is-open'); mobileFilterSheet.classList.add('is-open'); refreshMobileNavState(); refreshMapSizeSoon(); }
-    function closeMobileFilterSheet(){ if(!mobileFilterSheet) return; mobileFilterSheet.classList.remove('is-open'); refreshMobileNavState(); refreshMapSizeSoon(); }
-    function openSearch(){ if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open'); if(!mobileSearchSheet) return; mobileSearchSheet.classList.add('is-open'); refreshMobileNavState(); if(mobileSearchInput){ setTimeout(function(){ mobileSearchInput.focus(); },80); } }
-    function closeSearch(){ if(!mobileSearchSheet) return; mobileSearchSheet.classList.remove('is-open'); if(mobileSearchInput){ mobileSearchInput.blur(); } refreshMobileNavState(); setTimeout(function(){ refreshMapSizeSoon(); },120); }
+  function openSea(){
+  activeBottomTab = "sea";
 
-    if(mobileSearchCloseBtn){ mobileSearchCloseBtn.addEventListener('click',function(e){ e.stopPropagation(); closeSearch(); }); }
-    if(mobileFilterCloseBtn){ mobileFilterCloseBtn.addEventListener('click',function(e){ e.stopPropagation(); closeMobileFilterSheet(); }); }
+  if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
+  if(mobileSearchSheet) mobileSearchSheet.classList.remove('is-open');
+  if(!mobileSeaSheet) return;
 
-    var tabWeather=document.getElementById('tabWeather'); if(tabWeather){ tabWeather.addEventListener('click',function(){ closeMobileFilterSheet(); closeSearch(); refreshMobileNavState(); refreshMapSizeSoon(); }); }
-    var tabWave=document.getElementById('tabWave'); if(tabWave){ tabWave.addEventListener('click',function(){ closeMobileFilterSheet(); closeSearch(); showWaveObjects=!showWaveObjects; updateModeUI(); refreshMobileNavState(); }); }
-    var tabLighthouse=document.getElementById('tabLighthouse'); if(tabLighthouse){ tabLighthouse.addEventListener('click',function(){ closeMobileFilterSheet(); closeSearch(); showLighthouseObjects=!showLighthouseObjects; updateModeUI(); refreshMobileNavState(); }); }
-    var tabFilter=document.getElementById('tabFilter'); if(tabFilter){ tabFilter.addEventListener('click',function(e){ e.stopPropagation(); if(!mobileFilterSheet) return; if(mobileFilterSheet.classList.contains('is-open')){ closeMobileFilterSheet(); }else{ openMobileFilterSheet(); } }); }
-    var tabSearch=document.getElementById('tabSearch'); if(tabSearch){ tabSearch.addEventListener('click',function(e){ e.stopPropagation(); if(!mobileSearchSheet) return; if(mobileSearchSheet.classList.contains('is-open')){ closeSearch(); }else{ openSearch(); } }); }
+  mobileSeaSheet.classList.add('is-open');
+  renderSeaAreaPanel();
+  refreshMobileNavState();
+  refreshMapSizeSoon();
+}
+
+function closeSea(){
+  if(!mobileSeaSheet) return;
+  mobileSeaSheet.classList.remove('is-open');
+  refreshMobileNavState();
+  refreshMapSizeSoon();
+}
+
+function openMobileFilterSheet(){
+  activeBottomTab = "filter";
+
+  if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');
+  if(mobileSearchSheet) mobileSearchSheet.classList.remove('is-open');
+  if(!mobileFilterSheet) return;
+
+  mobileFilterSheet.classList.add('is-open');
+  refreshMobileNavState();
+  refreshMapSizeSoon();
+}
+
+function closeMobileFilterSheet(){
+  if(!mobileFilterSheet) return;
+  mobileFilterSheet.classList.remove('is-open');
+  refreshMobileNavState();
+  refreshMapSizeSoon();
+}
+
+function openSearch(){
+  activeBottomTab = "search";
+
+  if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');
+  if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
+  if(!mobileSearchSheet) return;
+
+  mobileSearchSheet.classList.add('is-open');
+  refreshMobileNavState();
+
+  if(mobileSearchInput){
+    setTimeout(function(){ mobileSearchInput.focus(); },80);
+  }
+}
+
+function openPlaces(){
+  activeBottomTab = "places";
+
+  if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');
+  if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
+  if(!mobileSearchSheet) return;
+
+  mobileSearchSheet.classList.add('is-open');
+  renderFavoritesList();
+  refreshMobileNavState();
+
+  if(mobileSearchInput){
+    mobileSearchInput.blur();
+  }
+}
+
+function closeSearch(){
+  if(!mobileSearchSheet) return;
+  mobileSearchSheet.classList.remove('is-open');
+
+  if(mobileSearchInput){
+    mobileSearchInput.blur();
+  }
+
+  refreshMobileNavState();
+  setTimeout(function(){ refreshMapSizeSoon(); },120);
+}
+
+  if(mobileSearchCloseBtn){ mobileSearchCloseBtn.addEventListener('click',function(e){ e.stopPropagation(); closeSearch(); }); }
+if(mobileFilterCloseBtn){ mobileFilterCloseBtn.addEventListener('click',function(e){ e.stopPropagation(); closeMobileFilterSheet(); }); }
+if(mobileSeaCloseBtn){ mobileSeaCloseBtn.addEventListener('click',function(e){ e.stopPropagation(); closeSea(); }); }
+
+var seaAreaTabBtn=document.getElementById('seaAreaTabBtn');
+if(seaAreaTabBtn){
+  seaAreaTabBtn.addEventListener('click',function(e){
+    e.stopPropagation();
+    setSeaMode('area');
+  });
+}
+
+var seaStationsTabBtn=document.getElementById('seaStationsTabBtn');
+if(seaStationsTabBtn){
+  seaStationsTabBtn.addEventListener('click',function(e){
+    e.stopPropagation();
+    setSeaMode('stations');
+  });
+}
+
+  var tabWeather=document.getElementById('tabWeather');
+if(tabWeather){
+  tabWeather.addEventListener('click',function(){
+    activeBottomTab = "weather";
+    closeSea();
+    closeMobileFilterSheet();
+    closeSearch();
+    refreshMobileNavState();
+    refreshMapSizeSoon();
+  });
+}
+
+var tabSea=document.getElementById('tabSea');
+if(tabSea){
+  tabSea.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(!mobileSeaSheet) return;
+
+    if(mobileSeaSheet.classList.contains('is-open')){
+      closeSea();
+    }else{
+      openSea();
+    }
+  });
+}
+
+var tabFilter=document.getElementById('tabFilter');
+if(tabFilter){
+  tabFilter.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(!mobileFilterSheet) return;
+
+    if(mobileFilterSheet.classList.contains('is-open')){
+      closeMobileFilterSheet();
+    }else{
+      openMobileFilterSheet();
+    }
+  });
+}
+
+var tabSearch=document.getElementById('tabSearch');
+if(tabSearch){
+  tabSearch.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(!mobileSearchSheet) return;
+
+    if(mobileSearchSheet.classList.contains('is-open') && activeBottomTab === "search"){
+      closeSearch();
+    }else{
+      openSearch();
+    }
+  });
+}
+
+var tabPlaces=document.getElementById('tabPlaces');
+if(tabPlaces){
+  tabPlaces.addEventListener('click',function(e){
+    e.stopPropagation();
+
+    if(mobileSearchSheet && mobileSearchSheet.classList.contains('is-open') && activeBottomTab === "places"){
+      closeSearch();
+    }else{
+      openPlaces();
+    }
+  });
+}
 
     document.addEventListener('click',function(e){
-      var clickedFilterTab = e.target && e.target.closest ? e.target.closest('#tabFilter') : null;
-      var clickedSearchTab = e.target && e.target.closest ? e.target.closest('#tabSearch') : null;
+    var clickedSeaTab = e.target && e.target.closest ? e.target.closest('#tabSea') : null;
+var clickedFilterTab = e.target && e.target.closest ? e.target.closest('#tabFilter') : null;
+var clickedSearchTab = e.target && e.target.closest ? e.target.closest('#tabSearch') : null;
+var clickedPlacesTab = e.target && e.target.closest ? e.target.closest('#tabPlaces') : null;
 
       if(mobileFilterSheet && mobileFilterSheet.classList.contains('is-open') && !mobileFilterSheet.contains(e.target) && !clickedFilterTab){
         closeMobileFilterSheet();
       }
 
-      if(mobileSearchSheet && mobileSearchSheet.classList.contains('is-open') && !mobileSearchSheet.contains(e.target) && !clickedSearchTab){
-        closeSearch();
-      }
+     if(mobileSearchSheet && mobileSearchSheet.classList.contains('is-open') && !mobileSearchSheet.contains(e.target) && !clickedSearchTab && !clickedPlacesTab){
+  closeSearch();
+}
+      if(mobileSeaSheet && mobileSeaSheet.classList.contains('is-open') && !mobileSeaSheet.contains(e.target) && !clickedSeaTab){
+  closeSea();
+}
     });
 
     function setMaptilerWeatherMarker(lat,lon){ if(!maptilerMap || !window.maptilersdk) return; if(maptilerWeatherMarker) maptilerWeatherMarker.remove(); maptilerWeatherMarker=new maptilersdk.Marker().setLngLat([lon,lat]).addTo(maptilerMap); }
+function handleMapClick(lat, lon){
+  if(activeBottomTab === "sea"){
+    selectSeaArea(lat, lon);
+    return;
+  }
 
+  handlePrimaryMapClick(lat, lon);
+}
 async function handlePrimaryMapClick(lat, lon){
   if(Date.now() - lastObjectInteractionAt < 500) return;
 
@@ -4030,7 +4571,7 @@ async function handlePrimaryMapClick(lat, lon){
   loadWeatherForPoint(lat, lon);
 }
 
-    map.on('click',function(e){ handlePrimaryMapClick(e.latlng.lat,e.latlng.lng); });
+    map.on('click',function(e){ handleMapClick(e.latlng.lat,e.latlng.lng); });
     window.addEventListener('resize',refreshMapSizeSoon);
     window.addEventListener('orientationchange',function(){ setTimeout(function(){ refreshMapSizeSoon(); },250); });
 
@@ -4062,9 +4603,9 @@ async function handlePrimaryMapClick(lat, lon){
   var lon = f.center[0], lat = f.center[1];
   closeSearch();
   setTimeout(function(){
-    focusMapOnPoint(lat, lon, 9);
-    handlePrimaryMapClick(lat, lon);
-    refreshMapSizeSoon();
+  focusMapOnPoint(lat, lon, 9);
+handleMapClick(lat, lon);
+refreshMapSizeSoon();
   }, 120);
 };
               mobileSearchResults.appendChild(div);
@@ -4177,6 +4718,8 @@ maptilerMap.addLayer(maptilerTimelineLayer);
 
 ensureNauticalChartLayers();
 setBaseMapMode(baseMapMode);
+ensureSeaAreaLayers();
+renderSeaAreaPanel();
 
 if(windLayerVisible){ maptilerMap.addLayer(maptilerWindLayer); }
 
@@ -4799,7 +5342,7 @@ if(
 
     
 
-      maptilerMap.on('click',function(e){ if(e.lngLat) handlePrimaryMapClick(e.lngLat.lat,e.lngLat.lng); });
+      maptilerMap.on('click',function(e){ if(e.lngLat) handleMapClick(e.lngLat.lat,e.lngLat.lng); });
     }else{
       console.error('MapTiler SDK ej tillgänglig');
     }
