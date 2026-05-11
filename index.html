@@ -1879,7 +1879,12 @@ var AIS_MIN_ZOOM = 6;
     function setText(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
     function isMobileView(){ return window.matchMedia("(max-width:700px)").matches; }
    function setOverlayHeaderDot(state){ var dot=document.getElementById("overlayHeaderDot"); if(dot) dot.classList.toggle("loading",state==="loading"); }
-
+function isSeaActive(){
+  return (
+    activeBottomTab === "sea" ||
+    (mobileSeaSheet && mobileSeaSheet.classList.contains("is-open"))
+  );
+}
 function createShipElement(rotation){
   var outer = document.createElement("div");
 
@@ -2983,7 +2988,7 @@ function ensureSeaAreaLayers(){
         source: seaAreaSourceId,
         paint: {
           "fill-color": "#7bc7ff",
-          "fill-opacity": 0.16
+          "fill-opacity": 0.24
         }
       });
     }
@@ -3025,7 +3030,8 @@ function updateSeaAreaLayer(){
       );
     }
 
-  setSeaAreaVisible(activeBottomTab === "sea");
+setSeaAreaVisible(isSeaActive());
+bringSeaAreaLayersToFront();
 
 var seaBadge = document.getElementById("seaBadge");
 if(seaBadge) seaBadge.classList.add("visible");
@@ -3182,6 +3188,10 @@ renderSeaTimeseriesPanel();
   }
 }
 function selectSeaArea(lat, lon){
+  activeBottomTab = "sea";
+  setActiveTab("tabSea");
+  setSeaAreaVisible(true);
+
   selectedSeaArea = {
     lat: lat,
     lon: lon,
@@ -3189,15 +3199,15 @@ function selectSeaArea(lat, lon){
     selectedAt: Date.now()
   };
 
- selectedSeaAreaData = null;
-selectedSeaTimeseriesData = null;
-activeSeaMetric = "waterTemp";
+  selectedSeaAreaData = null;
+  selectedSeaTimeseriesData = null;
+  activeSeaMetric = "waterTemp";
 
-updateSeaAreaLayer();
-renderSeaAreaPanel();
+  updateSeaAreaLayer();
+  renderSeaAreaPanel();
 
-loadSeaAreaData(lat, lon, seaAreaRadiusKm);
-loadSeaTimeseriesData(lat, lon, seaAreaRadiusKm);
+  loadSeaAreaData(lat, lon, seaAreaRadiusKm);
+  loadSeaTimeseriesData(lat, lon, seaAreaRadiusKm);
 
   try{
     if(maptilerMap){
@@ -4903,7 +4913,8 @@ function openSea(){
 
   mobileSeaSheet.classList.add('is-open');
 
-  setSeaAreaVisible(!!selectedSeaArea);
+ setSeaAreaVisible(!!selectedSeaArea);
+bringSeaAreaLayersToFront();
 
   renderSeaAreaPanel();
   refreshMobileNavState();
@@ -5113,9 +5124,21 @@ document.addEventListener('click',function(e){
   var clickedSearchTab = e.target && e.target.closest ? e.target.closest('#tabSearch') : null;
   var clickedPlacesTab = e.target && e.target.closest ? e.target.closest('#tabPlaces') : null;
 
-  if(mobileSeaSheet && mobileSeaSheet.classList.contains('is-open') && !mobileSeaSheet.contains(e.target) && !clickedSeaTab){
+if(
+  mobileSeaSheet &&
+  mobileSeaSheet.classList.contains('is-open') &&
+  !mobileSeaSheet.contains(e.target) &&
+  !clickedSeaTab
+){
+  var clickedMap =
+    e.target &&
+    e.target.closest &&
+    e.target.closest('#maptilerMap, #map');
+
+  if(!clickedMap){
     closeSea();
   }
+}
 
   if(mobileFilterSheet && mobileFilterSheet.classList.contains('is-open') && !mobileFilterSheet.contains(e.target) && !clickedFilterTab){
     closeMobileFilterSheet();
@@ -5128,12 +5151,30 @@ document.addEventListener('click',function(e){
 
     function setMaptilerWeatherMarker(lat,lon){ if(!maptilerMap || !window.maptilersdk) return; if(maptilerWeatherMarker) maptilerWeatherMarker.remove(); maptilerWeatherMarker=new maptilersdk.Marker().setLngLat([lon,lat]).addTo(maptilerMap); }
 function handleMapClick(lat, lon){
-  if(activeBottomTab === "sea"){
+  if(isSeaActive()){
+    activeBottomTab = "sea";
+    setActiveTab("tabSea");
+    setSeaAreaVisible(true);
     selectSeaArea(lat, lon);
     return;
   }
 
   handlePrimaryMapClick(lat, lon);
+}
+    function bringSeaAreaLayersToFront(){
+  if(!maptilerMap) return;
+
+  try{
+    if(maptilerMap.getLayer && maptilerMap.getLayer(seaAreaFillLayerId)){
+      maptilerMap.moveLayer(seaAreaFillLayerId);
+    }
+
+    if(maptilerMap.getLayer && maptilerMap.getLayer(seaAreaLineLayerId)){
+      maptilerMap.moveLayer(seaAreaLineLayerId);
+    }
+  }catch(e){
+    console.warn("Kunde inte flytta havsområdet överst", e);
+  }
 }
 async function handlePrimaryMapClick(lat, lon){
   if(Date.now() - lastObjectInteractionAt < 500) return;
