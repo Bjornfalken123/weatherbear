@@ -38,6 +38,7 @@ export async function onRequestGet(context) {
           return value;
         }
       }
+
       return null;
     }
 
@@ -70,9 +71,34 @@ export async function onRequestGet(context) {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-          data?.message ||
-          text ||
-          `Fel vid hämtning: ${path}`
+            data?.message ||
+            text ||
+            `Fel vid hämtning: ${path}`
+        );
+      }
+
+      return data;
+    }
+
+    async function safeExternalJson(externalUrl) {
+      const response = await fetch(externalUrl);
+      const text = await response.text();
+
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            data?.reason ||
+            data?.message ||
+            text ||
+            `Fel vid extern hämtning: ${externalUrl}`
         );
       }
 
@@ -130,14 +156,13 @@ export async function onRequestGet(context) {
     }
 
     function normalizeTimeseries(data) {
-      const raw =
-        Array.isArray(data?.value)
-          ? data.value
-          : Array.isArray(data?.values)
-            ? data.values
-            : Array.isArray(data?.data)
-              ? data.data
-              : [];
+      const raw = Array.isArray(data?.value)
+        ? data.value
+        : Array.isArray(data?.values)
+          ? data.values
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
 
       return raw
         .map((item) => {
@@ -165,7 +190,39 @@ export async function onRequestGet(context) {
           };
         })
         .filter(Boolean)
-        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        .sort(
+          (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+        );
+    }
+
+    function normalizeOpenMeteoHourly(data, variableName) {
+      const times = Array.isArray(data?.hourly?.time)
+        ? data.hourly.time
+        : [];
+
+      const values = Array.isArray(data?.hourly?.[variableName])
+        ? data.hourly[variableName]
+        : [];
+
+      return times
+        .map((time, index) => {
+          const value = Number(values[index]);
+
+          if (!time || !Number.isFinite(value)) return null;
+
+          const timestamp = new Date(time).getTime();
+
+          if (!Number.isFinite(timestamp)) return null;
+
+          return {
+            time: new Date(timestamp).toISOString(),
+            value
+          };
+        })
+        .filter(Boolean)
+        .sort(
+          (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+        );
     }
 
     function extractVivaSample(stationData, names) {
@@ -183,7 +240,10 @@ export async function onRequestGet(context) {
 
         if (!sample) continue;
 
-        const value = extractNumericValue(firstDefined(sample.Value, sample.value));
+        const value = extractNumericValue(
+          firstDefined(sample.Value, sample.value)
+        );
+
         if (value == null) continue;
 
         const updated = firstDefined(
@@ -197,7 +257,9 @@ export async function onRequestGet(context) {
 
         return {
           value,
-          time: updated ? new Date(updated).toISOString() : new Date().toISOString()
+          time: updated
+            ? new Date(updated).toISOString()
+            : new Date().toISOString()
         };
       }
 
@@ -208,45 +270,51 @@ export async function onRequestGet(context) {
       const data = await safeJson("/api/ocean-wave-stations");
       const stations = Array.isArray(data?.stations) ? data.stations : [];
 
-      return stations
-        .map(normalizeStation)
-        .filter(Boolean)
-        .filter((station) => station.distanceKm <= radiusKm)
-        .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null;
+      return (
+        stations
+          .map(normalizeStation)
+          .filter(Boolean)
+          .filter((station) => station.distanceKm <= radiusKm)
+          .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null
+      );
     }
 
     async function getNearestWaterLevelStation() {
       const data = await safeJson("/api/ocean-stations");
 
-      const stations =
-        Array.isArray(data?.station)
-          ? data.station
-          : Array.isArray(data?.stations)
-            ? data.stations
-            : Array.isArray(data?.resource)
-              ? data.resource
-              : [];
+      const stations = Array.isArray(data?.station)
+        ? data.station
+        : Array.isArray(data?.stations)
+          ? data.stations
+          : Array.isArray(data?.resource)
+            ? data.resource
+            : [];
 
-      return stations
-        .map(normalizeStation)
-        .filter(Boolean)
-        .filter((station) => station.distanceKm <= radiusKm)
-        .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null;
+      return (
+        stations
+          .map(normalizeStation)
+          .filter(Boolean)
+          .filter((station) => station.distanceKm <= radiusKm)
+          .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null
+      );
     }
 
     async function getNearestVivaStation() {
       const data = await safeJson("/api/viva-stations");
+
       const stations = Array.isArray(data?.stations)
         ? data.stations
         : Array.isArray(data)
           ? data
           : [];
 
-      return stations
-        .map(normalizeStation)
-        .filter(Boolean)
-        .filter((station) => station.distanceKm <= radiusKm)
-        .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null;
+      return (
+        stations
+          .map(normalizeStation)
+          .filter(Boolean)
+          .filter((station) => station.distanceKm <= radiusKm)
+          .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null
+      );
     }
 
     async function getWaveHistory(station) {
@@ -257,7 +325,9 @@ export async function onRequestGet(context) {
       for (const period of periods) {
         try {
           const data = await safeJson(
-            `/api/ocean-wave-height?stationId=${encodeURIComponent(station.id)}&period=${encodeURIComponent(period)}`
+            `/api/ocean-wave-height?stationId=${encodeURIComponent(
+              station.id
+            )}&period=${encodeURIComponent(period)}`
           );
 
           const series = normalizeTimeseries(data);
@@ -279,7 +349,9 @@ export async function onRequestGet(context) {
       for (const period of periods) {
         try {
           const data = await safeJson(
-            `/api/ocean-water-level?stationId=${encodeURIComponent(station.id)}&period=${encodeURIComponent(period)}`
+            `/api/ocean-water-level?stationId=${encodeURIComponent(
+              station.id
+            )}&period=${encodeURIComponent(period)}`
           );
 
           const series = normalizeTimeseries(data);
@@ -325,16 +397,52 @@ export async function onRequestGet(context) {
       }
     }
 
+    async function getMarineForecast() {
+      try {
+        const marineUrl =
+          "https://marine-api.open-meteo.com/v1/marine" +
+          `?latitude=${encodeURIComponent(String(lat))}` +
+          `&longitude=${encodeURIComponent(String(lon))}` +
+          "&hourly=wave_height,sea_surface_temperature" +
+          "&forecast_days=7" +
+          "&timezone=GMT";
+
+        const data = await safeExternalJson(marineUrl);
+
+        return {
+          waveHeight: normalizeOpenMeteoHourly(data, "wave_height"),
+          waterTemp: normalizeOpenMeteoHourly(data, "sea_surface_temperature"),
+
+          // Medvetet tom tills vi har en vattenståndskälla med tydlig referensnivå.
+          waterLevel: []
+        };
+      } catch (error) {
+        console.warn("marine forecast failed", error);
+
+        return {
+          waveHeight: [],
+          waterTemp: [],
+          waterLevel: []
+        };
+      }
+    }
+
     const [waveStation, waterLevelStation, vivaStation] = await Promise.all([
       getNearestWaveStation(),
       getNearestWaterLevelStation(),
       getNearestVivaStation()
     ]);
 
-    const [waveHistory, waterLevelHistory, waterTempHistory] = await Promise.all([
+    const [
+      waveHistory,
+      waterLevelHistory,
+      waterTempHistory,
+      marineForecast
+    ] = await Promise.all([
       getWaveHistory(waveStation),
       getWaterLevelHistory(waterLevelStation),
-      getWaterTempHistory(vivaStation)
+      getWaterTempHistory(vivaStation),
+      getMarineForecast()
     ]);
 
     return jsonResponse({
@@ -342,33 +450,44 @@ export async function onRequestGet(context) {
       lon,
       radiusKm,
       updatedAt: new Date().toISOString(),
+
       sources: {
         waveHeight: waveStation,
         waterLevel: waterLevelStation,
-        waterTemp: vivaStation
+        waterTemp: vivaStation,
+
+        forecast: {
+          name: "Open-Meteo Marine",
+          distanceKm: 0,
+          note: "Prognos från modellpunkt för vald lat/lon."
+        }
       },
+
       series: {
         waterTemp: {
           label: "Vattentemperatur",
           unit: "°C",
           history: waterTempHistory,
-          forecast: []
+          forecast: marineForecast.waterTemp
         },
+
         waveHeight: {
           label: "Våghöjd",
           unit: "m",
           history: waveHistory,
-          forecast: []
+          forecast: marineForecast.waveHeight
         },
+
         waterLevel: {
           label: "Vattenstånd",
           unit: "cm",
           history: waterLevelHistory,
-          forecast: []
+          forecast: marineForecast.waterLevel
         }
       },
+
       forecastNote:
-        "Prognosfältet är förberett. Nästa steg är att koppla NEMO-Nordic/Copernicus eller annan modellkälla."
+        "Våghöjd och vattentemperatur har prognos från Open-Meteo Marine. Vattenståndsprognos är avvaktad tills en källa med säker referensnivå kopplas."
     });
   } catch (error) {
     console.error("sea-timeseries error", error);
@@ -387,7 +506,8 @@ function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      "content-type": "application/json; charset=utf-8"
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=300"
     }
   });
 }
