@@ -3098,11 +3098,19 @@ function updateSeaAreaLayer(){
 setSeaAreaVisible(isSeaActive());
 bringSeaAreaLayersToFront();
 
-var seaBadge = document.getElementById("seaBadge");
-if(seaBadge) seaBadge.classList.add("visible");
+updateSeaBadge();
   }catch(e){
     console.warn("Kunde inte uppdatera havsområde", e);
   }
+}
+    function updateSeaBadge(){
+  var seaBadge = document.getElementById("seaBadge");
+  if(!seaBadge) return;
+
+  seaBadge.classList.toggle(
+    "visible",
+    !!(seaSelectionActive && selectedSeaArea)
+  );
 }
 function setSeaAreaVisible(visible){
   if(!maptilerMap) return;
@@ -3127,6 +3135,7 @@ function setSeaAreaVisible(visible){
     console.warn("Kunde inte ändra synlighet för havsområde", e);
   }
 }
+
 function renderSeaAreaPanel(){
   var areaContent = document.getElementById("seaAreaContent");
   var stationsContent = document.getElementById("seaStationsContent");
@@ -3280,6 +3289,7 @@ function selectSeaArea(lat, lon){
   activeSeaMetric = "waterTemp";
 
   updateSeaAreaLayer();
+  updateSeaBadge();
   renderSeaAreaPanel();
 
   loadSeaAreaData(lat, lon, seaAreaRadiusKm);
@@ -3552,11 +3562,12 @@ function renderFavoritesList(){
           loadSeaTimeseriesData(item.lat, item.lon, selectedSeaArea.radiusKm);
 
           enterSeaMode(true);
-        }else{
-          seaSelectionActive = false;
-          setSeaAreaVisible(false);
-          handlePrimaryMapClick(item.lat, item.lon);
-        }
+     }else{
+  seaSelectionActive = false;
+  setSeaAreaVisible(false);
+  updateSeaBadge();
+  handlePrimaryMapClick(item.lat, item.lon);
+}
 
         refreshMapSizeSoon();
       }, 120);
@@ -5101,6 +5112,7 @@ function enterSeaMode(openSheet){
   setSeaAreaVisible(!!selectedSeaArea);
   bringSeaAreaLayersToFront();
   renderSeaAreaPanel();
+  updateSeaBadge();
   refreshMobileNavState();
   refreshMapSizeSoon();
 }
@@ -5115,6 +5127,7 @@ function minimizeSea(){
 
   setSeaAreaVisible(!!selectedSeaArea);
   bringSeaAreaLayersToFront();
+  updateSeaBadge();
   refreshMobileNavState();
   refreshMapSizeSoon();
 }
@@ -5131,6 +5144,7 @@ function exitSeaMode(){
   }
 
   setSeaAreaVisible(false);
+  updateSeaBadge();
   refreshMobileNavState();
   refreshMapSizeSoon();
 }
@@ -5146,6 +5160,9 @@ function openMobileFilterSheet(){
   activeBottomTab = "filter";
 
   setSeaAreaVisible(false);
+  seaSelectionActive = false;
+updateSeaBadge();
+  
 
   if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');
 
@@ -5172,6 +5189,8 @@ function openSearch(){
   activeBottomTab = "search";
 
   setSeaAreaVisible(false);
+  seaSelectionActive = false;
+updateSeaBadge();
 
   if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');
   if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
@@ -5194,6 +5213,8 @@ function openPlaces(){
   activeBottomTab = "places";
 
   setSeaAreaVisible(false);
+  seaSelectionActive = false;
+updateSeaBadge();
 
   if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');
   if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
@@ -5439,9 +5460,10 @@ div.onclick=function(){
   setTimeout(function(){
     focusMapOnPoint(lat, lon, 9);
 
-    seaSelectionActive = false;
-    setSeaAreaVisible(false);
-    handlePrimaryMapClick(lat, lon);
+   seaSelectionActive = false;
+setSeaAreaVisible(false);
+updateSeaBadge();
+handlePrimaryMapClick(lat, lon);
 
     refreshMapSizeSoon();
   }, 120);
