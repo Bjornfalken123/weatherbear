@@ -10,6 +10,16 @@ export default async function handler(req, res) {
       });
     }
 
+    function getBaseUrl(req) {
+      const proto =
+        req.headers["x-forwarded-proto"] ||
+        (req.socket?.encrypted ? "https" : "http");
+
+      const host = req.headers["x-forwarded-host"] || req.headers.host;
+
+      return `${proto}://${host}`;
+    }
+
     function toRad(value) {
       return value * Math.PI / 180;
     }
@@ -45,6 +55,16 @@ export default async function handler(req, res) {
       return value == null ? "--" : `${Number(value).toFixed(1)} m/s`;
     }
 
+    function firstDefined(...values) {
+      for (const value of values) {
+        if (value !== undefined && value !== null && value !== "") {
+          return value;
+        }
+      }
+
+      return null;
+    }
+
     function extractNumericValue(value) {
       if (value == null) return null;
 
@@ -64,12 +84,21 @@ export default async function handler(req, res) {
 
     async function safeJson(url) {
       const response = await fetch(url);
-      const data = await response.json().catch(() => null);
+      const text = await response.text();
+
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.error ||
           data?.message ||
+          text ||
           `Fel vid hämtning: ${url}`
         );
       }
@@ -77,70 +106,104 @@ export default async function handler(req, res) {
       return data;
     }
 
-    async function getVivaStations() {
-      const data = await safeJson(`${getBaseUrl(req)}/api/viva-stations`);
-      return Array.isArray(data?.stations) ? data.stations : [];
-    }
-
-    async function getVivaStationData(stationId) {
-      const data = await safeJson(
-        `${getBaseUrl(req)}/api/viva-station?stationId=${encodeURIComponent(
-          stationId
-        )}`
+    function normalizeStation(station) {
+      const id = firstDefined(
+        station.id,
+        station.Id,
+        station.ID,
+        station.stationId,
+        station.StationId,
+        station.key
       );
 
-      return data?.station || null;
+      const name = firstDefined(
+        station.name,
+        station.Name,
+        station.stationName,
+        station.StationName
+      );
+
+      const latitude = Number(
+        firstDefined(
+          station.latitude,
+          station.Latitude,
+          station.lat,
+          station.Lat
+        )
+      );
+
+      const longitude = Number(
+        firstDefined(
+          station.longitude,
+          station.Longitude,
+          station.lon,
+          station.lng,
+          station.Lon,
+          station.Lng
+        )
+      );
+
+      if (!id || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return null;
+      }
+
+      return {
+        id: String(id),
+        name: name || "Okänd station",
+        latitude,
+        longitude
+      };
     }
 
     function extractVivaSample(stationData, names) {
       const samples = Array.isArray(stationData?.Samples)
         ? stationData.Samples
-        : [];
+        : Array.isArray(stationData?.samples)
+          ? stationData.samples
+          : [];
 
-      for (const name of names) {
-        const sample = samples.find((item) => item?.Name === name);
+      for (const wantedName of names) {
+        const sample = samples.find((item) => {
+          const sampleName = firstDefined(item?.Name, item?.name);
+          return sampleName === wantedName;
+        });
+
         if (!sample) continue;
 
-        const numericValue = extractNumericValue(sample.Value);
+        const value = firstDefined(sample.Value, sample.value);
+        const numericValue = extractNumericValue(value);
+
         if (numericValue == null) continue;
 
         return {
-          name: sample.Name,
+          name: firstDefined(sample.Name, sample.name),
           value: numericValue,
-          updated: sample.Updated || null
+          updated: firstDefined(sample.Updated, sample.updated, sample.Time, sample.time)
         };
       }
 
       return null;
     }
 
-    function getBaseUrl(req) {
-      const proto =
-        req.headers["x-forwarded-proto"] ||
-        (req.socket?.encrypted ? "https" : "http");
+    const baseUrl = getBaseUrl(req);
 
-      const host = req.headers["x-forwarded-host"] || req.headers.host;
+    const vivaStationsData = await safeJson(`${baseUrl}/api/viva-stations`);
 
-      return `${proto}://${host}`;
-    }
+    const rawStations = Array.isArray(vivaStationsData?.stations)
+      ? vivaStationsData.stations
+      : Array.isArray(vivaStationsData)
+        ? vivaStationsData
+        : [];
 
-    const vivaStations = await getVivaStations();
+    const vivaStations = rawStations
+      .map(normalizeStation)
+      .filter(Boolean);
 
     const nearbyStations = vivaStations
-      .map((station) => {
-        const stationLat = Number(station.latitude);
-        const stationLon = Number(station.longitude);
-
-        if (!Number.isFinite(stationLat) || !Number.isFinite(stationLon)) {
-          return null;
-        }
-
-        return {
-          ...station,
-          distanceKm: distanceKm(lat, lon, stationLat, stationLon)
-        };
-      })
-      .filter(Boolean)
+      .map((station) => ({
+        ...station,
+        distanceKm: distanceKm(lat, lon, station.latitude, station.longitude)
+      }))
       .filter((station) => station.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
 
@@ -154,55 +217,45 @@ export default async function handler(req, res) {
 
     for (const station of nearbyStations.slice(0, 8)) {
       try {
-        const stationData = await getVivaStationData(station.id);
+        const stationData = await safeJson(
+          `${baseUrl}/api/viva-station?stationId=${encodeURIComponent(station.id)}`
+        );
 
-        const waterTempSample = extractVivaSample(stationData, [
+        const actualStationData = stationData?.station || stationData;
+
+        const waterTempSample = extractVivaSample(actualStationData, [
           "Vattentemperatur",
           "Vatten Temperatur",
           "Ytvattentemperatur"
         ]);
 
-        const waveSample = extractVivaSample(stationData, [
+        const waveSample = extractVivaSample(actualStationData, [
           "Våghöjd"
         ]);
 
-        const waterLevelSample = extractVivaSample(stationData, [
+        const waterLevelSample = extractVivaSample(actualStationData, [
           "Vattenstånd"
         ]);
 
-        const windSample = extractVivaSample(stationData, [
+        const windSample = extractVivaSample(actualStationData, [
           "Vindhastighet",
           "Medelvind"
         ]);
 
-        const gustSample = extractVivaSample(stationData, [
+        const gustSample = extractVivaSample(actualStationData, [
           "Byvind",
           "Vindby"
         ]);
 
-        if (waterTemp == null && waterTempSample) {
-          waterTemp = waterTempSample.value;
-        }
-
-        if (waveHeight == null && waveSample) {
-          waveHeight = waveSample.value;
-        }
-
-        if (waterLevel == null && waterLevelSample) {
-          waterLevel = waterLevelSample.value;
-        }
-
-        if (wind == null && windSample) {
-          wind = windSample.value;
-        }
-
-        if (gust == null && gustSample) {
-          gust = gustSample.value;
-        }
+        if (waterTemp == null && waterTempSample) waterTemp = waterTempSample.value;
+        if (waveHeight == null && waveSample) waveHeight = waveSample.value;
+        if (waterLevel == null && waterLevelSample) waterLevel = waterLevelSample.value;
+        if (wind == null && windSample) wind = windSample.value;
+        if (gust == null && gustSample) gust = gustSample.value;
 
         stationResults.push({
           id: station.id,
-          name: station.name || "Okänd station",
+          name: station.name,
           type: "VIVA",
           source: "VIVA",
           latitude: station.latitude,
@@ -217,13 +270,14 @@ export default async function handler(req, res) {
       } catch (error) {
         stationResults.push({
           id: station.id,
-          name: station.name || "Okänd station",
+          name: station.name,
           type: "VIVA",
           source: "VIVA",
           latitude: station.latitude,
           longitude: station.longitude,
           distanceKm: station.distanceKm,
-          error: true
+          error: true,
+          message: error.message
         });
       }
     }
@@ -232,6 +286,8 @@ export default async function handler(req, res) {
       lat,
       lon,
       radiusKm,
+      stationCountTotal: vivaStations.length,
+      stationCountNearby: nearbyStations.length,
       waterTemp,
       waveHeight,
       waterLevel,
