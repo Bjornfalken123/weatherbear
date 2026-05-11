@@ -1,23 +1,21 @@
-export default async function handler(req, res) {
+export async function onRequestGet({ request }) {
   try {
-    const lat = Number(req.query.lat);
-    const lon = Number(req.query.lon);
-    const radiusKm = Number(req.query.radiusKm || 30);
+    const url = new URL(request.url);
+
+    const lat = Number(url.searchParams.get("lat"));
+    const lon = Number(url.searchParams.get("lon"));
+    const radiusKm = Number(url.searchParams.get("radiusKm") || 30);
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      return res.status(400).json({
-        error: "lat och lon krävs"
-      });
+      return Response.json(
+        { error: "lat och lon krävs" },
+        { status: 400 }
+      );
     }
 
-    function getBaseUrl(req) {
-      const proto =
-        req.headers["x-forwarded-proto"] ||
-        (req.socket?.encrypted ? "https" : "http");
-
-      const host = req.headers["x-forwarded-host"] || req.headers.host;
-
-      return `${proto}://${host}`;
+    function getBaseUrl(request) {
+      const currentUrl = new URL(request.url);
+      return currentUrl.origin;
     }
 
     function toRad(value) {
@@ -82,8 +80,8 @@ export default async function handler(req, res) {
       return Number.isFinite(number) ? number : null;
     }
 
-    async function safeJson(url) {
-      const response = await fetch(url);
+    async function safeJson(fetchUrl) {
+      const response = await fetch(fetchUrl);
       const text = await response.text();
 
       let data = null;
@@ -99,7 +97,7 @@ export default async function handler(req, res) {
           data?.error ||
           data?.message ||
           text ||
-          `Fel vid hämtning: ${url}`
+          `Fel vid hämtning: ${fetchUrl}`
         );
       }
 
@@ -178,14 +176,19 @@ export default async function handler(req, res) {
         return {
           name: firstDefined(sample.Name, sample.name),
           value: numericValue,
-          updated: firstDefined(sample.Updated, sample.updated, sample.Time, sample.time)
+          updated: firstDefined(
+            sample.Updated,
+            sample.updated,
+            sample.Time,
+            sample.time
+          )
         };
       }
 
       return null;
     }
 
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = getBaseUrl(request);
 
     const vivaStationsData = await safeJson(`${baseUrl}/api/viva-stations`);
 
@@ -247,11 +250,25 @@ export default async function handler(req, res) {
           "Vindby"
         ]);
 
-        if (waterTemp == null && waterTempSample) waterTemp = waterTempSample.value;
-        if (waveHeight == null && waveSample) waveHeight = waveSample.value;
-        if (waterLevel == null && waterLevelSample) waterLevel = waterLevelSample.value;
-        if (wind == null && windSample) wind = windSample.value;
-        if (gust == null && gustSample) gust = gustSample.value;
+        if (waterTemp == null && waterTempSample) {
+          waterTemp = waterTempSample.value;
+        }
+
+        if (waveHeight == null && waveSample) {
+          waveHeight = waveSample.value;
+        }
+
+        if (waterLevel == null && waterLevelSample) {
+          waterLevel = waterLevelSample.value;
+        }
+
+        if (wind == null && windSample) {
+          wind = windSample.value;
+        }
+
+        if (gust == null && gustSample) {
+          gust = gustSample.value;
+        }
 
         stationResults.push({
           id: station.id,
@@ -282,7 +299,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({
+    return Response.json({
       lat,
       lon,
       radiusKm,
@@ -303,9 +320,12 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("sea-area error", error);
 
-    return res.status(500).json({
-      error: "Kunde inte hämta havsområde",
-      message: error.message
-    });
+    return Response.json(
+      {
+        error: "Kunde inte hämta havsområde",
+        message: error.message
+      },
+      { status: 500 }
+    );
   }
 }
