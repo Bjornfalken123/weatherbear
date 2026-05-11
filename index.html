@@ -679,6 +679,82 @@
 .sea-data-row span:first-child{
   color:var(--muted-soft);
 }
+ .sea-timeseries-card{
+  margin-top:12px;
+  padding:13px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.04);
+}
+
+.sea-metric-tabs{
+  display:flex;
+  gap:7px;
+  margin-bottom:10px;
+}
+
+.sea-metric-tab{
+  flex:1;
+  appearance:none;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--muted-soft);
+  border-radius:12px;
+  padding:8px 7px;
+  font-size:11px;
+  font-weight:850;
+  cursor:pointer;
+}
+
+.sea-metric-tab.is-active{
+  background:rgba(43,108,255,0.85);
+  color:#fff;
+  border-color:rgba(123,199,255,0.35);
+}
+
+.sea-chart-header{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+  margin-bottom:8px;
+}
+
+.sea-chart-title{
+  color:var(--text);
+  font-size:13px;
+  font-weight:900;
+}
+
+.sea-chart-meta{
+  color:var(--muted-soft);
+  font-size:10px;
+  line-height:1.35;
+  text-align:right;
+}
+
+.sea-svg-chart{
+  width:100%;
+  height:128px;
+  display:block;
+  overflow:visible;
+}
+
+.sea-chart-empty{
+  padding:12px;
+  border-radius:13px;
+  border:1px dashed rgba(255,255,255,0.14);
+  color:var(--muted-soft);
+  font-size:12px;
+  line-height:1.5;
+}
+
+.sea-chart-legend{
+  margin-top:8px;
+  color:var(--muted-soft);
+  font-size:11px;
+  line-height:1.45;
+}   
 
 .sea-stations-placeholder{
   padding:14px;
@@ -1334,6 +1410,9 @@
       pendingForecastTime=null;
     var selectedSeaAreaData = null;
 var latestSeaAreaRequestId = 0;
+    var selectedSeaTimeseriesData = null;
+var latestSeaTimeseriesRequestId = 0;
+var activeSeaMetric = "waterTemp";
 
     var savedSelections={weather:null,wave:null,lighthouse:null};
 
@@ -1400,6 +1479,226 @@ async function loadSeaAreaData(lat, lon, radiusKm){
 
     renderSeaAreaPanel();
   }
+}
+
+  async function loadSeaTimeseriesData(lat, lon, radiusKm){
+  var requestId = ++latestSeaTimeseriesRequestId;
+
+  selectedSeaTimeseriesData = null;
+  renderSeaTimeseriesPanel();
+
+  try{
+    var url =
+      "/api/sea-timeseries?lat=" +
+      encodeURIComponent(String(lat)) +
+      "&lon=" +
+      encodeURIComponent(String(lon)) +
+      "&radiusKm=" +
+      encodeURIComponent(String(radiusKm));
+
+    var res = await fetch(url);
+    var data = await res.json();
+
+    if(requestId !== latestSeaTimeseriesRequestId) return;
+
+    if(!res.ok){
+      throw new Error((data && data.error) || "Havsserier kunde inte hämtas");
+    }
+
+    selectedSeaTimeseriesData = data;
+    renderSeaTimeseriesPanel();
+  }catch(e){
+    if(requestId !== latestSeaTimeseriesRequestId) return;
+
+    console.warn("Havsserier kunde inte hämtas", e);
+
+    selectedSeaTimeseriesData = {
+      error: true,
+      message: "Det gick inte att hämta historik/prognos just nu."
+    };
+
+    renderSeaTimeseriesPanel();
+  }
+}
+
+function formatSeaChartTime(value){
+  var d = new Date(value);
+  if(isNaN(d.getTime())) return "";
+
+  return d.toLocaleDateString("sv-SE", {
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
+function formatSeaChartValue(value, unit){
+  if(value == null || isNaN(Number(value))) return "--";
+
+  return Number(value).toFixed(1) + " " + unit;
+}
+
+function buildSeaSvgChart(points, unit){
+  if(!Array.isArray(points) || !points.length){
+    return "";
+  }
+
+  if(points.length === 1){
+    return (
+      '<div class="sea-chart-empty">' +
+        'Endast senaste värdet finns ännu: <strong>' +
+        formatSeaChartValue(points[0].value, unit) +
+        '</strong>' +
+      '</div>'
+    );
+  }
+
+  var width = 320;
+  var height = 128;
+  var padX = 12;
+  var padY = 14;
+
+  var values = points
+    .map(function(p){ return Number(p.value); })
+    .filter(function(v){ return isFinite(v); });
+
+  if(!values.length){
+    return '<div class="sea-chart-empty">Inga mätvärden hittades.</div>';
+  }
+
+  var min = Math.min.apply(null, values);
+  var max = Math.max.apply(null, values);
+
+  if(min === max){
+    min = min - 1;
+    max = max + 1;
+  }
+
+  var usableW = width - padX * 2;
+  var usableH = height - padY * 2;
+
+  var coords = points.map(function(point, index){
+    var value = Number(point.value);
+    var x = padX + (index / Math.max(points.length - 1, 1)) * usableW;
+    var y = padY + (1 - ((value - min) / (max - min))) * usableH;
+
+    return {
+      x: x,
+      y: y,
+      value: value,
+      time: point.time
+    };
+  });
+
+  var path = coords.map(function(point, index){
+    return (index === 0 ? "M" : "L") + point.x.toFixed(1) + " " + point.y.toFixed(1);
+  }).join(" ");
+
+  var areaPath =
+    path +
+    " L " + coords[coords.length - 1].x.toFixed(1) + " " + (height - padY) +
+    " L " + coords[0].x.toFixed(1) + " " + (height - padY) +
+    " Z";
+
+  var first = coords[0];
+  var last = coords[coords.length - 1];
+
+  return (
+    '<svg class="sea-svg-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Historikdiagram">' +
+      '<line x1="' + padX + '" y1="' + (height - padY) + '" x2="' + (width - padX) + '" y2="' + (height - padY) + '" stroke="rgba(255,255,255,0.16)" stroke-width="1"></line>' +
+      '<line x1="' + padX + '" y1="' + padY + '" x2="' + padX + '" y2="' + (height - padY) + '" stroke="rgba(255,255,255,0.12)" stroke-width="1"></line>' +
+      '<path d="' + areaPath + '" fill="rgba(123,199,255,0.13)"></path>' +
+      '<path d="' + path + '" fill="none" stroke="rgba(123,199,255,0.95)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>' +
+      '<circle cx="' + first.x + '" cy="' + first.y + '" r="3.2" fill="rgba(255,255,255,0.9)"></circle>' +
+      '<circle cx="' + last.x + '" cy="' + last.y + '" r="4" fill="rgba(152,240,219,0.95)"></circle>' +
+      '<text x="' + padX + '" y="10" fill="rgba(255,255,255,0.58)" font-size="9">' + formatSeaChartValue(max, unit) + '</text>' +
+      '<text x="' + padX + '" y="' + (height - 2) + '" fill="rgba(255,255,255,0.58)" font-size="9">' + formatSeaChartValue(min, unit) + '</text>' +
+    '</svg>'
+  );
+}
+
+function getSeaMetricLabel(metric){
+  if(metric === "waterTemp") return "Vattentemp";
+  if(metric === "waveHeight") return "Våghöjd";
+  if(metric === "waterLevel") return "Vattenstånd";
+  return "Data";
+}
+
+function renderSeaTimeseriesPanel(){
+  var container = document.getElementById("seaTimeseriesContent");
+  if(!container) return;
+
+  if(!selectedSeaArea){
+    container.innerHTML = "";
+    return;
+  }
+
+  if(!selectedSeaTimeseriesData){
+    container.innerHTML =
+      '<div class="sea-timeseries-card">' +
+        '<div class="sea-chart-empty">Hämtar historik och prognos...</div>' +
+      '</div>';
+    return;
+  }
+
+  if(selectedSeaTimeseriesData.error){
+    container.innerHTML =
+      '<div class="sea-timeseries-card">' +
+        '<div class="sea-chart-empty">' +
+          (selectedSeaTimeseriesData.message || "Kunde inte hämta havsserier.") +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  var seriesRoot = selectedSeaTimeseriesData.series || {};
+  var metricData = seriesRoot[activeSeaMetric] || {};
+  var history = Array.isArray(metricData.history) ? metricData.history : [];
+  var forecast = Array.isArray(metricData.forecast) ? metricData.forecast : [];
+  var unit = metricData.unit || "";
+  var label = metricData.label || getSeaMetricLabel(activeSeaMetric);
+
+  var allPoints = history.concat(forecast);
+
+  var latestPoint = allPoints.length ? allPoints[allPoints.length - 1] : null;
+
+  var source = selectedSeaTimeseriesData.sources && selectedSeaTimeseriesData.sources[activeSeaMetric];
+  var sourceText = source && source.name
+    ? source.name + " · " + Number(source.distanceKm || 0).toFixed(1) + " km"
+    : "Ingen station vald";
+
+  var tabs =
+    '<div class="sea-metric-tabs">' +
+      '<button type="button" class="sea-metric-tab ' + (activeSeaMetric === "waterTemp" ? "is-active" : "") + '" data-sea-metric="waterTemp">Temp</button>' +
+      '<button type="button" class="sea-metric-tab ' + (activeSeaMetric === "waveHeight" ? "is-active" : "") + '" data-sea-metric="waveHeight">Våg</button>' +
+      '<button type="button" class="sea-metric-tab ' + (activeSeaMetric === "waterLevel" ? "is-active" : "") + '" data-sea-metric="waterLevel">Vatten</button>' +
+    '</div>';
+
+  var chartHtml = allPoints.length
+    ? buildSeaSvgChart(allPoints, unit)
+    : '<div class="sea-chart-empty">Ingen historik hittades för ' + label.toLowerCase() + ' i detta område.</div>';
+
+  container.innerHTML =
+    '<div class="sea-timeseries-card">' +
+      tabs +
+      '<div class="sea-chart-header">' +
+        '<div>' +
+          '<div class="sea-chart-title">' + label + '</div>' +
+          '<div class="sea-chart-legend">Historik visas nu. Prognosfältet är förberett för NEMO-Nordic.</div>' +
+        '</div>' +
+        '<div class="sea-chart-meta">' +
+          (latestPoint ? 'Senast: ' + formatSeaChartValue(latestPoint.value, unit) + '<br>' : '') +
+          sourceText +
+        '</div>' +
+      '</div>' +
+      chartHtml +
+    '</div>';
+
+  container.querySelectorAll("[data-sea-metric]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      activeSeaMetric = btn.getAttribute("data-sea-metric") || "waterTemp";
+      renderSeaTimeseriesPanel();
+    });
+  });
 }
 function refreshNauticalLayerOrder(){
   if(!maptilerMap) return;
@@ -2760,19 +3059,21 @@ function renderSeaAreaPanel(){
 
   if(!selectedSeaAreaData){
     areaContent.className = "sea-area-card";
-    areaContent.innerHTML =
-      '<div class="sea-area-title">Hämtar havsdata...</div>' +
-      '<div class="sea-area-meta">' +
-        'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
-        'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
-        'Letar efter närliggande stationer och observationer.' +
-      '</div>' +
-      '<div class="sea-data-placeholder">' +
-        '<div class="sea-data-row"><span>Vattentemp</span><strong>Laddar...</strong></div>' +
-        '<div class="sea-data-row"><span>Våghöjd</span><strong>Laddar...</strong></div>' +
-        '<div class="sea-data-row"><span>Vattenstånd</span><strong>Laddar...</strong></div>' +
-        '<div class="sea-data-row"><span>Vind/byvind</span><strong>Laddar...</strong></div>' +
-      '</div>';
+  areaContent.innerHTML =
+  '<div class="sea-area-title">Hämtar havsdata...</div>' +
+  '<div class="sea-area-meta">' +
+    'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
+    'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
+    'Letar efter närliggande stationer och observationer.' +
+  '</div>' +
+  '<div class="sea-data-placeholder">' +
+    '<div class="sea-data-row"><span>Vattentemp</span><strong>Laddar...</strong></div>' +
+    '<div class="sea-data-row"><span>Våghöjd</span><strong>Laddar...</strong></div>' +
+    '<div class="sea-data-row"><span>Vattenstånd</span><strong>Laddar...</strong></div>' +
+  '</div>' +
+  '<div id="seaTimeseriesContent"></div>';
+
+renderSeaTimeseriesPanel();
 
     if(stationsContent){
       stationsContent.innerHTML =
@@ -2782,11 +3083,15 @@ function renderSeaAreaPanel(){
     return;
   }
 
-  if(selectedSeaAreaData.error){
-    areaContent.className = "sea-empty-state";
-    areaContent.innerHTML =
-      selectedSeaAreaData.message ||
-      "Det gick inte att hämta havsdata för området.";
+if(selectedSeaAreaData.error){
+  areaContent.className = "sea-empty-state";
+  areaContent.innerHTML =
+    '<div>' +
+      (selectedSeaAreaData.message || "Det gick inte att hämta havsdata för området.") +
+    '</div>' +
+    '<div id="seaTimeseriesContent"></div>';
+
+  renderSeaTimeseriesPanel();
 
     if(stationsContent){
       stationsContent.innerHTML =
@@ -2828,19 +3133,21 @@ function renderSeaAreaPanel(){
       : 0;
 
   areaContent.className = "sea-area-card";
-  areaContent.innerHTML =
-    '<div class="sea-area-title">Havsområde valt</div>' +
-    '<div class="sea-area-meta">' +
-      'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
-      'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
-      'Stationer hittade: ' + stationCount +
-    '</div>' +
-    '<div class="sea-data-placeholder">' +
-      '<div class="sea-data-row"><span>Vattentemp</span><strong>' + waterTemp + '</strong></div>' +
-      '<div class="sea-data-row"><span>Våghöjd</span><strong>' + waveHeight + '</strong></div>' +
-      '<div class="sea-data-row"><span>Vattenstånd</span><strong>' + waterLevel + '</strong></div>' +
-      '<div class="sea-data-row"><span>Vind/byvind</span><strong>' + wind + (gust ? ' / ' + gust : '') + '</strong></div>' +
-    '</div>';
+ areaContent.innerHTML =
+  '<div class="sea-area-title">Havsområde valt</div>' +
+  '<div class="sea-area-meta">' +
+    'Centrum: ' + formatCoord(selectedSeaArea.lat) + ', ' + formatCoord(selectedSeaArea.lon) + '<br>' +
+    'Radie: ' + selectedSeaArea.radiusKm + ' km<br>' +
+    'Stationer hittade: ' + stationCount +
+  '</div>' +
+  '<div class="sea-data-placeholder">' +
+    '<div class="sea-data-row"><span>Vattentemp</span><strong>' + waterTemp + '</strong></div>' +
+    '<div class="sea-data-row"><span>Våghöjd</span><strong>' + waveHeight + '</strong></div>' +
+    '<div class="sea-data-row"><span>Vattenstånd</span><strong>' + waterLevel + '</strong></div>' +
+  '</div>' +
+  '<div id="seaTimeseriesContent"></div>';
+
+renderSeaTimeseriesPanel();
 
   if(stationsContent){
     if(!stationCount){
@@ -2872,12 +3179,15 @@ function selectSeaArea(lat, lon){
     selectedAt: Date.now()
   };
 
-  selectedSeaAreaData = null;
+ selectedSeaAreaData = null;
+selectedSeaTimeseriesData = null;
+activeSeaMetric = "waterTemp";
 
-  updateSeaAreaLayer();
-  renderSeaAreaPanel();
+updateSeaAreaLayer();
+renderSeaAreaPanel();
 
-  loadSeaAreaData(lat, lon, seaAreaRadiusKm);
+loadSeaAreaData(lat, lon, seaAreaRadiusKm);
+loadSeaTimeseriesData(lat, lon, seaAreaRadiusKm);
 
   try{
     if(maptilerMap){
