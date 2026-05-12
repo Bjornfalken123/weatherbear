@@ -383,6 +383,7 @@
     }
     .filter-row button.is-on{background:rgba(43,108,255,0.9);color:#fff;}
     .filter-row button.is-off{background:rgba(255,255,255,0.06);color:var(--muted-soft);}
+    .filter-row button.is-zoom-needed{background:rgba(232,215,168,0.16);color:var(--accent-gold);border-color:rgba(232,215,168,0.28);}
 
        .layer-dot{width:8px;height:8px;border-radius:999px;display:inline-block;flex-shrink:0;}
     .layer-dot.wind{background:#dfe8f7;}
@@ -603,6 +604,8 @@
     .sheet-toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:999px;background:rgba(255,255,255,0.5);transition:transform 200ms cubic-bezier(0.22,1,0.36,1),background 200ms ease;}
     .sheet-toggle.is-on{background:rgba(43,108,255,0.85);border-color:rgba(123,199,255,0.4);}
     .sheet-toggle.is-on::after{transform:translateX(20px);background:#fff;}
+    .sheet-toggle.is-zoom-needed{background:rgba(232,215,168,0.18);border-color:rgba(232,215,168,0.3);}
+    .sheet-toggle.is-zoom-needed::after{transform:translateX(20px);background:var(--accent-gold);}
     .sea-tabs{
   display:flex;
   gap:8px;
@@ -4994,21 +4997,30 @@ async function loadAisData(force){
   var label = 'Av';
 
   if(showAisObjects){
-    label = aisZoomBlocked ? 'Zooma' : 'På';
+    label = aisZoomBlocked ? 'Zooma in' : 'På';
   }
 
   if(deskBtn){
     deskBtn.textContent = label;
+    deskBtn.disabled = false;
+    deskBtn.classList.remove('is-disabled');
     deskBtn.classList.toggle('is-on',showAisObjects && !aisZoomBlocked);
-    deskBtn.classList.toggle('is-off',!showAisObjects || aisZoomBlocked);
+    deskBtn.classList.toggle('is-off',!showAisObjects);
+    deskBtn.classList.toggle('is-zoom-needed',showAisObjects && aisZoomBlocked);
+    deskBtn.title = showAisObjects && aisZoomBlocked
+      ? 'AIS är på. Zooma in för att visa fartyg.'
+      : '';
   }
 
   if(mobileBtn){
+    mobileBtn.disabled = false;
+    mobileBtn.classList.remove('is-disabled');
     mobileBtn.classList.toggle('is-on',showAisObjects && !aisZoomBlocked);
+    mobileBtn.classList.toggle('is-zoom-needed',showAisObjects && aisZoomBlocked);
     mobileBtn.setAttribute(
       'aria-label',
       showAisObjects && aisZoomBlocked
-        ? 'AIS är på men kräver mer inzoomning'
+        ? 'AIS är på. Zooma in för att visa fartyg.'
         : showAisObjects
           ? 'AIS är på'
           : 'AIS är av'
@@ -6588,14 +6600,22 @@ if(mobileToggleLighthouseBtn){
 
 var desktopToggleAisBtn=document.getElementById('toggleAisLayerBtn');
 if(desktopToggleAisBtn){
-  desktopToggleAisBtn.addEventListener('click',function(){
+  desktopToggleAisBtn.disabled = false;
+  desktopToggleAisBtn.classList.remove('is-disabled');
+  desktopToggleAisBtn.addEventListener('click',function(e){
+    e.preventDefault();
+    e.stopPropagation();
     onAisToggle();
   });
 }
 
 var mobileToggleAisBtn=document.getElementById('mobileToggleAisBtn');
 if(mobileToggleAisBtn){
-  mobileToggleAisBtn.addEventListener('click',function(){
+  mobileToggleAisBtn.disabled = false;
+  mobileToggleAisBtn.classList.remove('is-disabled');
+  mobileToggleAisBtn.addEventListener('click',function(e){
+    e.preventDefault();
+    e.stopPropagation();
     onAisToggle();
   });
 }
