@@ -957,6 +957,54 @@
   line-height:1.55;
 }
 
+    .search-tabs{
+      display:flex;
+      gap:8px;
+      padding:12px 18px 0;
+    }
+
+    .search-tab-btn{
+      flex:1;
+      appearance:none;
+      border:1px solid rgba(255,255,255,0.1);
+      background:rgba(255,255,255,0.05);
+      color:var(--muted-soft);
+      border-radius:14px;
+      padding:10px 12px;
+      font-size:12px;
+      font-weight:850;
+      cursor:pointer;
+    }
+
+    .search-tab-btn.is-active{
+      background:rgba(43,108,255,0.85);
+      color:#fff;
+      border-color:rgba(123,199,255,0.35);
+    }
+
+    .favorite-section-title{
+      padding:14px 18px 8px;
+      color:var(--muted);
+      font-size:10px;
+      font-weight:850;
+      letter-spacing:0.03em;
+      text-transform:uppercase;
+    }
+
+    .sea-timeseries-expand-btn{
+      width:100%;
+      margin-top:12px;
+      appearance:none;
+      border:1px solid rgba(123,199,255,0.22);
+      background:rgba(123,199,255,0.09);
+      color:var(--text);
+      border-radius:14px;
+      padding:11px 12px;
+      font-size:12px;
+      font-weight:900;
+      cursor:pointer;
+    }
+
     .search-input-wrap{padding:14px 18px 10px;}
     #mobileSearchInput{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.06);color:#fff;outline:none;font-size:16px;}
     #mobileSearchInput::placeholder{color:rgba(255,255,255,0.45);}
@@ -1577,6 +1625,11 @@
     <div class="sheet-title">Sök stad</div>
   </div>
 
+  <div class="search-tabs">
+    <button id="mobileSearchTabBtn" type="button" class="search-tab-btn is-active">Sök</button>
+    <button id="mobileSavedTabBtn" type="button" class="search-tab-btn">Sparade</button>
+  </div>
+
   <div class="search-input-wrap">
     <input id="mobileSearchInput" type="text" placeholder="Sök stad..." />
   </div>
@@ -1618,6 +1671,7 @@ var latestSeaAreaRequestId = 0;
 var latestSeaTimeseriesRequestId = 0;
 var seaHistoryHours = 24;
 var seaForecastHours = 24;
+var seaTimeseriesExpanded = !isMobileView();
 
     var savedSelections={weather:null,wave:null,lighthouse:null};
 
@@ -3818,6 +3872,7 @@ renderSeaTimeseriesPanel();
   }
 }
 function selectSeaArea(lat, lon){
+  seaTimeseriesExpanded = !isMobileView();
   seaSelectionActive = true;
   activeBottomTab = "sea";
   setActiveTab("tabSea");
@@ -5792,6 +5847,58 @@ function closeMobileFilterSheet(){
   refreshMapSizeSoon();
 }
 
+function setMobileSearchSheetMode(mode){
+  if(!mobileSearchSheet) return;
+
+  var isSaved = mode === 'places';
+  var searchTab = document.getElementById('mobileSearchTabBtn');
+  var savedTab = document.getElementById('mobileSavedTabBtn');
+  var title = mobileSearchSheet.querySelector('.sheet-title');
+
+  mobileSearchSheet.classList.toggle('places-mode', isSaved);
+
+  if(searchTab) searchTab.classList.toggle('is-active', !isSaved);
+  if(savedTab) savedTab.classList.toggle('is-active', isSaved);
+  if(title) title.textContent = isSaved ? 'Sparade platser' : 'Sök plats';
+
+  if(isSaved){
+    if(mobileSearchInput){
+      mobileSearchInput.value = '';
+      mobileSearchInput.blur();
+    }
+
+    if(mobileSearchResults){
+      mobileSearchResults.innerHTML = '';
+    }
+
+    renderFavoritesList();
+  }
+}
+
+var mobileSearchTabBtn = document.getElementById('mobileSearchTabBtn');
+if(mobileSearchTabBtn){
+  mobileSearchTabBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    activeBottomTab = 'search';
+    setMobileSearchSheetMode('search');
+    refreshMobileNavState();
+
+    if(mobileSearchInput){
+      setTimeout(function(){ mobileSearchInput.focus(); },80);
+    }
+  });
+}
+
+var mobileSavedTabBtn = document.getElementById('mobileSavedTabBtn');
+if(mobileSavedTabBtn){
+  mobileSavedTabBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    activeBottomTab = 'places';
+    setMobileSearchSheetMode('places');
+    refreshMobileNavState();
+  });
+}
+
 function openSearch(){
   activeBottomTab = "search";
 
@@ -5803,11 +5910,8 @@ updateSeaBadge();
   if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
   if(!mobileSearchSheet) return;
 
-  mobileSearchSheet.classList.remove('places-mode');
   mobileSearchSheet.classList.add('is-open');
-
-  var title = mobileSearchSheet.querySelector('.sheet-title');
-  if(title) title.textContent = "Sök stad";
+  setMobileSearchSheetMode('search');
 
   refreshMobileNavState();
 
@@ -5827,24 +5931,9 @@ function openPlaces(){
   if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');
   if(!mobileSearchSheet) return;
 
-  mobileSearchSheet.classList.add('places-mode');
   mobileSearchSheet.classList.add('is-open');
-
-  var title = mobileSearchSheet.querySelector('.sheet-title');
-  if(title) title.textContent = "Platser";
-
-  if(mobileSearchInput){
-    mobileSearchInput.value = "";
-    mobileSearchInput.blur();
-  }
-
-  if(mobileSearchResults){
-    mobileSearchResults.innerHTML = "";
-  }
-
-  renderFavoritesList();
+  setMobileSearchSheetMode('places');
   refreshMobileNavState();
-
 }
 
 function closeSearch(){
