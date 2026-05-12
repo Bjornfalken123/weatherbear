@@ -153,6 +153,35 @@
     #activeLayersBadge.visible{display:flex;}
     .badge-dot{width:6px;height:6px;border-radius:999px;background:var(--accent);}
 
+    #aisMapToast{
+      position:absolute;
+      left:50%;
+      bottom:104px;
+      transform:translateX(-50%) translateY(8px);
+      z-index:1300;
+      padding:9px 13px;
+      border-radius:999px;
+      border:1px solid rgba(232,215,168,0.26);
+      background:rgba(5,11,22,0.88);
+      color:var(--accent-gold);
+      box-shadow:0 12px 30px rgba(0,0,0,0.34);
+      font-size:12px;
+      font-weight:850;
+      letter-spacing:-0.01em;
+      opacity:0;
+      pointer-events:none;
+      white-space:nowrap;
+      max-width:calc(100% - 32px);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      transition:opacity 180ms ease, transform 180ms ease;
+    }
+
+    #aisMapToast.is-visible{
+      opacity:1;
+      transform:translateX(-50%) translateY(0);
+    }
+
     #mapOverlayPanel{
       position:absolute;
       top:16px;
@@ -1094,6 +1123,15 @@
 
  
 
+  #aisMapToast{
+    position:fixed;
+    left:50%;
+    bottom:calc(var(--bottom-ui-offset) + 70px);
+    width:auto;
+    max-width:calc(100vw - 28px);
+    z-index:7100;
+  }
+
   #mapOverlayPanel{
     position:fixed !important;
     top:calc(var(--safe-top) + 10px) !important;
@@ -1294,6 +1332,8 @@
               <span id="activeLayersText">1 lager</span>
             </div>
           </div>
+
+          <div id="aisMapToast" role="status" aria-live="polite">AIS är på · zooma in för att visa fartyg</div>
 
           <div id="mapOverlayPanel">
             <div id="overlayHeader">
@@ -4990,7 +5030,17 @@ async function loadAisData(force){
     }
   }
 }
-   function syncAisButtons(){
+   function syncAisToast(){
+  var toast = document.getElementById('aisMapToast');
+  if(!toast) return;
+
+  toast.classList.toggle(
+    'is-visible',
+    !!(showAisObjects && aisZoomBlocked)
+  );
+}
+
+function syncAisButtons(){
   var deskBtn=document.getElementById('toggleAisLayerBtn');
   var mobileBtn=document.getElementById('mobileToggleAisBtn');
 
@@ -5026,6 +5076,8 @@ async function loadAisData(force){
           : 'AIS är av'
     );
   }
+
+  syncAisToast();
 }
 
 function setAisZoomBlocked(blocked){
@@ -5035,7 +5087,12 @@ function setAisZoomBlocked(blocked){
 
 function onAisToggle(){
   showAisObjects=!showAisObjects;
-  setAisZoomBlocked(false);
+
+  if(showAisObjects && maptilerMap && maptilerMap.getZoom){
+    setAisZoomBlocked(maptilerMap.getZoom() < AIS_MIN_ZOOM);
+  }else{
+    setAisZoomBlocked(false);
+  }
 
   if(showAisObjects){
     startAisAutoRefresh();
