@@ -755,6 +755,166 @@
   font-size:11px;
   line-height:1.45;
 }   
+    .sea-range-panel{
+  margin-top:12px;
+  padding:12px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.035);
+}
+
+.sea-range-row{
+  display:grid;
+  grid-template-columns:72px 1fr;
+  gap:8px;
+  align-items:center;
+}
+
+.sea-range-row + .sea-range-row{
+  margin-top:8px;
+}
+
+.sea-range-label{
+  color:var(--muted-soft);
+  font-size:11px;
+  font-weight:850;
+  text-transform:uppercase;
+}
+
+.sea-range-buttons{
+  display:flex;
+  gap:6px;
+}
+
+.sea-range-btn{
+  flex:1;
+  appearance:none;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--muted-soft);
+  border-radius:11px;
+  padding:8px 7px;
+  font-size:11px;
+  font-weight:850;
+  cursor:pointer;
+}
+
+.sea-range-btn.is-active{
+  background:rgba(43,108,255,0.85);
+  color:#fff;
+  border-color:rgba(123,199,255,0.35);
+}
+
+.sea-metric-stack{
+  display:grid;
+  gap:12px;
+  margin-top:12px;
+}
+
+.sea-metric-card{
+  padding:13px;
+  border-radius:17px;
+  border:1px solid rgba(255,255,255,0.085);
+  background:rgba(255,255,255,0.04);
+}
+
+.sea-metric-card-header{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+  margin-bottom:9px;
+}
+
+.sea-metric-card-title{
+  color:var(--text);
+  font-size:14px;
+  font-weight:950;
+  line-height:1.2;
+}
+
+.sea-metric-card-subtitle{
+  margin-top:3px;
+  color:var(--muted-soft);
+  font-size:10px;
+  line-height:1.35;
+}
+
+.sea-metric-now{
+  text-align:right;
+  flex-shrink:0;
+}
+
+.sea-metric-now-label{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:850;
+  text-transform:uppercase;
+  line-height:1.1;
+}
+
+.sea-metric-now-value{
+  margin-top:3px;
+  color:var(--accent-2);
+  font-size:14px;
+  font-weight:950;
+  line-height:1.1;
+}
+
+.sea-combined-chart{
+  width:100%;
+  height:188px;
+  display:block;
+  overflow:visible;
+}
+
+.sea-chart-footer{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:8px;
+  color:var(--muted-soft);
+  font-size:10px;
+  line-height:1.35;
+}
+
+.sea-chart-footer strong{
+  color:var(--text-soft);
+}
+
+.sea-chart-note{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:12px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.06);
+  color:var(--muted-soft);
+  font-size:11px;
+  line-height:1.45;
+}
+
+.sea-chart-empty{
+  padding:12px;
+  border-radius:13px;
+  border:1px dashed rgba(255,255,255,0.14);
+  color:var(--muted-soft);
+  font-size:12px;
+  line-height:1.5;
+}
+
+@media (max-width:700px){
+  .sea-range-row{
+    grid-template-columns:64px 1fr;
+  }
+
+  .sea-combined-chart{
+    height:176px;
+  }
+
+  .sea-metric-card{
+    padding:12px;
+  }
+}
 
 .sea-stations-placeholder{
   padding:14px;
@@ -1413,7 +1573,8 @@
 var latestSeaAreaRequestId = 0;
     var selectedSeaTimeseriesData = null;
 var latestSeaTimeseriesRequestId = 0;
-var activeSeaMetric = "waterTemp";
+var seaHistoryHours = 24;
+var seaForecastHours = 24;
 
     var savedSelections={weather:null,wave:null,lighthouse:null};
 
@@ -1522,6 +1683,15 @@ async function loadSeaAreaData(lat, lon, radiusKm){
   }
 }
 
+function escapeHtml(value){
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function formatSeaChartTime(value){
   var d = new Date(value);
   if(isNaN(d.getTime())) return "";
@@ -1535,108 +1705,395 @@ function formatSeaChartTime(value){
   });
 }
 
+function formatSeaChartShortTime(value){
+  var d = new Date(value);
+  if(isNaN(d.getTime())) return "";
+
+  return d.toLocaleTimeString("sv-SE", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatSeaChartDay(value){
+  var d = new Date(value);
+  if(isNaN(d.getTime())) return "";
+
+  var today = new Date();
+  var tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+
+  if(
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  ){
+    return "Idag";
+  }
+
+  if(
+    d.getFullYear() === tomorrow.getFullYear() &&
+    d.getMonth() === tomorrow.getMonth() &&
+    d.getDate() === tomorrow.getDate()
+  ){
+    return "Imorgon";
+  }
+
+  return d.toLocaleDateString("sv-SE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
 function formatSeaChartValue(value, unit){
   if(value == null || isNaN(Number(value))) return "--";
 
   return Number(value).toFixed(1) + " " + unit;
 }
 
-function buildSeaSvgChart(points, unit){
-  if(!Array.isArray(points) || !points.length){
-    return "";
+function getSeaMetricConfig(metric){
+  if(metric === "waterTemp"){
+    return {
+      key: "waterTemp",
+      label: "Vattentemperatur",
+      shortLabel: "Temp",
+      unit: "°C",
+      emptyText: "Ingen vattentemperatur hittades för detta område."
+    };
+  }
+
+  if(metric === "waveHeight"){
+    return {
+      key: "waveHeight",
+      label: "Våghöjd",
+      shortLabel: "Våg",
+      unit: "m",
+      emptyText: "Ingen vågdata hittades för detta område."
+    };
+  }
+
+  if(metric === "waterLevel"){
+    return {
+      key: "waterLevel",
+      label: "Vattenstånd",
+      shortLabel: "Vatten",
+      unit: "cm",
+      emptyText: "Ingen vattenståndsdata hittades för detta område."
+    };
+  }
+
+  return {
+    key: metric,
+    label: "Data",
+    shortLabel: "Data",
+    unit: "",
+    emptyText: "Ingen data hittades."
+  };
+}
+
+function normalizeSeaPoint(point, type){
+  if(!point) return null;
+
+  var time = point.time || point.date || point.datetime || point.validTime;
+  var value = Number(point.value);
+
+  if(!time || !isFinite(value)) return null;
+
+  var timestamp = new Date(time).getTime();
+  if(!isFinite(timestamp)) return null;
+
+  return {
+    time: new Date(timestamp).toISOString(),
+    timestamp: timestamp,
+    value: value,
+    type: type
+  };
+}
+
+function getVisibleSeaSeries(metricData){
+  metricData = metricData || {};
+
+  var now = Date.now();
+
+  var history = Array.isArray(metricData.history)
+    ? metricData.history.map(function(point){
+        return normalizeSeaPoint(point, "history");
+      }).filter(Boolean)
+    : [];
+
+  var forecast = Array.isArray(metricData.forecast)
+    ? metricData.forecast.map(function(point){
+        return normalizeSeaPoint(point, "forecast");
+      }).filter(Boolean)
+    : [];
+
+  var historyStart = now - seaHistoryHours * 60 * 60 * 1000;
+  var forecastEnd = now + seaForecastHours * 60 * 60 * 1000;
+
+  history = history
+    .filter(function(point){
+      return point.timestamp >= historyStart && point.timestamp <= now + 15 * 60 * 1000;
+    })
+    .sort(function(a, b){
+      return a.timestamp - b.timestamp;
+    });
+
+  forecast = forecast
+    .filter(function(point){
+      return point.timestamp >= now - 15 * 60 * 1000 && point.timestamp <= forecastEnd;
+    })
+    .sort(function(a, b){
+      return a.timestamp - b.timestamp;
+    });
+
+  return {
+    now: now,
+    history: history,
+    forecast: forecast,
+    all: history.concat(forecast).sort(function(a, b){
+      return a.timestamp - b.timestamp;
+    })
+  };
+}
+
+function findClosestSeaPoint(points, targetTime){
+  if(!Array.isArray(points) || !points.length) return null;
+
+  var closest = points[0];
+  var closestDiff = Math.abs(points[0].timestamp - targetTime);
+
+  for(var i = 1; i < points.length; i++){
+    var diff = Math.abs(points[i].timestamp - targetTime);
+
+    if(diff < closestDiff){
+      closest = points[i];
+      closestDiff = diff;
+    }
+  }
+
+  return closest;
+}
+
+function buildSeaPath(points, xForTime, yForValue){
+  if(!Array.isArray(points) || !points.length) return "";
+
+  return points.map(function(point, index){
+    var x = xForTime(point.timestamp);
+    var y = yForValue(point.value);
+
+    return (index === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1);
+  }).join(" ");
+}
+
+function buildSeaCombinedSvgChart(metricData, config){
+  var series = getVisibleSeaSeries(metricData);
+  var points = series.all;
+
+  if(!points.length){
+    return '<div class="sea-chart-empty">' + escapeHtml(config.emptyText) + '</div>';
   }
 
   if(points.length === 1){
     return (
       '<div class="sea-chart-empty">' +
-        'Endast senaste värdet finns ännu: <strong>' +
-        formatSeaChartValue(points[0].value, unit) +
+        'Endast ett värde finns i valt intervall: <strong>' +
+        escapeHtml(formatSeaChartValue(points[0].value, config.unit)) +
         '</strong><br>' +
-        '<span>' + formatSeaChartTime(points[0].time) + '</span>' +
+        '<span>' + escapeHtml(formatSeaChartTime(points[0].time)) + '</span>' +
       '</div>'
     );
   }
 
-  var width = 320;
-  var height = 150;
-  var padX = 16;
-  var padTop = 14;
-  var padBottom = 30;
+  var width = 340;
+  var height = 188;
+  var padLeft = 32;
+  var padRight = 16;
+  var padTop = 18;
+  var padBottom = 38;
 
-  var values = points
-    .map(function(p){ return Number(p.value); })
-    .filter(function(v){ return isFinite(v); });
-
-  if(!values.length){
-    return '<div class="sea-chart-empty">Inga mätvärden hittades.</div>';
-  }
-
-  var min = Math.min.apply(null, values);
-  var max = Math.max.apply(null, values);
-
-  if(min === max){
-    min = min - 1;
-    max = max + 1;
-  }
-
-  var usableW = width - padX * 2;
-  var usableH = height - padTop - padBottom;
-
-  var coords = points.map(function(point, index){
-    var value = Number(point.value);
-    var x = padX + (index / Math.max(points.length - 1, 1)) * usableW;
-    var y = padTop + (1 - ((value - min) / (max - min))) * usableH;
-
-    return {
-      x: x,
-      y: y,
-      value: value,
-      time: point.time
-    };
+  var values = points.map(function(point){
+    return point.value;
   });
 
-  var path = coords.map(function(point, index){
-    return (index === 0 ? "M" : "L") + point.x.toFixed(1) + " " + point.y.toFixed(1);
-  }).join(" ");
+  var minValue = Math.min.apply(null, values);
+  var maxValue = Math.max.apply(null, values);
 
-  var areaPath =
-    path +
-    " L " + coords[coords.length - 1].x.toFixed(1) + " " + (height - padBottom) +
-    " L " + coords[0].x.toFixed(1) + " " + (height - padBottom) +
-    " Z";
+  if(minValue === maxValue){
+    minValue = minValue - 1;
+    maxValue = maxValue + 1;
+  }
 
-  var first = coords[0];
-  var middle = coords[Math.floor(coords.length / 2)];
-  var last = coords[coords.length - 1];
+  var valuePadding = (maxValue - minValue) * 0.12;
+  minValue -= valuePadding;
+  maxValue += valuePadding;
 
+  var minTime = points[0].timestamp;
+  var maxTime = points[points.length - 1].timestamp;
+
+  if(maxTime <= minTime){
+    maxTime = minTime + 60 * 60 * 1000;
+  }
+
+  var usableW = width - padLeft - padRight;
+  var usableH = height - padTop - padBottom;
+
+  function xForTime(timestamp){
+    return padLeft + ((timestamp - minTime) / (maxTime - minTime)) * usableW;
+  }
+
+  function yForValue(value){
+    return padTop + (1 - ((value - minValue) / (maxValue - minValue))) * usableH;
+  }
+
+  var historyPath = buildSeaPath(series.history, xForTime, yForValue);
+  var forecastPath = buildSeaPath(series.forecast, xForTime, yForValue);
+
+  var nowX = xForTime(series.now);
+  nowX = Math.max(padLeft, Math.min(width - padRight, nowX));
+
+  var nowPoint = findClosestSeaPoint(points, series.now);
+  var nowPointX = nowPoint ? xForTime(nowPoint.timestamp) : nowX;
+  var nowPointY = nowPoint ? yForValue(nowPoint.value) : padTop + usableH / 2;
+
+  var first = points[0];
+  var middle = points[Math.floor(points.length / 2)];
+  var last = points[points.length - 1];
+
+  var yMaxLabel = formatSeaChartValue(maxValue, config.unit);
+  var yMinLabel = formatSeaChartValue(minValue, config.unit);
+
+  var svg =
+    '<svg class="sea-combined-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escapeHtml(config.label) + '">' +
+
+      '<line x1="' + padLeft + '" y1="' + padTop + '" x2="' + padLeft + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.13)" stroke-width="1"></line>' +
+      '<line x1="' + padLeft + '" y1="' + (height - padBottom) + '" x2="' + (width - padRight) + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.16)" stroke-width="1"></line>' +
+
+      '<line x1="' + padLeft + '" y1="' + padTop + '" x2="' + (width - padRight) + '" y2="' + padTop + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"></line>' +
+      '<line x1="' + padLeft + '" y1="' + (padTop + usableH / 2) + '" x2="' + (width - padRight) + '" y2="' + (padTop + usableH / 2) + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"></line>' +
+
+      '<text x="2" y="' + (padTop + 3) + '" fill="rgba(255,255,255,0.58)" font-size="8">' + escapeHtml(yMaxLabel) + '</text>' +
+      '<text x="2" y="' + (height - padBottom + 3) + '" fill="rgba(255,255,255,0.58)" font-size="8">' + escapeHtml(yMinLabel) + '</text>';
+
+  if(historyPath){
+    svg +=
+      '<path d="' + historyPath + '" fill="none" stroke="rgba(123,199,255,0.96)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>';
+  }
+
+  if(forecastPath){
+    svg +=
+      '<path d="' + forecastPath + '" fill="none" stroke="rgba(152,240,219,0.95)" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round" stroke-linejoin="round"></path>';
+  }
+
+  svg +=
+      '<line x1="' + nowX.toFixed(1) + '" y1="' + padTop + '" x2="' + nowX.toFixed(1) + '" y2="' + (height - padBottom) + '" stroke="rgba(232,215,168,0.92)" stroke-width="1.5" stroke-dasharray="4 4"></line>' +
+      '<circle cx="' + nowPointX.toFixed(1) + '" cy="' + nowPointY.toFixed(1) + '" r="4.6" fill="rgba(232,215,168,1)" stroke="rgba(4,9,19,0.95)" stroke-width="2"></circle>' +
+      '<text x="' + Math.min(width - padRight - 22, nowX + 5).toFixed(1) + '" y="' + (padTop + 10) + '" fill="rgba(232,215,168,0.95)" font-size="9" font-weight="800">Nu</text>' +
+
+      '<text x="' + xForTime(first.timestamp).toFixed(1) + '" y="' + (height - 18) + '" text-anchor="start" fill="rgba(255,255,255,0.55)" font-size="8">' + escapeHtml(formatSeaChartDay(first.time)) + '</text>' +
+      '<text x="' + xForTime(middle.timestamp).toFixed(1) + '" y="' + (height - 6) + '" text-anchor="middle" fill="rgba(255,255,255,0.38)" font-size="8">' + escapeHtml(formatSeaChartShortTime(middle.time)) + '</text>' +
+      '<text x="' + xForTime(last.timestamp).toFixed(1) + '" y="' + (height - 18) + '" text-anchor="end" fill="rgba(255,255,255,0.55)" font-size="8">' + escapeHtml(formatSeaChartDay(last.time)) + '</text>' +
+
+    '</svg>';
+
+  return svg;
+}
+
+function buildSeaRangeControls(){
   return (
-    '<svg class="sea-svg-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Havsdiagram">' +
+    '<div class="sea-range-panel">' +
+      '<div class="sea-range-row">' +
+        '<div class="sea-range-label">Historik</div>' +
+        '<div class="sea-range-buttons">' +
+          [12, 24, 72].map(function(hours){
+            return '<button type="button" class="sea-range-btn ' + (seaHistoryHours === hours ? 'is-active' : '') + '" data-sea-history-hours="' + hours + '">' + hours + 'h</button>';
+          }).join("") +
+        '</div>' +
+      '</div>' +
 
-      '<line x1="' + padX + '" y1="' + (height - padBottom) + '" x2="' + (width - padX) + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.16)" stroke-width="1"></line>' +
-      '<line x1="' + padX + '" y1="' + padTop + '" x2="' + padX + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.12)" stroke-width="1"></line>' +
-
-      '<text x="' + padX + '" y="10" fill="rgba(255,255,255,0.62)" font-size="9">' + formatSeaChartValue(max, unit) + '</text>' +
-      '<text x="' + padX + '" y="' + (height - padBottom - 3) + '" fill="rgba(255,255,255,0.62)" font-size="9">' + formatSeaChartValue(min, unit) + '</text>' +
-
-      '<path d="' + areaPath + '" fill="rgba(123,199,255,0.13)"></path>' +
-      '<path d="' + path + '" fill="none" stroke="rgba(123,199,255,0.95)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>' +
-
-      '<circle cx="' + first.x + '" cy="' + first.y + '" r="3.2" fill="rgba(255,255,255,0.9)"></circle>' +
-      '<circle cx="' + last.x + '" cy="' + last.y + '" r="4" fill="rgba(152,240,219,0.95)"></circle>' +
-
-      '<text x="' + first.x + '" y="' + (height - 14) + '" text-anchor="start" fill="rgba(255,255,255,0.62)" font-size="8">' + formatSeaChartTime(first.time) + '</text>' +
-      '<text x="' + middle.x + '" y="' + (height - 4) + '" text-anchor="middle" fill="rgba(255,255,255,0.44)" font-size="8">' + formatSeaChartTime(middle.time) + '</text>' +
-      '<text x="' + last.x + '" y="' + (height - 14) + '" text-anchor="end" fill="rgba(255,255,255,0.62)" font-size="8">' + formatSeaChartTime(last.time) + '</text>' +
-
-    '</svg>'
+      '<div class="sea-range-row">' +
+        '<div class="sea-range-label">Prognos</div>' +
+        '<div class="sea-range-buttons">' +
+          [12, 24, 72].map(function(hours){
+            return '<button type="button" class="sea-range-btn ' + (seaForecastHours === hours ? 'is-active' : '') + '" data-sea-forecast-hours="' + hours + '">' + hours + 'h</button>';
+          }).join("") +
+        '</div>' +
+      '</div>' +
+    '</div>'
   );
 }
 
-function getSeaMetricLabel(metric){
-  if(metric === "waterTemp") return "Vattentemp";
-  if(metric === "waveHeight") return "Våghöjd";
-  if(metric === "waterLevel") return "Vattenstånd";
-  return "Data";
+function buildSeaMetricCard(metricKey, metricData, source){
+  var config = getSeaMetricConfig(metricKey);
+
+  metricData = metricData || {};
+
+  if(metricData.label){
+    config.label = metricData.label;
+  }
+
+  if(metricData.unit){
+    config.unit = metricData.unit;
+  }
+
+  var series = getVisibleSeaSeries(metricData);
+  var nowPoint = findClosestSeaPoint(series.all, Date.now());
+
+  var sourceText = source && source.name
+    ? source.name + " · " + Number(source.distanceKm || 0).toFixed(1) + " km"
+    : "Ingen station vald";
+
+  var hasHistory = series.history.length > 0;
+  var hasForecast = series.forecast.length > 0;
+
+  var statusParts = [];
+
+  if(hasHistory){
+    statusParts.push("historik");
+  }else{
+    statusParts.push("ingen historik");
+  }
+
+  if(hasForecast){
+    statusParts.push("prognos");
+  }else{
+    statusParts.push("ingen prognos");
+  }
+
+  var note = "";
+
+  if(!hasHistory || !hasForecast){
+    note =
+      '<div class="sea-chart-note">' +
+        escapeHtml(config.label) + ': ' +
+        escapeHtml(statusParts.join(" · ")) +
+      '</div>';
+  }
+
+  return (
+    '<div class="sea-metric-card">' +
+      '<div class="sea-metric-card-header">' +
+        '<div>' +
+          '<div class="sea-metric-card-title">' + escapeHtml(config.label) + '</div>' +
+          '<div class="sea-metric-card-subtitle">' + escapeHtml(sourceText) + '</div>' +
+        '</div>' +
+
+        '<div class="sea-metric-now">' +
+          '<div class="sea-metric-now-label">Nu</div>' +
+          '<div class="sea-metric-now-value">' + escapeHtml(nowPoint ? formatSeaChartValue(nowPoint.value, config.unit) : "--") + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      buildSeaCombinedSvgChart(metricData, config) +
+
+      '<div class="sea-chart-footer">' +
+        '<span><strong>Heldragen</strong> historik</span>' +
+        '<span><strong>Streckad</strong> prognos</span>' +
+      '</div>' +
+
+      note +
+    '</div>'
+  );
 }
 
 function renderSeaTimeseriesPanel(){
@@ -1660,64 +2117,52 @@ function renderSeaTimeseriesPanel(){
     container.innerHTML =
       '<div class="sea-timeseries-card">' +
         '<div class="sea-chart-empty">' +
-          (selectedSeaTimeseriesData.message || "Kunde inte hämta havsserier.") +
+          escapeHtml(selectedSeaTimeseriesData.message || "Kunde inte hämta havsserier.") +
         '</div>' +
       '</div>';
     return;
   }
 
   var seriesRoot = selectedSeaTimeseriesData.series || {};
-  var metricData = seriesRoot[activeSeaMetric] || {};
-  var history = Array.isArray(metricData.history) ? metricData.history : [];
-  var forecast = Array.isArray(metricData.forecast) ? metricData.forecast : [];
-  var unit = metricData.unit || "";
-  var label = metricData.label || getSeaMetricLabel(activeSeaMetric);
-
-  var allPoints = history.concat(forecast);
-
-  var latestPoint = allPoints.length ? allPoints[allPoints.length - 1] : null;
-
-  var source = selectedSeaTimeseriesData.sources && selectedSeaTimeseriesData.sources[activeSeaMetric];
-  var sourceText = source && source.name
-    ? source.name + " · " + Number(source.distanceKm || 0).toFixed(1) + " km"
-    : "Ingen station vald";
-
-  var tabs =
-    '<div class="sea-metric-tabs">' +
-      '<button type="button" class="sea-metric-tab ' + (activeSeaMetric === "waterTemp" ? "is-active" : "") + '" data-sea-metric="waterTemp">Temp</button>' +
-      '<button type="button" class="sea-metric-tab ' + (activeSeaMetric === "waveHeight" ? "is-active" : "") + '" data-sea-metric="waveHeight">Våg</button>' +
-      '<button type="button" class="sea-metric-tab ' + (activeSeaMetric === "waterLevel" ? "is-active" : "") + '" data-sea-metric="waterLevel">Vatten</button>' +
-    '</div>';
-
-  var chartHtml = allPoints.length
-    ? buildSeaSvgChart(allPoints, unit)
-    : '<div class="sea-chart-empty">Ingen historik hittades för ' + label.toLowerCase() + ' i detta område.</div>';
+  var sources = selectedSeaTimeseriesData.sources || {};
 
   container.innerHTML =
     '<div class="sea-timeseries-card">' +
-      tabs +
       '<div class="sea-chart-header">' +
         '<div>' +
-          '<div class="sea-chart-title">' + label + '</div>' +
-          '<div class="sea-chart-legend">Historik visas nu. Prognosfältet är förberett för NEMO-Nordic.</div>' +
-        '</div>' +
-        '<div class="sea-chart-meta">' +
-          (latestPoint ? 'Senast: ' + formatSeaChartValue(latestPoint.value, unit) + '<br>' : '') +
-          sourceText +
+          '<div class="sea-chart-title">Havsdata över tid</div>' +
+          '<div class="sea-chart-legend">Välj historik och prognoslängd. Gul markering visar ungefär var vi är just nu.</div>' +
         '</div>' +
       '</div>' +
-      chartHtml +
+
+      buildSeaRangeControls() +
+
+      '<div class="sea-metric-stack">' +
+        buildSeaMetricCard("waterTemp", seriesRoot.waterTemp, sources.waterTemp) +
+        buildSeaMetricCard("waveHeight", seriesRoot.waveHeight, sources.waveHeight) +
+        buildSeaMetricCard("waterLevel", seriesRoot.waterLevel, sources.waterLevel) +
+      '</div>' +
     '</div>';
 
-container.querySelectorAll("[data-sea-metric]").forEach(function(btn){
-  btn.addEventListener("click", function(e){
-    e.preventDefault();
-    e.stopPropagation();
+  container.querySelectorAll("[data-sea-history-hours]").forEach(function(btn){
+    btn.addEventListener("click", function(e){
+      e.preventDefault();
+      e.stopPropagation();
 
-    activeSeaMetric = btn.getAttribute("data-sea-metric") || "waterTemp";
-    renderSeaTimeseriesPanel();
+      seaHistoryHours = Number(btn.getAttribute("data-sea-history-hours")) || 24;
+      renderSeaTimeseriesPanel();
+    });
   });
-});
+
+  container.querySelectorAll("[data-sea-forecast-hours]").forEach(function(btn){
+    btn.addEventListener("click", function(e){
+      e.preventDefault();
+      e.stopPropagation();
+
+      seaForecastHours = Number(btn.getAttribute("data-sea-forecast-hours")) || 24;
+      renderSeaTimeseriesPanel();
+    });
+  });
 }
 function refreshNauticalLayerOrder(){
   if(!maptilerMap) return;
@@ -3286,7 +3731,7 @@ function selectSeaArea(lat, lon){
 
   selectedSeaAreaData = null;
   selectedSeaTimeseriesData = null;
-  activeSeaMetric = "waterTemp";
+
 
   updateSeaAreaLayer();
   updateSeaBadge();
@@ -3553,7 +3998,7 @@ function renderFavoritesList(){
 
           selectedSeaAreaData = null;
           selectedSeaTimeseriesData = null;
-          activeSeaMetric = "waterTemp";
+          
 
           updateSeaAreaLayer();
           renderSeaAreaPanel();
