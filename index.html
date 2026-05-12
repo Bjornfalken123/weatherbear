@@ -1745,7 +1745,32 @@ function formatSeaChartDay(value){
     month: "2-digit"
   });
 }
+function formatSeaRelativeHourLabel(timestamp, now){
+  var diffHours = Math.round((timestamp - now) / (60 * 60 * 1000));
 
+  if(diffHours === 0){
+    return "Nu";
+  }
+
+  if(diffHours > 0){
+    return "+" + diffHours + "h";
+  }
+
+  return diffHours + "h";
+}
+
+function formatSeaAxisClock(timestamp){
+  var d = new Date(timestamp);
+
+  if(isNaN(d.getTime())){
+    return "";
+  }
+
+  return d.toLocaleTimeString("sv-SE", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 function formatSeaChartValue(value, unit){
   if(value == null || isNaN(Number(value))) return "--";
 
@@ -1956,9 +1981,25 @@ function buildSeaCombinedSvgChart(metricData, config){
   var nowPointX = nowPoint ? xForTime(nowPoint.timestamp) : nowX;
   var nowPointY = nowPoint ? yForValue(nowPoint.value) : padTop + usableH / 2;
 
-  var first = points[0];
-  var middle = points[Math.floor(points.length / 2)];
-  var last = points[points.length - 1];
+  var axisTicks = [
+    {
+      timestamp: series.now - seaHistoryHours * 60 * 60 * 1000
+    },
+    {
+      timestamp: series.now - Math.round(seaHistoryHours / 2) * 60 * 60 * 1000
+    },
+    {
+      timestamp: series.now
+    },
+    {
+      timestamp: series.now + Math.round(seaForecastHours / 2) * 60 * 60 * 1000
+    },
+    {
+      timestamp: series.now + seaForecastHours * 60 * 60 * 1000
+    }
+  ].filter(function(tick){
+    return tick.timestamp >= minTime && tick.timestamp <= maxTime;
+  });
 
   var yMaxLabel = formatSeaChartValue(maxValue, config.unit);
   var yMinLabel = formatSeaChartValue(minValue, config.unit);
@@ -1990,9 +2031,35 @@ function buildSeaCombinedSvgChart(metricData, config){
       '<circle cx="' + nowPointX.toFixed(1) + '" cy="' + nowPointY.toFixed(1) + '" r="4.6" fill="rgba(232,215,168,1)" stroke="rgba(4,9,19,0.95)" stroke-width="2"></circle>' +
       '<text x="' + Math.min(width - padRight - 22, nowX + 5).toFixed(1) + '" y="' + (padTop + 10) + '" fill="rgba(232,215,168,0.95)" font-size="9" font-weight="800">Nu</text>' +
 
-      '<text x="' + xForTime(first.timestamp).toFixed(1) + '" y="' + (height - 18) + '" text-anchor="start" fill="rgba(255,255,255,0.55)" font-size="8">' + escapeHtml(formatSeaChartDay(first.time)) + '</text>' +
-      '<text x="' + xForTime(middle.timestamp).toFixed(1) + '" y="' + (height - 6) + '" text-anchor="middle" fill="rgba(255,255,255,0.38)" font-size="8">' + escapeHtml(formatSeaChartShortTime(middle.time)) + '</text>' +
-      '<text x="' + xForTime(last.timestamp).toFixed(1) + '" y="' + (height - 18) + '" text-anchor="end" fill="rgba(255,255,255,0.55)" font-size="8">' + escapeHtml(formatSeaChartDay(last.time)) + '</text>' +
+         axisTicks.map(function(tick, index){
+        var x = xForTime(tick.timestamp);
+        var label = formatSeaRelativeHourLabel(tick.timestamp, series.now);
+        var clock = formatSeaAxisClock(tick.timestamp);
+
+        var anchor = "middle";
+
+        if(index === 0){
+          anchor = "start";
+        }
+
+        if(index === axisTicks.length - 1){
+          anchor = "end";
+        }
+
+        var isNow = label === "Nu";
+
+        return (
+          '<line x1="' + x.toFixed(1) + '" y1="' + (height - padBottom) + '" x2="' + x.toFixed(1) + '" y2="' + (height - padBottom + 5) + '" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>' +
+
+          '<text x="' + x.toFixed(1) + '" y="' + (height - 22) + '" text-anchor="' + anchor + '" fill="' + (isNow ? "rgba(232,215,168,0.98)" : "rgba(255,255,255,0.62)") + '" font-size="8" font-weight="' + (isNow ? "900" : "750") + '">' +
+            escapeHtml(label) +
+          '</text>' +
+
+          '<text x="' + x.toFixed(1) + '" y="' + (height - 8) + '" text-anchor="' + anchor + '" fill="rgba(255,255,255,0.42)" font-size="8">' +
+            escapeHtml(clock) +
+          '</text>'
+        );
+      }).join("") +
 
     '</svg>';
 
@@ -2131,7 +2198,7 @@ function renderSeaTimeseriesPanel(){
       '<div class="sea-chart-header">' +
         '<div>' +
           '<div class="sea-chart-title">Havsdata över tid</div>' +
-          '<div class="sea-chart-legend">Välj historik och prognoslängd. Gul markering visar ungefär var vi är just nu.</div>' +
+          '<div class="sea-chart-legend">X-axeln visar tid relativt nu. Heldragen linje är historik, streckad linje är prognos.</div>' +
         '</div>' +
       '</div>' +
 
