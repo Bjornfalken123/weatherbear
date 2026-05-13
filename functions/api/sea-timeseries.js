@@ -56,26 +56,37 @@ export async function onRequestGet(context) {
       return Number.isFinite(number) ? number : null;
     }
 
-    function parseTimeToTimestamp(value) {
-      if (!value) return null;
+   function parseTimeToTimestamp(value) {
+  if (value == null || value === "") return null;
 
-      let text = String(value).trim();
+  if (typeof value === "number") {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
 
-      /*
-        Open-Meteo med timezone=GMT returnerar ofta tider utan Z,
-        t.ex. 2026-05-13T12:00. Vi tolkar dem som UTC.
-      */
-      if (
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(text)
-      ) {
-        text += "Z";
-      }
+  let text = String(value).trim();
 
-      const timestamp = new Date(text).getTime();
+  if (/^\d+$/.test(text)) {
+    const numeric = Number(text);
 
+    if (Number.isFinite(numeric)) {
+      const timestamp = new Date(numeric).getTime();
       return Number.isFinite(timestamp) ? timestamp : null;
     }
+  }
 
+  /*
+    Open-Meteo med timezone=GMT returnerar ofta tider utan Z,
+    t.ex. 2026-05-13T12:00. Vi tolkar dem som UTC.
+  */
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(text)) {
+    text += "Z";
+  }
+
+  const timestamp = new Date(text).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
     function normalizeTime(value) {
       const timestamp = parseTimeToTimestamp(value);
       return timestamp == null ? null : new Date(timestamp).toISOString();
