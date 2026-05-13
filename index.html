@@ -268,7 +268,7 @@
     .filter-row + .filter-row{margin-top:7px;}
     .filter-row-left{display:flex;align-items:center;gap:9px;min-width:0;}
     .filter-row-left span:last-child{font-size:12px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .filter-row button{appearance:none;border:1px solid rgba(255,255,255,0.1);background:rgba(11,20,34,0.82);color:var(--text);border-radius:10px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;min-width:52px;}
+    .filter-row button{appearance:none;border:1px solid rgba(255,255,255,0.1);background:rgba(11,20,34,0.82);color:var(--text);border-radius:10px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;min-width:52px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:2;}
     .filter-row button.is-on{background:rgba(43,108,255,0.9);color:#fff;}
     .filter-row button.is-off{background:rgba(255,255,255,0.06);color:var(--muted-soft);}
     .filter-row button.is-zoom-needed{background:rgba(232,215,168,0.16);color:var(--accent-gold);border-color:rgba(232,215,168,0.28);}
@@ -322,7 +322,7 @@
     .sheet-row + .sheet-row{margin-top:8px;}
     .sheet-row-left{display:flex;align-items:center;gap:10px;min-width:0;}
     .sheet-row-left span:last-child{font-size:14px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .sheet-toggle{appearance:none;width:48px;height:28px;border-radius:999px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12);cursor:pointer;position:relative;flex-shrink:0;}
+    .sheet-toggle{appearance:none;width:48px;height:28px;border-radius:999px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12);cursor:pointer;position:relative;flex-shrink:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent;z-index:2;}
     .sheet-toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:999px;background:rgba(255,255,255,0.5);transition:transform 200ms cubic-bezier(0.22,1,0.36,1),background 200ms ease;}
     .sheet-toggle.is-on{background:rgba(43,108,255,0.85);border-color:rgba(123,199,255,0.4);}
     .sheet-toggle.is-on::after{transform:translateX(20px);background:#fff;}
@@ -1116,7 +1116,15 @@
 
       var filterDrawer=document.getElementById('filterDrawer'), filterToggleBtn=document.getElementById('filterToggleBtn'), filterCloseBtn=document.getElementById('filterCloseBtn');
       function closeFilterDrawer(){if(filterDrawer) filterDrawer.classList.add('is-hidden');}
-      if(filterDrawer) filterDrawer.addEventListener('click',function(e){e.stopPropagation();});
+      function protectFilterPanelClicks(panel){
+        if(!panel) return;
+        panel.addEventListener('click',function(e){e.stopPropagation();});
+        panel.addEventListener('pointerdown',function(e){e.stopPropagation();});
+        panel.addEventListener('mousedown',function(e){e.stopPropagation();});
+        panel.addEventListener('touchstart',function(e){e.stopPropagation();},{passive:true});
+      }
+      protectFilterPanelClicks(filterDrawer);
+      protectFilterPanelClicks(mobileFilterSheet);
       if(filterToggleBtn) filterToggleBtn.addEventListener('click',function(e){e.stopPropagation();if(filterDrawer) filterDrawer.classList.toggle('is-hidden');refreshMapSizeSoon();});
       if(filterCloseBtn) filterCloseBtn.addEventListener('click',function(e){e.stopPropagation();closeFilterDrawer();refreshMapSizeSoon();});
 
@@ -1253,6 +1261,14 @@
       function setLighthouseMarkerColorById(id,state,tip){var isSelected=selectedLighthouseStationId===id, baseColor=isSelected?'#ff4d6d':'#ff9f1c', glowColor=isSelected?'rgba(255,77,109,0.38)':'rgba(255,159,28,0.24)';var m=lighthouseMarkerMap.get(id);if(m){if(state==='active'){m.setRadius(isSelected?9:7);m.setStyle({color:baseColor,fillColor:baseColor,fillOpacity:0.98,opacity:1,stroke:true,weight:isSelected?3:2});}else{m.setRadius(5);m.setStyle({opacity:0,fillOpacity:0,stroke:false});}if(tip) m.bindTooltip(tip,{direction:'top'});}var md=lighthouseMaptilerMarkerMap.get(id);if(md&&md.element){var el=md.element;if(state==='active'){el.style.display=showLighthouseObjects?'block':'none';el.style.background=baseColor;el.style.width=isSelected?'18px':'14px';el.style.height=isSelected?'18px':'14px';el.style.boxShadow='0 0 0 '+(isSelected?'5px ':'4px ')+glowColor;el.style.border=isSelected?'2px solid rgba(255,255,255,0.98)':'2px solid rgba(255,255,255,0.75)';}else el.style.display='none';el.title=tip||'';}}
       function clearWaveSelection(){selectedWaveStationId=null;if(waveSelectionMarker){map.removeLayer(waveSelectionMarker);waveSelectionMarker=null;}hideWaveOverlay();waveMarkerMap.forEach(function(_,id){var station=waveStationsCache.get(id);if(station) setWaveMarkerColorById(id,'active',station.name+' • data tillgänglig');});refreshMapSizeSoon();}
       function clearLighthouseSelection(){selectedLighthouseStationId=null;if(lighthouseSelectionMarker){map.removeLayer(lighthouseSelectionMarker);lighthouseSelectionMarker=null;}hideLighthouseOverlay();lighthouseMarkerMap.forEach(function(_,id){var station=lighthouseStationsCache.get(id);if(station) setLighthouseMarkerColorById(id,'active',station.name+' • data tillgänglig');});refreshMapSizeSoon();}
+      function toggleWaveObjects(){
+        showWaveObjects=!showWaveObjects;
+        updateModeUI();
+      }
+      function toggleLighthouseObjects(){
+        showLighthouseObjects=!showLighthouseObjects;
+        updateModeUI();
+      }
       function updateModeUI(){waveMaptilerMarkerMap.forEach(function(d){if(d.element) d.element.style.display=showWaveObjects?'block':'none';});lighthouseMaptilerMarkerMap.forEach(function(d){if(d.element) d.element.style.display=showLighthouseObjects?'block':'none';});if(showWaveObjects){ensureWaveStationsLoaded();if(!map.hasLayer(waveStationsLayer)) map.addLayer(waveStationsLayer);}else{if(map.hasLayer(waveStationsLayer)) map.removeLayer(waveStationsLayer);clearWaveSelection();}if(showLighthouseObjects){ensureLighthouseStationsLoaded();if(!map.hasLayer(lighthouseStationsLayer)) map.addLayer(lighthouseStationsLayer);}else{if(map.hasLayer(lighthouseStationsLayer)) map.removeLayer(lighthouseStationsLayer);clearLighthouseSelection();}var waveBtn=document.getElementById('toggleWaveModeBtn'), lighthouseBtn=document.getElementById('toggleLighthouseModeBtn');if(waveBtn){waveBtn.textContent=showWaveObjects?'På':'Av';waveBtn.classList.toggle('is-on',showWaveObjects);waveBtn.classList.toggle('is-off',!showWaveObjects);}if(lighthouseBtn){lighthouseBtn.textContent=showLighthouseObjects?'På':'Av';lighthouseBtn.classList.toggle('is-on',showLighthouseObjects);lighthouseBtn.classList.toggle('is-off',!showLighthouseObjects);}var mobileWaveBtn=document.getElementById('mobileToggleWaveBtn'), mobileLighthouseBtn=document.getElementById('mobileToggleLighthouseBtn');if(mobileWaveBtn) mobileWaveBtn.classList.toggle('is-on',showWaveObjects);if(mobileLighthouseBtn) mobileLighthouseBtn.classList.toggle('is-on',showLighthouseObjects);syncAisButtons();if(!savedSelections.weather) updateMapOverlay('Väderpunkt','Välj en punkt på kartan för att visa lokal väderdata.');refreshMobileNavState();refreshMapSizeSoon();}
       async function ensureWaveStationsLoaded(){if(waveStationsLoaded) return;if(waveStationsLoadingPromise) return waveStationsLoadingPromise;waveStationsLoadingPromise=(async function(){try{var res=await fetch('/api/ocean-wave-stations'), data=await res.json(), stations=Array.isArray(data&&data.stations)?data.stations:[];stations.forEach(function(s){waveStationsCache.set(s.id,s);});waveStationsLoaded=true;startWaveBackgroundCheck();}catch(e){console.error(e);}finally{waveStationsLoadingPromise=null;}})();return waveStationsLoadingPromise;}
       function createWaveStationMarkers(s){if(waveMarkerMap.has(s.id)||waveMaptilerMarkerMap.has(s.id)) return;var lm=L.circleMarker([s.latitude,s.longitude],{radius:7,weight:2,color:'#4fc3ff',fillColor:'#4fc3ff',fillOpacity:0.95,opacity:1,stroke:true});lm.bindTooltip(s.name+' • data tillgänglig',{direction:'top'});lm.on('click',function(e){L.DomEvent.stopPropagation(e);selectWaveStation(s);});waveMarkerMap.set(s.id,lm);waveStationsLayer.addLayer(lm);if(maptilerMap&&window.maptilersdk){var el=document.createElement('div');Object.assign(el.style,{width:'14px',height:'14px',borderRadius:'999px',background:'#4fc3ff',border:'2px solid rgba(255,255,255,0.75)',boxShadow:'0 0 0 4px rgba(79,195,255,0.22)',cursor:'pointer',display:showWaveObjects?'block':'none'});el.title=s.name+' • data tillgänglig';el.addEventListener('click',function(e){e.stopPropagation();selectWaveStation(s);});var mm=new maptilersdk.Marker({element:el}).setLngLat([s.longitude,s.latitude]).addTo(maptilerMap);waveMaptilerMarkerMap.set(s.id,{marker:mm,element:el});}}
@@ -1334,8 +1350,14 @@
             ['toggleSatelliteLayerBtn','mobileToggleSatelliteBtn'].forEach(function(id){var el=document.getElementById(id);if(el) el.addEventListener('click',onSatelliteToggle);});
             ['toggleRadarLayerBtn','mobileToggleRadarBtn'].forEach(function(id){var el=document.getElementById(id);if(el) el.addEventListener('click',onRadarToggle);});
             ['toggleTemperatureLayerBtn','mobileToggleTemperatureBtn'].forEach(function(id){var el=document.getElementById(id);if(el) el.addEventListener('click',onTemperatureToggle);});
-            var mobileToggleWaveBtn=document.getElementById('mobileToggleWaveBtn');if(mobileToggleWaveBtn) mobileToggleWaveBtn.addEventListener('click',function(){showWaveObjects=!showWaveObjects;updateModeUI();syncAllLayerButtons();});
-            var mobileToggleLighthouseBtn=document.getElementById('mobileToggleLighthouseBtn');if(mobileToggleLighthouseBtn) mobileToggleLighthouseBtn.addEventListener('click',function(){showLighthouseObjects=!showLighthouseObjects;updateModeUI();syncAllLayerButtons();});
+            var desktopToggleWaveBtn=document.getElementById('toggleWaveModeBtn');
+            if(desktopToggleWaveBtn && !desktopToggleWaveBtn.dataset.boundClick){desktopToggleWaveBtn.dataset.boundClick='1';desktopToggleWaveBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggleWaveObjects();syncAllLayerButtons();});}
+            var desktopToggleLighthouseBtn=document.getElementById('toggleLighthouseModeBtn');
+            if(desktopToggleLighthouseBtn && !desktopToggleLighthouseBtn.dataset.boundClick){desktopToggleLighthouseBtn.dataset.boundClick='1';desktopToggleLighthouseBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggleLighthouseObjects();syncAllLayerButtons();});}
+            var mobileToggleWaveBtn=document.getElementById('mobileToggleWaveBtn');
+            if(mobileToggleWaveBtn && !mobileToggleWaveBtn.dataset.boundClick){mobileToggleWaveBtn.dataset.boundClick='1';mobileToggleWaveBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggleWaveObjects();syncAllLayerButtons();});}
+            var mobileToggleLighthouseBtn=document.getElementById('mobileToggleLighthouseBtn');
+            if(mobileToggleLighthouseBtn && !mobileToggleLighthouseBtn.dataset.boundClick){mobileToggleLighthouseBtn.dataset.boundClick='1';mobileToggleLighthouseBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggleLighthouseObjects();syncAllLayerButtons();});}
             var desktopToggleAisBtn=document.getElementById('toggleAisLayerBtn');if(desktopToggleAisBtn){desktopToggleAisBtn.disabled=false;desktopToggleAisBtn.classList.remove('is-disabled');desktopToggleAisBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();onAisToggle();});}
             var mobileToggleAisBtn=document.getElementById('mobileToggleAisBtn');if(mobileToggleAisBtn){mobileToggleAisBtn.disabled=false;mobileToggleAisBtn.classList.remove('is-disabled');mobileToggleAisBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();onAisToggle();});}
             [maptilerTimelineLayer,maptilerPrecipitationLayer,maptilerRadarLayer,maptilerTemperatureLayer,maptilerWindLayer].forEach(function(layer){if(!layer||!layer.on) return;layer.on('sourceReady',function(){initializeForecastTimeline();});});
