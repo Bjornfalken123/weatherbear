@@ -56,6 +56,31 @@ export async function onRequestGet(context) {
       return Number.isFinite(number) ? number : null;
     }
 
+    function parseTimeToTimestamp(value) {
+      if (!value) return null;
+
+      let text = String(value).trim();
+
+      /*
+        Open-Meteo med timezone=GMT returnerar ofta tider utan Z,
+        t.ex. 2026-05-13T12:00. Vi tolkar dem som UTC.
+      */
+      if (
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(text)
+      ) {
+        text += "Z";
+      }
+
+      const timestamp = new Date(text).getTime();
+
+      return Number.isFinite(timestamp) ? timestamp : null;
+    }
+
+    function normalizeTime(value) {
+      const timestamp = parseTimeToTimestamp(value);
+      return timestamp == null ? null : new Date(timestamp).toISOString();
+    }
+
     async function safeJson(path) {
       const response = await fetch(`${baseUrl}${path}`);
       const text = await response.text();
@@ -180,12 +205,11 @@ export async function onRequestGet(context) {
 
           if (!time || value == null) return null;
 
-          const timestamp = new Date(time).getTime();
-
-          if (!Number.isFinite(timestamp)) return null;
+          const normalizedTime = normalizeTime(time);
+          if (!normalizedTime) return null;
 
           return {
-            time: new Date(timestamp).toISOString(),
+            time: normalizedTime,
             value
           };
         })
@@ -210,12 +234,11 @@ export async function onRequestGet(context) {
 
           if (!time || !Number.isFinite(value)) return null;
 
-          const timestamp = new Date(time).getTime();
-
-          if (!Number.isFinite(timestamp)) return null;
+          const normalizedTime = normalizeTime(time);
+          if (!normalizedTime) return null;
 
           return {
-            time: new Date(timestamp).toISOString(),
+            time: normalizedTime,
             value
           };
         })
@@ -223,6 +246,30 @@ export async function onRequestGet(context) {
         .sort(
           (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
         );
+    }
+
+    function splitHistoryForecast(series) {
+      const now = Date.now();
+
+      const history = [];
+      const forecast = [];
+
+      for (const point of series || []) {
+        const timestamp = new Date(point.time).getTime();
+
+        if (!Number.isFinite(timestamp)) continue;
+
+        if (timestamp <= now) {
+          history.push(point);
+        } else {
+          forecast.push(point);
+        }
+      }
+
+      return {
+        history,
+        forecast
+      };
     }
 
     function extractVivaSample(stationData, names) {
@@ -255,11 +302,13 @@ export async function onRequestGet(context) {
           stationData?.updated
         );
 
+        const normalizedTime = updated
+          ? normalizeTime(updated)
+          : new Date().toISOString();
+
         return {
           value,
-          time: updated
-            ? new Date(updated).toISOString()
-            : new Date().toISOString()
+          time: normalizedTime || new Date().toISOString()
         };
       }
 
@@ -365,8 +414,8 @@ export async function onRequestGet(context) {
       return [];
     }
 
-    async function getWaterTempHistory(station) {
-      if (!station) return [];
+    async function getWaterTempObservation(station) {
+      if (!station) return null;
 
       try {
         const data = await safeJson(
@@ -375,54 +424,68 @@ export async function onRequestGet(context) {
 
         const stationData = data?.station || data;
 
-        const sample = extractVivaSample(stationData, [
+        return extractVivaSample(stationData, [
           "Ytvattentemperatur",
           "Vattentemperatur",
           "Vatten Temperatur",
           "Vattentemp",
           "Water temperature"
         ]);
-
-        if (!sample) return [];
-
-        return [
-          {
-            time: sample.time,
-            value: sample.value
-          }
-        ];
       } catch (error) {
-        console.warn("water temp history failed", error);
-        return [];
+        console.warn("water temp observation failed", error);
+        return null;
       }
     }
 
-    async function getMarineForecast() {
+    async function getMarineSeries() {
       try {
         const marineUrl =
           "https://marine-api.open-meteo.com/v1/marine" +
           `?latitude=${encodeURIComponent(String(lat))}` +
           `&longitude=${encodeURIComponent(String(lon))}` +
           "&hourly=wave_height,sea_surface_temperature" +
-          "&forecast_days=7" +
-          "&timezone=GMT";
+          "&past_hours=72" +
+          "&forecast_hours=168" +
+          "&timezone=GMT" +
+          "&cell_selection=sea";
 
         const data = await safeExternalJson(marineUrl);
 
-        return {
-          waveHeight: normalizeOpenMeteoHourly(data, "wave_height"),
-          waterTemp: normalizeOpenMeteoHourly(data, "sea_surface_temperature"),
+        const waveHeightAll = normalizeOpenMeteoHourly(data, "wave_height");
+        const waterTempAll = normalizeOpenMeteoHourly(
+          data,
+          "sea_surface_temperature"
+        );
 
-          // Medvetet tom tills vi har en vattenståndskälla med tydlig referensnivå.
-          waterLevel: []
+        return {
+          waveHeight: splitHistoryForecast(waveHeightAll),
+          waterTemp: splitHistoryForecast(waterTempAll),
+
+          /*
+            Medvetet tomt tills vi har en vattenståndsprognos
+            med säker referensnivå.
+          */
+          waterLevel: {
+            history: [],
+            forecast: []
+          }
         };
       } catch (error) {
-        console.warn("marine forecast failed", error);
+        console.warn("marine series failed", error);
 
         return {
-          waveHeight: [],
-          waterTemp: [],
-          waterLevel: []
+          waveHeight: {
+            history: [],
+            forecast: []
+          },
+          waterTemp: {
+            history: [],
+            forecast: []
+          },
+          waterLevel: {
+            history: [],
+            forecast: []
+          }
         };
       }
     }
@@ -434,16 +497,47 @@ export async function onRequestGet(context) {
     ]);
 
     const [
-      waveHistory,
+      waveHistoryFromStation,
       waterLevelHistory,
-      waterTempHistory,
-      marineForecast
+      waterTempObservation,
+      marineSeries
     ] = await Promise.all([
       getWaveHistory(waveStation),
       getWaterLevelHistory(waterLevelStation),
-      getWaterTempHistory(vivaStation),
-      getMarineForecast()
+      getWaterTempObservation(vivaStation),
+      getMarineSeries()
     ]);
+
+    /*
+      Vattentemperatur:
+      - Historik/prognos kommer från Open-Meteo Marine, så grafen får en riktig tidsserie.
+      - VIVA-observation sparas separat som aktuell observation, men används inte som fejkad historik.
+
+      Våghöjd:
+      - Om SMHI-stationshistorik finns används den för historik.
+      - Prognos kommer från Open-Meteo Marine.
+      - Om stationshistorik saknas används Open-Meteo-historik som fallback.
+
+      Vattenstånd:
+      - Historik kommer från SMHI-station.
+      - Prognos lämnas tom tills referensnivå är säkert löst.
+    */
+
+    const waterTempHistory = marineSeries.waterTemp.history;
+    const waterTempForecast = marineSeries.waterTemp.forecast;
+
+    const waveHistory = waveHistoryFromStation.length
+      ? waveHistoryFromStation
+      : marineSeries.waveHeight.history;
+
+    const waveForecast = marineSeries.waveHeight.forecast;
+
+    const waterTempSource = {
+      name: "Open-Meteo Marine",
+      distanceKm: 0,
+      note:
+        "Historik och prognos är modellvärden för vald punkt. När VIVA-observation finns skickas den separat som aktuell observation."
+    };
 
     return jsonResponse({
       lat,
@@ -452,9 +546,26 @@ export async function onRequestGet(context) {
       updatedAt: new Date().toISOString(),
 
       sources: {
-        waveHeight: waveStation,
+        waveHeight: waveHistoryFromStation.length
+          ? waveStation
+          : {
+              name: "Open-Meteo Marine",
+              distanceKm: 0,
+              note:
+                "Stationshistorik saknades inom valt område. Visar modellhistorik och prognos för vald punkt."
+            },
+
         waterLevel: waterLevelStation,
-        waterTemp: vivaStation,
+        waterTemp: waterTempSource,
+
+        observations: {
+          waterTemp: vivaStation
+            ? {
+                ...vivaStation,
+                note: "Närmaste VIVA-station för aktuell uppmätt vattentemperatur."
+              }
+            : null
+        },
 
         forecast: {
           name: "Open-Meteo Marine",
@@ -463,31 +574,55 @@ export async function onRequestGet(context) {
         }
       },
 
+      observations: {
+        waterTemp: waterTempObservation
+          ? {
+              label: "Aktuell uppmätt vattentemperatur",
+              unit: "°C",
+              time: waterTempObservation.time,
+              value: waterTempObservation.value,
+              source: vivaStation
+            }
+          : null
+      },
+
       series: {
         waterTemp: {
           label: "Vattentemperatur",
           unit: "°C",
           history: waterTempHistory,
-          forecast: marineForecast.waterTemp
+          forecast: waterTempForecast,
+          sourceType: "model",
+          note:
+            "Historik och prognos kommer från Open-Meteo Marine. Aktuell VIVA-observation skickas separat när den finns."
         },
 
         waveHeight: {
           label: "Våghöjd",
           unit: "m",
           history: waveHistory,
-          forecast: marineForecast.waveHeight
+          forecast: waveForecast,
+          sourceType: waveHistoryFromStation.length
+            ? "station-history-and-model-forecast"
+            : "model",
+          note: waveHistoryFromStation.length
+            ? "Historik kommer från närmaste station. Prognos kommer från Open-Meteo Marine."
+            : "Historik och prognos kommer från Open-Meteo Marine."
         },
 
         waterLevel: {
           label: "Vattenstånd",
           unit: "cm",
           history: waterLevelHistory,
-          forecast: marineForecast.waterLevel
+          forecast: marineSeries.waterLevel.forecast,
+          sourceType: "station-history",
+          note:
+            "Vattenståndsprognos är avvaktad tills en källa med säker referensnivå kopplas."
         }
       },
 
       forecastNote:
-        "Våghöjd och vattentemperatur har prognos från Open-Meteo Marine. Vattenståndsprognos är avvaktad tills en källa med säker referensnivå kopplas."
+        "Våghöjd och vattentemperatur har prognos från Open-Meteo Marine. Vattentemperaturhistorik kommer också från Open-Meteo Marine. Vattenståndsprognos är avvaktad tills en källa med säker referensnivå kopplas."
     });
   } catch (error) {
     console.error("sea-timeseries error", error);
