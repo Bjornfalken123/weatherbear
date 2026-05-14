@@ -6,6 +6,11 @@ const MAX_LISTEN_MS = 10000;
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 timme
 const KV_KEY_PREFIX = "ais-region:";
 
+// Cache-first refresh
+const BACKGROUND_REFRESH_LISTEN_MS = 2500;
+const REFRESH_LOCK_MS = 20 * 1000;
+const KV_REFRESH_LOCK_PREFIX = "ais-refresh-lock:";
+
 const MANAGED_REGIONS = [
   {
     id: "oresund",
@@ -77,6 +82,7 @@ function firstDefined(...values) {
       return value;
     }
   }
+
   return null;
 }
 
@@ -555,9 +561,6 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
       ws.addEventListener("open", () => {
         debugInfo.connected = true;
 
-        // Viktigt:
-        // Ingen FilterMessageTypes här. Du testade tidigare att AISStream gav 0
-        // med filter, men gav messages utan filter.
         ws.send(
           JSON.stringify({
             APIKey: apiKey,
@@ -640,10 +643,15 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
             const merged = mergeVessel(existing, {
               mmsi: staticData.mmsi,
               name: staticData.name || (existing && existing.name) || null,
-              callsign: staticData.callsign || (existing && existing.callsign) || null,
+              callsign:
+                staticData.callsign || (existing && existing.callsign) || null,
               imo: staticData.imo || (existing && existing.imo) || null,
-              shipType: staticData.shipType ?? ((existing && existing.shipType) ?? null),
-              destination: staticData.destination || (existing && existing.destination) || null,
+              shipType:
+                staticData.shipType ?? ((existing && existing.shipType) ?? null),
+              destination:
+                staticData.destination ||
+                (existing && existing.destination) ||
+                null,
               eta: staticData.eta || (existing && existing.eta) || null,
               static: staticData,
               receivedAt: now,
@@ -681,7 +689,11 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
   });
 }
 
-async function getCachedVesselsForRequestBbox(env, requestBbox, overlappingRegions) {
+async function getCachedVesselsForRequestBbox(
+  env,
+  requestBbox,
+  overlappingRegions
+) {
   const cached = [];
 
   for (const region of overlappingRegions) {
@@ -806,10 +818,91 @@ function mergeCachedAndLive(cachedVessels, liveVessels) {
   return sortVessels(pruneOldVessels(Array.from(merged.values())));
 }
 
+function buildRefreshLockId(bbox, overlappingRegions) {
+  if (overlappingRegions && overlappingRegions.length) {
+    return overlappingRegions
+      .map((region) => region.id)
+      .sort()
+      .join("+");
+  }
+
+  return [
+    Number(bbox.minLon).toFixed(2),
+    Number(bbox.minLat).toFixed(2),
+    Number(bbox.maxLon).toFixed(2),
+    Number(bbox.maxLat).toFixed(2)
+  ].join(",");
+}
+
+async function acquireRefreshLock(env, lockId) {
+  const kv = getKv(env);
+  if (!kv) return true;
+
+  const key = KV_REFRESH_LOCK_PREFIX + lockId;
+  const existing = await kv.get(key);
+
+  if (existing) {
+    return false;
+  }
+
+  await kv.put(key, String(Date.now()), {
+    expirationTtl: Math.ceil(REFRESH_LOCK_MS / 1000)
+  });
+
+  return true;
+}
+
+function runBackgroundRefresh(context, options) {
+  if (!context || typeof context.waitUntil !== "function") {
+    return;
+  }
+
+  context.waitUntil(
+    (async () => {
+      const { apiKey, bbox, overlappingRegions, debug } = options;
+
+      try {
+        const lockId = buildRefreshLockId(bbox, overlappingRegions);
+        const canRefresh = await acquireRefreshLock(context.env, lockId);
+
+        if (!canRefresh) {
+          return;
+        }
+
+        const livePayload = await fetchFreshAis({
+          apiKey,
+          bbox,
+          safeListenMs: BACKGROUND_REFRESH_LISTEN_MS,
+          debug
+        });
+
+        const liveVessels = Array.isArray(livePayload.vessels)
+          ? livePayload.vessels.filter((vessel) =>
+              isPointInsideBbox(vessel, bbox)
+            )
+          : [];
+
+        if (liveVessels.length) {
+          await saveLiveVesselsToManagedRegionCaches(
+            context.env,
+            liveVessels
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "AIS background refresh failed",
+          error && error.message ? error.message : String(error)
+        );
+      }
+    })()
+  );
+}
+
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
 
   const debug = url.searchParams.get("debug") === "1";
+  const forceLive = url.searchParams.get("live") === "1";
   const bbox = parseBbox(url.searchParams.get("bbox"));
 
   const safeListenMs =
@@ -855,7 +948,41 @@ export async function onRequestGet(context) {
       );
     }
 
-    // Alltid live. Det här gör att global AIS fortsätter fungera.
+    /*
+      Snabb väg:
+      Om cache finns svarar API:t direkt och kör live-refresh i bakgrunden.
+      Lägg till ?live=1 i URL:en om du vill tvinga livehämtning.
+    */
+    if (cachedVessels.length && !forceLive) {
+      runBackgroundRefresh(context, {
+        apiKey,
+        bbox,
+        overlappingRegions,
+        debug
+      });
+
+      const mergedVessels = sortVessels(pruneOldVessels(cachedVessels));
+
+      return jsonResponse({
+        vessels: mergedVessels,
+        cache: {
+          mode: "KV_HOSTING_CACHE_FAST_BACKGROUND_REFRESH",
+          kvAvailable,
+          overlappingRegions: overlappingRegions.map((r) => r.id),
+          liveCount: 0,
+          cachedCount: cachedVessels.length,
+          mergedCount: mergedVessels.length,
+          savedCount: 0,
+          backgroundRefresh: true
+        }
+      });
+    }
+
+    /*
+      Fallback:
+      Kör live om cache saknas, om bbox ligger utanför managed regions,
+      eller om ?live=1 används.
+    */
     livePayload = await fetchFreshAis({
       apiKey,
       bbox,
@@ -864,10 +991,11 @@ export async function onRequestGet(context) {
     });
 
     liveVessels = Array.isArray(livePayload.vessels)
-      ? livePayload.vessels.filter((vessel) => isPointInsideBbox(vessel, bbox))
+      ? livePayload.vessels.filter((vessel) =>
+          isPointInsideBbox(vessel, bbox)
+        )
       : [];
 
-    // Spara bara live-fartyg till KV om de råkar ligga i våra managed regions.
     if (kvAvailable && liveVessels.length) {
       savedCount = await saveLiveVesselsToManagedRegionCaches(
         context.env,
@@ -889,16 +1017,41 @@ export async function onRequestGet(context) {
         liveCount: liveVessels.length,
         cachedCount: cachedVessels.length,
         mergedCount: mergedVessels.length,
-        savedCount
+        savedCount,
+        backgroundRefresh: false
       }
     };
 
     if (debug) {
-      response.debug = livePayload && livePayload.debug ? livePayload.debug : null;
+      response.debug =
+        livePayload && livePayload.debug ? livePayload.debug : null;
     }
 
     return jsonResponse(response);
   } catch (error) {
+    /*
+      Viktigt:
+      Om livehämtning misslyckas men cache finns ska kartan fortfarande få fartyg.
+    */
+    if (cachedVessels.length) {
+      const mergedVessels = sortVessels(pruneOldVessels(cachedVessels));
+
+      return jsonResponse({
+        vessels: mergedVessels,
+        warning: "AIS live refresh failed, showing cached vessels",
+        message: error && error.message ? error.message : String(error),
+        cache: {
+          mode: "CACHE_ONLY_AFTER_LIVE_ERROR",
+          kvAvailable,
+          overlappingRegions: overlappingRegions.map((r) => r.id),
+          liveCount: liveVessels.length,
+          cachedCount: cachedVessels.length,
+          mergedCount: mergedVessels.length,
+          savedCount
+        }
+      });
+    }
+
     return jsonResponse(
       {
         error: true,
