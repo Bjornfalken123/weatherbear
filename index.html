@@ -1192,7 +1192,7 @@
       function firstDefined(){for(var i=0;i<arguments.length;i++){if(arguments[i]!==undefined&&arguments[i]!==null&&arguments[i]!=="") return arguments[i];}return null;}
       function getAisMmsi(v){return firstDefined(v.mmsi,v.MMSI,v.mmsiNumber,v.Mmsi,v.UserID,v.userId,v.user_id,v.static&&v.static.mmsi,v.static&&v.static.MMSI,v.MetaData&&v.MetaData.MMSI,v.metadata&&v.metadata.mmsi,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.UserID,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.UserID,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.UserID);}
       function getAisLat(v){return firstDefined(v.lat,v.latitude,v.Latitude,v.LAT,v.y,v.position&&v.position.lat,v.position&&v.position.latitude,v.Position&&v.Position.Latitude,v.location&&v.location.lat,v.location&&v.location.latitude,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.Latitude,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.Latitude,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.Latitude);}
-      function getAisLon(v){return firstDefined(v.lon,v.lng,v.longitude,v.Longitude,v.LON,v.x,v.position&&v.position.lon,v.position&&v.position.lng,v.position&&v.position.longitude,v.Position&&v.Position.Longitude,v.location&&v.location.lon,v.location&&v.location.lng,v.location&&v.location.longitude,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.Longitude,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.Message&&v.Message.StandardClassBPositionReport.Longitude,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.Longitude);}
+      function getAisLon(v){return firstDefined(v.lon,v.lng,v.longitude,v.Longitude,v.LON,v.x,v.position&&v.position.lon,v.position&&v.position.lng,v.position&&v.position.longitude,v.Position&&v.Position.Longitude,v.location&&v.location.lon,v.location&&v.location.lng,v.location&&v.location.longitude,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.Longitude,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.Longitude,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.Longitude);}
       function getAisCog(v){return firstDefined(v.cog,v.course,v.Course,v.courseOverGround,v.CourseOverGround,v.COG,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.Cog,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.COG,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.Cog,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.COG,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.Cog,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.COG);}
       function getAisSog(v){return firstDefined(v.sog,v.speed,v.Speed,v.speedOverGround,v.SpeedOverGround,v.SOG,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.Sog,v.Message&&v.Message.PositionReport&&v.Message.PositionReport.SOG,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.Sog,v.Message&&v.Message.StandardClassBPositionReport&&v.Message.StandardClassBPositionReport.SOG,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.Sog,v.Message&&v.Message.ExtendedClassBPositionReport&&v.Message.ExtendedClassBPositionReport.SOG);}
       function getAisName(v){return firstDefined(v.name,v.shipName,v.ShipName,v.vesselName,v.VesselName,v.callsign,v.callSign,v.CallSign,v.static&&v.static.name,v.static&&v.static.shipName,v.static&&v.static.ShipName,v.MetaData&&v.MetaData.ShipName,v.metadata&&v.metadata.shipName) || "Fartyg";}
@@ -1201,12 +1201,37 @@
       function getAisTypeLabel(value){if(value==null||value==="") return "Okänd typ";var n=Number(value);if(!isFinite(n)){var s=String(value).trim();return s||"Okänd typ";}if(n===30) return "Fiskefartyg";if(n===31||n===32) return "Bogsering";if(n===33) return "Muddring / undervattensarbete";if(n===34) return "Dykfartyg";if(n===35) return "Militärt fartyg";if(n===36) return "Segelfartyg";if(n===37) return "Privat / fritidsfartyg";if(n>=40&&n<=49) return "Höghastighetsfartyg";if(n>=50&&n<=59) return "Service / specialfartyg";if(n>=60&&n<=69) return "Passagerarfartyg";if(n>=70&&n<=79) return "Lastfartyg";if(n>=80&&n<=89) return "Tanker / olja";if(n>=90&&n<=99) return "Annat fartyg";return "Okänd typ";}
       function getAisShipTypeValue(v){if(!v) return null;return (v.shipType ?? v.ShipType ?? v.type ?? v.Type ?? (v.static && (v.static.shipType ?? v.static.ShipType ?? v.static.Type ?? v.static.ShipAndCargoType)) ?? null);}
       function formatAisAge(lastSeenAt){var t=Number(lastSeenAt);if(!isFinite(t)) return "";var diffMs=Date.now()-t;if(diffMs<0) diffMs=0;var diffSec=Math.round(diffMs/1000);if(diffSec<60) return diffSec+" sek sedan";var diffMin=Math.round(diffSec/60);if(diffMin<60) return diffMin+" min sedan";return "";}
-      function getAisPopupText(v){var lines=[];lines.push(getAisName(v));var mmsi=getAisMmsi(v);if(mmsi) lines.push("MMSI: "+mmsi);var shipTypeValue=getAisShipTypeValue(v);if(shipTypeValue!=null&&shipTypeValue!=="") lines.push("Typ: "+getAisTypeLabel(shipTypeValue)+" ("+shipTypeValue+")"); else lines.push("Typ: Okänd / ej skickad");var sog=getAisSog(v);if(sog!=null&&sog!=="") lines.push("Fart: "+Number(sog).toFixed(1)+" kn");var cog=getAisCog(v);if(cog!=null&&cog!=="") lines.push("Kurs: "+Math.round(Number(cog))+"°");var destination=firstDefined(v.destination,v.Destination,v.dest,v.static&&v.static.destination,v.static&&v.static.Destination);if(destination) lines.push("Destination: "+destination);var age=formatAisAge(v.lastSeenAt||v.receivedAt||v.timestamp||v.time);if(age) lines.push("Senast sedd: "+age);return lines.join("\n");}
+      function getAisPopupText(v){var lines=[];lines.push(getAisName(v));var mmsi=getAisMmsi(v);if(mmsi) lines.push("MMSI: "+mmsi);var shipTypeValue=getAisShipTypeValue(v);if(shipTypeValue!=null&&shipTypeValue!=="") lines.push("Typ: "+getAisTypeLabel(shipTypeValue)+" ("+shipTypeValue+")"); else lines.push("Typ: Okänd / ej skickad");var sog=getAisSog(v);if(sog!=null&&sog!=="") lines.push("Fart: "+Number(sog).toFixed(1)+" kn");var cog=getAisCog(v);if(cog!=null&&cog!=="") lines.push("Kurs: "+Math.round(Number(cog))+"°");var destination=firstDefined(v.destination,v.Destination,v.dest,v.static&&v.static.destination,v.static&&v.static.Destination);if(destination) lines.push("Destination: "+destination);var age=formatAisAge(v.lastSeenAt||v.receivedAt||v.timestamp||v.time||v.cachedAt);if(age) lines.push("Senast sedd: "+age);return lines.join("\n");}
 
-      var aisVesselCache=new Map(), aisLoadTimer=null, aisRefreshInterval=null, aisLatestRequestId=0, aisFetchInFlight=false, aisLastFetchAt=0, aisPendingLoadAfterCurrent=false;
-      var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView()?45*1000:25*1000, AIS_MARKER_TTL_MS=20*60*1000, AIS_FETCH_THROTTLE_MS=isMobileView()?10000:7000, AIS_MAX_MARKERS=isMobileView()?90:250, AIS_MIN_ZOOM=isMobileView()?8:7, aisZoomBlocked=false;
+var aisVesselCache=new Map(), aisLoadTimer=null, aisRefreshInterval=null, aisLatestRequestId=0, aisFetchInFlight=false, aisLastFetchAt=0, aisPendingLoadAfterCurrent=false;
+var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView()?45*1000:25*1000, AIS_MARKER_TTL_MS=20*60*1000, AIS_FETCH_THROTTLE_MS=isMobileView()?10000:7000, AIS_MAX_MARKERS=isMobileView()?90:250, AIS_MIN_ZOOM=isMobileView()?8:7, aisZoomBlocked=false, aisControlsReady=false;
       function syncAisToast(){var toast=document.getElementById('aisMapToast');if(!toast) return;toast.classList.toggle('is-visible',!!(showAisObjects && aisZoomBlocked));}
-      function syncAisButtons(){var deskBtn=document.getElementById('toggleAisLayerBtn'), mobileBtn=document.getElementById('mobileToggleAisBtn');var label='Av';if(showAisObjects) label=aisZoomBlocked?'Zooma in':'På';if(deskBtn){deskBtn.textContent=label;deskBtn.disabled=false;deskBtn.classList.remove('is-disabled');deskBtn.classList.toggle('is-on',showAisObjects&&!aisZoomBlocked);deskBtn.classList.toggle('is-off',!showAisObjects);deskBtn.classList.toggle('is-zoom-needed',showAisObjects&&aisZoomBlocked);deskBtn.title=showAisObjects&&aisZoomBlocked?'AIS är aktivt. Zooma in för att visa fartyg.':'';}if(mobileBtn){mobileBtn.disabled=false;mobileBtn.classList.remove('is-disabled');mobileBtn.classList.toggle('is-on',showAisObjects&&!aisZoomBlocked);mobileBtn.classList.toggle('is-zoom-needed',showAisObjects&&aisZoomBlocked);mobileBtn.setAttribute('aria-label',showAisObjects&&aisZoomBlocked?'AIS är aktivt. Zooma in för att visa fartyg.':showAisObjects?'AIS är på':'AIS är av');}syncAisToast();}
+      function syncAisButtons(){
+  var deskBtn=document.getElementById('toggleAisLayerBtn'), mobileBtn=document.getElementById('mobileToggleAisBtn');
+  var label='Av';
+
+  if(showAisObjects) label=aisZoomBlocked?'Zooma in':'På';
+
+  if(deskBtn){
+    deskBtn.textContent=label;
+    deskBtn.disabled=!aisControlsReady;
+    deskBtn.classList.toggle('is-disabled',!aisControlsReady);
+    deskBtn.classList.toggle('is-on',showAisObjects&&!aisZoomBlocked);
+    deskBtn.classList.toggle('is-off',!showAisObjects);
+    deskBtn.classList.toggle('is-zoom-needed',showAisObjects&&aisZoomBlocked);
+    deskBtn.title=showAisObjects&&aisZoomBlocked?'AIS är aktivt. Zooma in för att visa fartyg.':'';
+  }
+
+  if(mobileBtn){
+    mobileBtn.disabled=!aisControlsReady;
+    mobileBtn.classList.toggle('is-disabled',!aisControlsReady);
+    mobileBtn.classList.toggle('is-on',showAisObjects&&!aisZoomBlocked);
+    mobileBtn.classList.toggle('is-zoom-needed',showAisObjects&&aisZoomBlocked);
+    mobileBtn.setAttribute('aria-label',showAisObjects&&aisZoomBlocked?'AIS är aktivt. Zooma in för att visa fartyg.':showAisObjects?'AIS är på':'AIS är av');
+  }
+
+  syncAisToast();
+}
       function setAisZoomBlocked(blocked){aisZoomBlocked=!!blocked;syncAisButtons();}
       function clearAisMarkers(){if(aisLoadTimer){clearTimeout(aisLoadTimer);aisLoadTimer=null;}if(aisRefreshInterval){clearInterval(aisRefreshInterval);aisRefreshInterval=null;}aisPendingLoadAfterCurrent=false;aisLastFetchAt=0;aisMarkerMap.forEach(function(item){try{if(item&&item.marker) item.marker.remove(); else if(item&&item.remove) item.remove();}catch(e){}});aisMarkerMap.clear();if(aisVesselCache) aisVesselCache.clear();}
       function setAisMarkersVisible(visible){aisMarkerMap.forEach(function(item){try{if(item&&item.element) item.element.style.display=visible?'flex':'none';}catch(e){}});}
@@ -1220,7 +1245,7 @@
       function bindAisMarkerClick(marker,element){if(!marker||!element) return;function stopOnly(e){if(e) e.stopPropagation();markObjectInteraction();}element.addEventListener("mousedown",stopOnly);element.addEventListener("pointerdown",stopOnly);element.addEventListener("touchstart",stopOnly,{passive:true});element.addEventListener("click",function(e){if(e){e.preventDefault();e.stopPropagation();}markObjectInteraction();try{if(typeof marker.togglePopup==="function") marker.togglePopup();else{var popup=marker.getPopup&&marker.getPopup();if(popup&&maptilerMap) popup.addTo(maptilerMap);}}catch(err){console.warn("AIS-popup kunde inte öppnas", err);}});}
       function updateAisMarkers(vessels,activeBbox){
         if(!maptilerMap||!Array.isArray(vessels)) return;var now=Date.now();
-        vessels.forEach(function(v){if(v==null) return;var lat=Number(getAisLat(v)),lon=Number(getAisLon(v));if(!isFinite(lat)||!isFinite(lon)) return;var key=getAisKey(v);if(!key) return;var cog=normalizeAisCourse(getAisCog(v)),sog=getAisSog(v),mmsi=getAisMmsi(v),existingCache=aisVesselCache.get(key)||{};var observedAt=Number(firstDefined(v.receivedAt,v.lastSeenAt,v.timestamp,v.time,v.Time,v.createdAt,now));if(!isFinite(observedAt)) observedAt=now;var merged=Object.assign({},existingCache,v,{mmsi:mmsi||existingCache.mmsi||null,lat:lat,lon:lon,cog:cog,sog:sog==null?existingCache.sog:sog,lastSeenAt:observedAt});aisVesselCache.set(key,merged);var existingMarkerItem=aisMarkerMap.get(key);if(existingMarkerItem&&existingMarkerItem.marker){existingMarkerItem.mmsi=merged.mmsi||existingMarkerItem.mmsi||null;existingMarkerItem.lat=lat;existingMarkerItem.lon=lon;existingMarkerItem.cog=cog;existingMarkerItem.sog=merged.sog==null?existingMarkerItem.sog:merged.sog;existingMarkerItem.name=getAisName(merged);existingMarkerItem.lastSeenAt=observedAt;try{existingMarkerItem.marker.setLngLat([lon,lat]);}catch(e){}updateAisMarkerRotation(existingMarkerItem,cog);try{existingMarkerItem.marker.setPopup(new maptilersdk.Popup({offset:18,closeButton:true,closeOnClick:false}).setText(getAisPopupText(merged)));}catch(e){}return;}var el=createShipElement(cog);var marker=new maptilersdk.Marker({element:el,anchor:"center"}).setLngLat([lon,lat]).addTo(maptilerMap);marker.setPopup(new maptilersdk.Popup({offset:18,closeButton:true,closeOnClick:false}).setText(getAisPopupText(merged)));bindAisMarkerClick(marker,el);aisMarkerMap.set(key,{marker:marker,element:el,mmsi:merged.mmsi||null,lat:lat,lon:lon,cog:cog,sog:merged.sog==null?null:merged.sog,name:getAisName(merged),lastSeenAt:observedAt});});
+        vessels.forEach(function(v){if(v==null) return;var lat=Number(getAisLat(v)),lon=Number(getAisLon(v));if(!isFinite(lat)||!isFinite(lon)) return;var key=getAisKey(v);if(!key) return;var cog=normalizeAisCourse(getAisCog(v)),sog=getAisSog(v),mmsi=getAisMmsi(v),existingCache=aisVesselCache.get(key)||{};var observedAt=Number(firstDefined(v.receivedAt,v.lastSeenAt,v.timestamp,v.time,v.Time,v.createdAt,v.cachedAt,now));if(!isFinite(observedAt)) observedAt=now;var merged=Object.assign({},existingCache,v,{mmsi:mmsi||existingCache.mmsi||null,lat:lat,lon:lon,cog:cog,sog:sog==null?existingCache.sog:sog,lastSeenAt:observedAt});aisVesselCache.set(key,merged);var existingMarkerItem=aisMarkerMap.get(key);if(existingMarkerItem&&existingMarkerItem.marker){existingMarkerItem.mmsi=merged.mmsi||existingMarkerItem.mmsi||null;existingMarkerItem.lat=lat;existingMarkerItem.lon=lon;existingMarkerItem.cog=cog;existingMarkerItem.sog=merged.sog==null?existingMarkerItem.sog:merged.sog;existingMarkerItem.name=getAisName(merged);existingMarkerItem.lastSeenAt=observedAt;try{existingMarkerItem.marker.setLngLat([lon,lat]);}catch(e){}updateAisMarkerRotation(existingMarkerItem,cog);try{existingMarkerItem.marker.setPopup(new maptilersdk.Popup({offset:18,closeButton:true,closeOnClick:false}).setText(getAisPopupText(merged)));}catch(e){}return;}var el=createShipElement(cog);var marker=new maptilersdk.Marker({element:el,anchor:"center"}).setLngLat([lon,lat]).addTo(maptilerMap);marker.setPopup(new maptilersdk.Popup({offset:18,closeButton:true,closeOnClick:false}).setText(getAisPopupText(merged)));bindAisMarkerClick(marker,el);aisMarkerMap.set(key,{marker:marker,element:el,mmsi:merged.mmsi||null,lat:lat,lon:lon,cog:cog,sog:merged.sog==null?null:merged.sog,name:getAisName(merged),lastSeenAt:observedAt});});
         pruneOldAisMarkers(activeBbox);limitAisMarkers();
       }
       function scheduleAisDataLoad(force){if(!showAisObjects) return;if(aisLoadTimer) clearTimeout(aisLoadTimer);aisLoadTimer=setTimeout(function(){aisLoadTimer=null;loadAisData(!!force);},700);}
@@ -1381,8 +1406,28 @@
             if(mobileToggleWaveBtn && !mobileToggleWaveBtn.dataset.boundClick){mobileToggleWaveBtn.dataset.boundClick='1';mobileToggleWaveBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggleWaveObjects();syncAllLayerButtons();});}
             var mobileToggleLighthouseBtn=document.getElementById('mobileToggleLighthouseBtn');
             if(mobileToggleLighthouseBtn && !mobileToggleLighthouseBtn.dataset.boundClick){mobileToggleLighthouseBtn.dataset.boundClick='1';mobileToggleLighthouseBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();toggleLighthouseObjects();syncAllLayerButtons();});}
-            var desktopToggleAisBtn=document.getElementById('toggleAisLayerBtn');if(desktopToggleAisBtn){desktopToggleAisBtn.disabled=false;desktopToggleAisBtn.classList.remove('is-disabled');desktopToggleAisBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();onAisToggle();});}
-            var mobileToggleAisBtn=document.getElementById('mobileToggleAisBtn');if(mobileToggleAisBtn){mobileToggleAisBtn.disabled=false;mobileToggleAisBtn.classList.remove('is-disabled');mobileToggleAisBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();onAisToggle();});}
+           var desktopToggleAisBtn=document.getElementById('toggleAisLayerBtn');
+if(desktopToggleAisBtn && !desktopToggleAisBtn.dataset.boundClick){
+  desktopToggleAisBtn.dataset.boundClick='1';
+  desktopToggleAisBtn.addEventListener('click',function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    onAisToggle();
+  });
+}
+
+var mobileToggleAisBtn=document.getElementById('mobileToggleAisBtn');
+if(mobileToggleAisBtn && !mobileToggleAisBtn.dataset.boundClick){
+  mobileToggleAisBtn.dataset.boundClick='1';
+  mobileToggleAisBtn.addEventListener('click',function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    onAisToggle();
+  });
+}
+
+aisControlsReady=true;
+syncAisButtons();
             [maptilerTimelineLayer,maptilerPrecipitationLayer,maptilerRadarLayer,maptilerTemperatureLayer,maptilerWindLayer].forEach(function(layer){if(!layer||!layer.on) return;layer.on('sourceReady',function(){initializeForecastTimeline();});});
             setTimeout(function(){initializeForecastTimeline();},800);setTimeout(function(){initializeForecastTimeline();},1400);syncAllLayerButtons();
             if(timeSlider){var handleInput=function(){stopTimePlayback();applySelectedForecastTimeImmediate(parseInt(timeSlider.value,10));};var handleFinalChange=function(){stopTimePlayback();var finalTime=parseInt(timeSlider.value,10);applySelectedForecastTimeImmediate(finalTime);if(satelliteLayerVisible){var exactCached=typeof showCachedOpenMeteoCloudLayerForTime==="function"&&showCachedOpenMeteoCloudLayerForTime(finalTime);if(!exactCached) syncOpenMeteoCloudLayerForSelectedTime(finalTime,{immediate:true,preload:true});if(typeof queueOpenMeteoCloudWindow==="function"&&openMeteoCloudValidTimes.length) queueOpenMeteoCloudWindow(finalTime,OPEN_METEO_CLOUD_DRAG_RADIUS,120);}};var stopTouch=function(e){e.stopPropagation();};timeSlider.addEventListener('input',handleInput);timeSlider.addEventListener('change',handleFinalChange);timeSlider.addEventListener('touchstart',stopTouch,{passive:true});timeSlider.addEventListener('touchmove',stopTouch,{passive:true});timeSlider.addEventListener('touchend',function(e){stopTouch(e);handleFinalChange();},{passive:true});timeSlider.addEventListener('pointerdown',stopTouch);timeSlider.addEventListener('pointermove',stopTouch);timeSlider.addEventListener('pointerup',function(e){stopTouch(e);handleFinalChange();});var tc=document.getElementById('timeControl');if(tc){tc.addEventListener('touchstart',stopTouch,{passive:true});tc.addEventListener('touchmove',stopTouch,{passive:true});tc.addEventListener('pointerdown',stopTouch);}if(timePlayPauseBtn){timePlayPauseBtn.addEventListener('touchstart',stopTouch,{passive:true});timePlayPauseBtn.addEventListener('touchend',stopTouch,{passive:true});timePlayPauseBtn.addEventListener('pointerdown',stopTouch);timePlayPauseBtn.addEventListener('click',stopTouch);}if(timeMinusHourBtn){timeMinusHourBtn.addEventListener('touchstart',stopTouch,{passive:true});timeMinusHourBtn.addEventListener('touchend',stopTouch,{passive:true});timeMinusHourBtn.addEventListener('pointerdown',stopTouch);}if(timePlusHourBtn){timePlusHourBtn.addEventListener('touchstart',stopTouch,{passive:true});timePlusHourBtn.addEventListener('touchend',stopTouch,{passive:true});timePlusHourBtn.addEventListener('pointerdown',stopTouch);}}
@@ -1394,7 +1439,29 @@
           }catch(err){console.error('Fel vid skapande av väderlager.', err);}
         });
         var isSyncMT=false,isSyncL=false;
-        maptilerMap.on('moveend',function(){if(isSyncL) return;if(showAisObjects){var currentZoom=maptilerMap.getZoom?maptilerMap.getZoom():0;setAisZoomBlocked(currentZoom<AIS_MIN_ZOOM);}isSyncMT=true;var c=maptilerMap.getCenter();map.setView([c.lat,c.lng],maptilerMap.getZoom(),{animate:false});if(showAisObjects) scheduleAisDataLoad(true);if(satelliteLayerVisible&&selectedForecastTime&&typeof queueOpenMeteoCloudWindow==="function"&&openMeteoCloudValidTimes.length) queueOpenMeteoCloudWindow(selectedForecastTime,OPEN_METEO_CLOUD_DRAG_RADIUS,40);setTimeout(function(){isSyncMT=false;},0);});
+        maptilerMap.on('moveend',function(){
+  if(isSyncL) return;
+
+  var currentZoom = maptilerMap.getZoom ? maptilerMap.getZoom() : 0;
+
+  if(showAisObjects){
+    var blocked = currentZoom < AIS_MIN_ZOOM;
+    setAisZoomBlocked(blocked);
+    setAisMarkersVisible(!blocked);
+
+    if(!blocked) scheduleAisDataLoad(true);
+  }
+
+  isSyncMT = true;
+  var c = maptilerMap.getCenter();
+  map.setView([c.lat,c.lng],currentZoom,{animate:false});
+
+  if(satelliteLayerVisible && selectedForecastTime && typeof queueOpenMeteoCloudWindow==="function" && openMeteoCloudValidTimes.length){
+    queueOpenMeteoCloudWindow(selectedForecastTime,OPEN_METEO_CLOUD_DRAG_RADIUS,40);
+  }
+
+  setTimeout(function(){isSyncMT=false;},0);
+});
         maptilerMap.on('click',function(e){if(e.lngLat) handleMapClick(e.lngLat.lat,e.lngLat.lng);});
       }else{
         console.error('MapTiler SDK ej tillgänglig');
