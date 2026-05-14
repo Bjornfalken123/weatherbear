@@ -281,6 +281,7 @@
     #timeControl{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:1200;width:min(760px, calc(100% - 32px));padding:10px 16px 11px;border-radius:20px;border:1px solid rgba(255,255,255,0.09);background:rgba(5,11,22,0.86);pointer-events:auto;touch-action:none;box-shadow:0 16px 38px rgba(0,0,0,0.34);}
     .time-module-top{display:grid;grid-template-columns:minmax(86px, 1fr) minmax(124px, 1.25fr) auto;align-items:center;gap:12px;margin-bottom:8px;}
     .time-stepper{display:flex;align-items:center;gap:7px;justify-content:flex-end;}
+    .time-stepper .time-now-btn{margin-right:8px;}
     .time-step-btn{appearance:none;border:1px solid rgba(255,255,255,0.11);background:linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.045));color:var(--text);border-radius:999px;min-width:44px;height:36px;padding:0 10px;font-size:12px;font-weight:950;letter-spacing:-0.01em;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 8px 20px rgba(0,0,0,0.18);transition:transform 160ms ease,border-color 160ms ease,background 160ms ease,opacity 160ms ease;}
     .time-step-btn:hover{border-color:rgba(123,199,255,0.34);background:linear-gradient(180deg,rgba(123,199,255,0.18),rgba(255,255,255,0.055));}
     .time-step-btn:active{transform:translateY(1px) scale(0.98);}
@@ -513,7 +514,6 @@
                 </div>
 
                 <div class="time-stepper" aria-label="Justera prognostid">
-                  <button id="timeMinusHourBtn" class="time-step-btn" type="button" aria-label="Gå tillbaka en timme"><span>-1h</span></button>
                   <button id="timePlayPauseBtn" class="time-now-btn" type="button" aria-label="Återställ till aktuell tid">
                     <svg id="resetTimeIcon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"></path>
@@ -521,6 +521,7 @@
                     </svg>
                     <span id="resetTimeBtnText">Nu</span>
                   </button>
+                  <button id="timeMinusHourBtn" class="time-step-btn" type="button" aria-label="Gå tillbaka en timme"><span>-1h</span></button>
                   <button id="timePlusHourBtn" class="time-step-btn" type="button" aria-label="Gå fram en timme"><span>+1h</span></button>
                 </div>
               </div>
