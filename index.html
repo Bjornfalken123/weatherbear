@@ -1236,7 +1236,22 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       function clearAisMarkers(){if(aisLoadTimer){clearTimeout(aisLoadTimer);aisLoadTimer=null;}if(aisRefreshInterval){clearInterval(aisRefreshInterval);aisRefreshInterval=null;}aisPendingLoadAfterCurrent=false;aisLastFetchAt=0;aisMarkerMap.forEach(function(item){try{if(item&&item.marker) item.marker.remove(); else if(item&&item.remove) item.remove();}catch(e){}});aisMarkerMap.clear();if(aisVesselCache) aisVesselCache.clear();}
       function setAisMarkersVisible(visible){aisMarkerMap.forEach(function(item){try{if(item&&item.element) item.element.style.display=visible?'flex':'none';}catch(e){}});}
       function clearAisMarkersOnly(){aisMarkerMap.forEach(function(item){try{if(item&&item.marker) item.marker.remove(); else if(item&&item.remove) item.remove();}catch(e){}});aisMarkerMap.clear();if(aisVesselCache) aisVesselCache.clear();}
-      function onAisToggle(){showAisObjects=!showAisObjects;if(showAisObjects&&maptilerMap&&maptilerMap.getZoom) setAisZoomBlocked(maptilerMap.getZoom()<AIS_MIN_ZOOM); else setAisZoomBlocked(false);if(showAisObjects) startAisAutoRefresh(); else{stopAisAutoRefresh();clearAisMarkers();}syncAisButtons();refreshMobileNavState();}
+      function onAisToggle(){
+  if(!aisControlsReady) return;
+
+  showAisObjects=!showAisObjects;
+  if(showAisObjects&&maptilerMap&&maptilerMap.getZoom) setAisZoomBlocked(maptilerMap.getZoom()<AIS_MIN_ZOOM);
+  else setAisZoomBlocked(false);
+
+  if(showAisObjects) startAisAutoRefresh();
+  else{
+    stopAisAutoRefresh();
+    clearAisMarkers();
+  }
+
+  syncAisButtons();
+  refreshMobileNavState();
+}
       function getExpandedAisBbox(){var bounds=maptilerMap.getBounds(), west=bounds.getWest(), south=bounds.getSouth(), east=bounds.getEast(), north=bounds.getNorth(), lonSpan=Math.abs(east-west), latSpan=Math.abs(north-south), lonPad=Math.max(lonSpan*0.20,0.06), latPad=Math.max(latSpan*0.20,0.05);west=Math.max(-180,west-lonPad);east=Math.min(180,east+lonPad);south=Math.max(-85,south-latPad);north=Math.min(85,north+latPad);return {west:west,south:south,east:east,north:north,query:[west,south,east,north].join(",")};}
       function isAisPointInsideBbox(item,bbox){if(!item||!bbox) return false;var lon=Number(item.lon),lat=Number(item.lat);if(!isFinite(lat)||!isFinite(lon)) return false;return lon>=bbox.west&&lon<=bbox.east&&lat>=bbox.south&&lat<=bbox.north;}
       function pruneOldAisMarkers(activeBbox){var now=Date.now();aisMarkerMap.forEach(function(item,key){if(!item) return;var tooOld=item.lastSeenAt&&now-item.lastSeenAt>AIS_MARKER_TTL_MS;if(tooOld){try{if(item.marker) item.marker.remove();}catch(e){}aisMarkerMap.delete(key);aisVesselCache.delete(key);}});}
