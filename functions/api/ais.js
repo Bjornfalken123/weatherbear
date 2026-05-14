@@ -2,14 +2,10 @@ const AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream";
 
 const DEFAULT_LISTEN_MS = 9000;
 const MAX_LISTEN_MS = 10000;
+const BACKGROUND_REFRESH_LISTEN_MS = 9000;
 
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 timme
 const KV_KEY_PREFIX = "ais-region:";
-
-// Cache-first refresh
-const BACKGROUND_REFRESH_LISTEN_MS = 2500;
-const REFRESH_LOCK_MS = 20 * 1000;
-const KV_REFRESH_LOCK_PREFIX = "ais-refresh-lock:";
 
 const MANAGED_REGIONS = [
   {
@@ -62,6 +58,10 @@ function jsonResponse(payload, status = 200) {
       "content-type": "application/json; charset=utf-8"
     }
   });
+}
+
+function nowMs() {
+  return Date.now();
 }
 
 function clampNumber(value, min, max) {
@@ -184,6 +184,7 @@ async function readRegionCache(env, regionId) {
     return {
       regionId,
       updatedAt: null,
+      vesselCount: 0,
       vessels: []
     };
   }
@@ -422,77 +423,116 @@ function vesselKey(vessel) {
   return "";
 }
 
+function getSeenTime(vessel) {
+  const value = Number(
+    vessel &&
+      (vessel.lastSeenAt ||
+        vessel.receivedAt ||
+        vessel.cachedAt ||
+        vessel.createdAt ||
+        0)
+  );
+
+  return Number.isFinite(value) ? value : 0;
+}
+
+function hasValidPosition(vessel) {
+  return (
+    Number.isFinite(Number(vessel && vessel.lat)) &&
+    Number.isFinite(Number(vessel && vessel.lon))
+  );
+}
+
 function mergeVessel(existing, next) {
-  const merged = {
-    ...(existing || {}),
-    ...(next || {})
+  const oldTime = getSeenTime(existing);
+  const nextTime = getSeenTime(next);
+
+  const existingHasPosition = hasValidPosition(existing);
+  const nextHasPosition = hasValidPosition(next);
+
+  let base = {
+    ...(existing || {})
   };
 
-  merged.static = {
+  if (!existing || !existingHasPosition || (nextHasPosition && nextTime >= oldTime)) {
+    base = {
+      ...base,
+      ...(next || {})
+    };
+  } else {
+    base = {
+      ...base,
+      ...(next || {}),
+      lat: existing.lat,
+      lon: existing.lon,
+      cog: existing.cog,
+      sog: existing.sog,
+      heading: existing.heading,
+      navStatus: existing.navStatus,
+      lastSeenAt: existing.lastSeenAt,
+      receivedAt: Math.max(
+        Number(existing.receivedAt || 0),
+        Number(next && next.receivedAt ? next.receivedAt : 0)
+      ) || existing.receivedAt
+    };
+  }
+
+  base.static = {
     ...((existing && existing.static) || {}),
     ...((next && next.static) || {})
   };
 
-  merged.name =
+  base.name =
     (next && next.name) ||
     (existing && existing.name) ||
-    (merged.static && merged.static.name) ||
+    (base.static && base.static.name) ||
     null;
 
-  merged.callsign =
+  base.callsign =
     (next && next.callsign) ||
     (existing && existing.callsign) ||
-    (merged.static && merged.static.callsign) ||
+    (base.static && base.static.callsign) ||
     null;
 
-  merged.imo =
+  base.imo =
     (next && next.imo) ||
     (existing && existing.imo) ||
-    (merged.static && merged.static.imo) ||
+    (base.static && base.static.imo) ||
     null;
 
-  merged.shipType =
+  base.shipType =
     (next && next.shipType) ??
     (existing && existing.shipType) ??
-    (merged.static && merged.static.shipType) ??
+    (base.static && base.static.shipType) ??
     null;
 
-  merged.destination =
+  base.destination =
     (next && next.destination) ||
     (existing && existing.destination) ||
-    (merged.static && merged.static.destination) ||
+    (base.static && base.static.destination) ||
     null;
 
-  merged.eta =
+  base.eta =
     (next && next.eta) ||
     (existing && existing.eta) ||
-    (merged.static && merged.static.eta) ||
+    (base.static && base.static.eta) ||
     null;
 
-  return merged;
+  return base;
 }
 
 function pruneOldVessels(vessels) {
-  const cutoff = Date.now() - CACHE_MAX_AGE_MS;
+  const cutoff = nowMs() - CACHE_MAX_AGE_MS;
 
   return vessels.filter((vessel) => {
-    const t = Number(
-      vessel.lastSeenAt ||
-      vessel.receivedAt ||
-      vessel.cachedAt ||
-      vessel.createdAt ||
-      0
-    );
-
+    const t = getSeenTime(vessel);
     return Number.isFinite(t) && t >= cutoff;
   });
 }
 
 function sortVessels(vessels) {
   return vessels.sort((a, b) => {
-    const at = Number(a.lastSeenAt || a.receivedAt || a.cachedAt || 0);
-    const bt = Number(b.lastSeenAt || b.receivedAt || b.cachedAt || 0);
-    return bt - at;
+    return getSeenTime(b) - getSeenTime(a);
   });
 }
 
@@ -617,12 +657,12 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
             if (!key) return;
 
             const existing = vessels.get(key);
-            const now = Date.now();
+            const ts = nowMs();
 
             const merged = mergeVessel(existing, {
               ...position,
-              receivedAt: now,
-              lastSeenAt: now,
+              receivedAt: ts,
+              lastSeenAt: ts,
               fromHostingCache: false
             });
 
@@ -638,7 +678,7 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
             if (!key) return;
 
             const existing = vessels.get(key);
-            const now = Date.now();
+            const ts = nowMs();
 
             const merged = mergeVessel(existing, {
               mmsi: staticData.mmsi,
@@ -654,7 +694,7 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
                 null,
               eta: staticData.eta || (existing && existing.eta) || null,
               static: staticData,
-              receivedAt: now,
+              receivedAt: ts,
               fromHostingCache: false
             });
 
@@ -689,11 +729,7 @@ async function fetchFreshAis({ apiKey, bbox, safeListenMs, debug }) {
   });
 }
 
-async function getCachedVesselsForRequestBbox(
-  env,
-  requestBbox,
-  overlappingRegions
-) {
+async function getCachedVesselsForRequestBbox(env, requestBbox, overlappingRegions) {
   const cached = [];
 
   for (const region of overlappingRegions) {
@@ -748,10 +784,15 @@ async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
       const key = vesselKey(oldVessel);
       if (!key) continue;
 
-      merged.set(key, {
-        ...oldVessel,
-        fromHostingCache: true
-      });
+      const existing = merged.get(key);
+
+      merged.set(
+        key,
+        mergeVessel(existing, {
+          ...oldVessel,
+          fromHostingCache: true
+        })
+      );
     }
 
     for (const liveVessel of liveInRegion) {
@@ -764,14 +805,18 @@ async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
         key,
         mergeVessel(existing, {
           ...liveVessel,
-          cachedAt: Date.now(),
+          cachedAt: nowMs(),
           cacheRegion: region.id,
           fromHostingCache: false
         })
       );
+
+      savedCount += 1;
     }
 
-    const payloadVessels = pruneOldVessels(Array.from(merged.values()));
+    const payloadVessels = sortVessels(
+      pruneOldVessels(Array.from(merged.values()))
+    );
 
     await writeRegionCache(env, region.id, {
       regionId: region.id,
@@ -780,8 +825,6 @@ async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
       vesselCount: payloadVessels.length,
       vessels: payloadVessels
     });
-
-    savedCount += liveInRegion.length;
   }
 
   return savedCount;
@@ -790,17 +833,22 @@ async function saveLiveVesselsToManagedRegionCaches(env, liveVessels) {
 function mergeCachedAndLive(cachedVessels, liveVessels) {
   const merged = new Map();
 
-  for (const cached of cachedVessels) {
+  for (const cached of cachedVessels || []) {
     const key = vesselKey(cached);
     if (!key) continue;
 
-    merged.set(key, {
-      ...cached,
-      fromHostingCache: true
-    });
+    const existing = merged.get(key);
+
+    merged.set(
+      key,
+      mergeVessel(existing, {
+        ...cached,
+        fromHostingCache: true
+      })
+    );
   }
 
-  for (const live of liveVessels) {
+  for (const live of liveVessels || []) {
     const key = vesselKey(live);
     if (!key) continue;
 
@@ -818,83 +866,40 @@ function mergeCachedAndLive(cachedVessels, liveVessels) {
   return sortVessels(pruneOldVessels(Array.from(merged.values())));
 }
 
-function buildRefreshLockId(bbox, overlappingRegions) {
-  if (overlappingRegions && overlappingRegions.length) {
-    return overlappingRegions
-      .map((region) => region.id)
-      .sort()
-      .join("+");
-  }
-
-  return [
-    Number(bbox.minLon).toFixed(2),
-    Number(bbox.minLat).toFixed(2),
-    Number(bbox.maxLon).toFixed(2),
-    Number(bbox.maxLat).toFixed(2)
-  ].join(",");
-}
-
-async function acquireRefreshLock(env, lockId) {
-  const kv = getKv(env);
-  if (!kv) return true;
-
-  const key = KV_REFRESH_LOCK_PREFIX + lockId;
-  const existing = await kv.get(key);
-
-  if (existing) {
-    return false;
-  }
-
-  await kv.put(key, String(Date.now()), {
-    expirationTtl: Math.ceil(REFRESH_LOCK_MS / 1000)
-  });
-
-  return true;
-}
-
-function runBackgroundRefresh(context, options) {
-  if (!context || typeof context.waitUntil !== "function") {
-    return;
-  }
+function runBackgroundRefresh(context, { apiKey, bbox, debug }) {
+  if (!context || !context.waitUntil || !apiKey || !bbox) return;
 
   context.waitUntil(
-    (async () => {
-      const { apiKey, bbox, overlappingRegions, debug } = options;
-
-      try {
-        const lockId = buildRefreshLockId(bbox, overlappingRegions);
-        const canRefresh = await acquireRefreshLock(context.env, lockId);
-
-        if (!canRefresh) {
-          return;
-        }
-
-        const livePayload = await fetchFreshAis({
-          apiKey,
-          bbox,
-          safeListenMs: BACKGROUND_REFRESH_LISTEN_MS,
-          debug
-        });
-
+    fetchFreshAis({
+      apiKey,
+      bbox,
+      safeListenMs: BACKGROUND_REFRESH_LISTEN_MS,
+      debug: false
+    })
+      .then(async (livePayload) => {
         const liveVessels = Array.isArray(livePayload.vessels)
-          ? livePayload.vessels.filter((vessel) =>
-              isPointInsideBbox(vessel, bbox)
-            )
+          ? livePayload.vessels.filter((vessel) => isPointInsideBbox(vessel, bbox))
           : [];
 
         if (liveVessels.length) {
-          await saveLiveVesselsToManagedRegionCaches(
-            context.env,
-            liveVessels
+          await saveLiveVesselsToManagedRegionCaches(context.env, liveVessels);
+        }
+
+        if (debug) {
+          console.log(
+            "AIS background refresh",
+            JSON.stringify({
+              liveCount: liveVessels.length
+            })
           );
         }
-      } catch (error) {
-        console.warn(
-          "AIS background refresh failed",
+      })
+      .catch((error) => {
+        console.log(
+          "AIS background refresh error",
           error && error.message ? error.message : String(error)
         );
-      }
-    })()
+      })
   );
 }
 
@@ -902,7 +907,10 @@ export async function onRequestGet(context) {
   const url = new URL(context.request.url);
 
   const debug = url.searchParams.get("debug") === "1";
-  const forceLive = url.searchParams.get("live") === "1";
+  const forceLive =
+    url.searchParams.get("live") === "1" ||
+    url.searchParams.get("forceLive") === "1";
+
   const bbox = parseBbox(url.searchParams.get("bbox"));
 
   const safeListenMs =
@@ -948,20 +956,14 @@ export async function onRequestGet(context) {
       );
     }
 
-    /*
-      Snabb väg:
-      Om cache finns svarar API:t direkt och kör live-refresh i bakgrunden.
-      Lägg till ?live=1 i URL:en om du vill tvinga livehämtning.
-    */
     if (cachedVessels.length && !forceLive) {
       runBackgroundRefresh(context, {
         apiKey,
         bbox,
-        overlappingRegions,
         debug
       });
 
-      const mergedVessels = sortVessels(pruneOldVessels(cachedVessels));
+      const mergedVessels = mergeCachedAndLive(cachedVessels, []);
 
       return jsonResponse({
         vessels: mergedVessels,
@@ -978,11 +980,6 @@ export async function onRequestGet(context) {
       });
     }
 
-    /*
-      Fallback:
-      Kör live om cache saknas, om bbox ligger utanför managed regions,
-      eller om ?live=1 används.
-    */
     livePayload = await fetchFreshAis({
       apiKey,
       bbox,
@@ -991,9 +988,7 @@ export async function onRequestGet(context) {
     });
 
     liveVessels = Array.isArray(livePayload.vessels)
-      ? livePayload.vessels.filter((vessel) =>
-          isPointInsideBbox(vessel, bbox)
-        )
+      ? livePayload.vessels.filter((vessel) => isPointInsideBbox(vessel, bbox))
       : [];
 
     if (kvAvailable && liveVessels.length) {
@@ -1023,35 +1018,11 @@ export async function onRequestGet(context) {
     };
 
     if (debug) {
-      response.debug =
-        livePayload && livePayload.debug ? livePayload.debug : null;
+      response.debug = livePayload && livePayload.debug ? livePayload.debug : null;
     }
 
     return jsonResponse(response);
   } catch (error) {
-    /*
-      Viktigt:
-      Om livehämtning misslyckas men cache finns ska kartan fortfarande få fartyg.
-    */
-    if (cachedVessels.length) {
-      const mergedVessels = sortVessels(pruneOldVessels(cachedVessels));
-
-      return jsonResponse({
-        vessels: mergedVessels,
-        warning: "AIS live refresh failed, showing cached vessels",
-        message: error && error.message ? error.message : String(error),
-        cache: {
-          mode: "CACHE_ONLY_AFTER_LIVE_ERROR",
-          kvAvailable,
-          overlappingRegions: overlappingRegions.map((r) => r.id),
-          liveCount: liveVessels.length,
-          cachedCount: cachedVessels.length,
-          mergedCount: mergedVessels.length,
-          savedCount
-        }
-      });
-    }
-
     return jsonResponse(
       {
         error: true,
@@ -1063,7 +1034,8 @@ export async function onRequestGet(context) {
           overlappingRegions: overlappingRegions.map((r) => r.id),
           liveCount: liveVessels.length,
           cachedCount: cachedVessels.length,
-          savedCount
+          savedCount,
+          backgroundRefresh: false
         }
       },
       500
