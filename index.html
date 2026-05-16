@@ -809,7 +809,7 @@ function calculateFeelsLikeTemperature(temp, windSpeed, humidity){
   if(temp == null || !isFinite(Number(temp))) return null;
 
   var t = Number(temp);
-  var wind = windSpeed == null || !isFinite(Number(windSpeed))
+  var windMs = windSpeed == null || !isFinite(Number(windSpeed))
     ? 0
     : Math.max(0, Number(windSpeed));
 
@@ -817,12 +817,63 @@ function calculateFeelsLikeTemperature(temp, windSpeed, humidity){
     ? 50
     : Math.max(0, Math.min(100, Number(humidity)));
 
+  // 1) Kallt väder: wind chill.
+  // Gäller bäst när temperaturen är låg och vinden är märkbar.
+  if(t <= 10 && windMs > 1.33){
+    var windKmh = windMs * 3.6;
+
+    var windChill =
+      13.12 +
+      0.6215 * t -
+      11.37 * Math.pow(windKmh, 0.16) +
+      0.3965 * t * Math.pow(windKmh, 0.16);
+
+    if(isFinite(windChill)){
+      return windChill;
+    }
+  }
+
+  // 2) Varmt och fuktigt väder: heat index.
+  // Används bara där heat index faktiskt är relevant.
+  if(t >= 26 && rh >= 40){
+    var tf = (t * 9 / 5) + 32;
+
+    var hiF =
+      -42.379 +
+      2.04901523 * tf +
+      10.14333127 * rh -
+      0.22475541 * tf * rh -
+      0.00683783 * tf * tf -
+      0.05481717 * rh * rh +
+      0.00122874 * tf * tf * rh +
+      0.00085282 * tf * rh * rh -
+      0.00000199 * tf * tf * rh * rh;
+
+    var hiC = (hiF - 32) * 5 / 9;
+
+    if(isFinite(hiC)){
+      return hiC;
+    }
+  }
+
+  // 3) Mellanläge: mjuk apparent temperature.
+  // Steadman tar hänsyn till vind och fukt, men viktas mot faktisk temperatur
+  // så att appen inte visar onödigt extrema "känns som"-värden i normalt väder.
   var vaporPressure = (rh / 100) * 6.105 * Math.exp((17.27 * t) / (237.7 + t));
-  var apparent = t + (0.33 * vaporPressure) - (0.70 * wind) - 4.00;
+  var steadman = t + (0.33 * vaporPressure) - (0.70 * windMs) - 4.00;
 
-  if(!isFinite(apparent)) return t;
+  if(!isFinite(steadman)) return t;
 
-  return apparent;
+  var diff = steadman - t;
+
+  // Begränsa mellanlägets påverkan så värdet känns trovärdigt i vardagsväder.
+  var maxDrop = 4;
+  var maxRise = 3;
+
+  if(diff < -maxDrop) diff = -maxDrop;
+  if(diff > maxRise) diff = maxRise;
+
+  return t + diff;
 }
 
 function formatUvIndex(value){
