@@ -1787,24 +1787,41 @@ function closeSearch(){
 
   list.innerHTML = "";
 
-  var tabs = document.createElement("div");
-  tabs.className = "favorite-tabs";
+var tabs = document.createElement("div");
+tabs.className = "favorite-tabs";
 
-  var weatherBtn = document.createElement("button");
-  weatherBtn.type = "button";
-  weatherBtn.className = "favorite-tab-btn" + (mode === "weather" ? " is-active" : "");
-  weatherBtn.textContent = "Platser";
-  weatherBtn.onclick = function(){
-    setMode("weather");
-  };
+tabs.addEventListener("click", function(e){
+  e.preventDefault();
+  e.stopPropagation();
+});
 
-  var seaBtn = document.createElement("button");
-  seaBtn.type = "button";
-  seaBtn.className = "favorite-tab-btn" + (mode === "sea" ? " is-active" : "");
-  seaBtn.textContent = "Hav";
-  seaBtn.onclick = function(){
-    setMode("sea");
-  };
+tabs.addEventListener("touchstart", function(e){
+  e.stopPropagation();
+}, {passive:true});
+
+tabs.addEventListener("pointerdown", function(e){
+  e.stopPropagation();
+});
+
+var weatherBtn = document.createElement("button");
+weatherBtn.type = "button";
+weatherBtn.className = "favorite-tab-btn" + (mode === "weather" ? " is-active" : "");
+weatherBtn.textContent = "Platser";
+weatherBtn.onclick = function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  setMode("weather");
+};
+
+var seaBtn = document.createElement("button");
+seaBtn.type = "button";
+seaBtn.className = "favorite-tab-btn" + (mode === "sea" ? " is-active" : "");
+seaBtn.textContent = "Hav";
+seaBtn.onclick = function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  setMode("sea");
+};
 
   tabs.appendChild(weatherBtn);
   tabs.appendChild(seaBtn);
