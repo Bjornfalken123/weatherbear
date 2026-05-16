@@ -248,6 +248,33 @@
     .weather-metric-accent{
   color:var(--text);
 }
+    .weather-precip-line{
+  padding:6px 8px;
+  border-radius:10px;
+  background:rgba(255,255,255,0.035);
+  border:1px solid rgba(255,255,255,0.055);
+}
+
+.weather-precip-dry{
+  color:var(--muted-soft);
+}
+
+.weather-precip-light strong{
+  color:var(--accent-2);
+}
+
+.weather-precip-moderate strong{
+  color:var(--accent);
+}
+
+.weather-precip-heavy{
+  background:rgba(232,215,168,0.10);
+  border-color:rgba(232,215,168,0.22);
+}
+
+.weather-precip-heavy strong{
+  color:var(--accent-gold);
+}
 
 .weather-metric-accent strong{
   color:var(--accent);
@@ -735,51 +762,102 @@ function formatForecastHourRange(timeValue){
 
 function formatPrecipAmount(value){
   if(value == null || !isFinite(Number(value))) return "0 mm";
-  var n = Number(value);
+
+  var n = Math.max(0, Number(value));
+
   if(n < 0.05) return "0 mm";
   if(n < 0.1) return "<0,1 mm";
+
   return n.toFixed(1).replace(".", ",") + " mm";
 }
 
 function getPrecipLevel(amount){
-  var n = Number(amount || 0);
-  if(n < 0.05) return {label:"Uppehåll", active:false};
-  if(n < 0.5) return {label:"Lätt nederbörd", active:true};
-  if(n < 2.0) return {label:"Nederbörd", active:true};
-  return {label:"Kraftig nederbörd", active:true};
+  var n = Math.max(0, Number(amount || 0));
+
+  if(n < 0.05){
+    return {
+      label: "Uppehåll",
+      tone: "dry",
+      active: false
+    };
+  }
+
+  if(n < 0.5){
+    return {
+      label: "Lätt nederbörd",
+      tone: "light",
+      active: true
+    };
+  }
+
+  if(n < 2.0){
+    return {
+      label: "Nederbörd",
+      tone: "moderate",
+      active: true
+    };
+  }
+
+  return {
+    label: "Kraftig nederbörd",
+    tone: "heavy",
+    active: true
+  };
 }
 
 function getPrecipAmountFromPeriod(item){
   if(!item || !item.data) return null;
 
-  var details = null;
+  var candidates = [
+    item.data.next_1_hours,
+    item.data.next_30_minutes,
+    item.data.next_15_minutes,
+    item.data.next_6_hours,
+    item.data.next_12_hours
+  ];
 
-  if(item.data.next_1_hours && item.data.next_1_hours.details){
-    details = item.data.next_1_hours.details;
-  }else if(item.data.next_30_minutes && item.data.next_30_minutes.details){
-    details = item.data.next_30_minutes.details;
-  }else if(item.data.next_15_minutes && item.data.next_15_minutes.details){
-    details = item.data.next_15_minutes.details;
+  for(var i = 0; i < candidates.length; i++){
+    var details = candidates[i] && candidates[i].details;
+
+    if(details && details.precipitation_amount != null){
+      var value = Number(details.precipitation_amount);
+      return isFinite(value) ? Math.max(0, value) : null;
+    }
   }
 
-  if(!details || details.precipitation_amount == null) return null;
-
-  var value = Number(details.precipitation_amount);
-  return isFinite(value) ? value : null;
+  return null;
 }
 
 function getPrecipRateNow(item){
   var details = item && item.data && item.data.instant && item.data.instant.details;
+
   if(!details || details.precipitation_rate == null) return null;
 
   var value = Number(details.precipitation_rate);
-  return isFinite(value) ? value : null;
+
+  return isFinite(value) ? Math.max(0, value) : null;
+}
+
+function isWetPrecipPoint(point){
+  if(!point) return false;
+
+  return (
+    (point.rate != null && point.rate >= 0.05) ||
+    (point.amount != null && point.amount >= 0.05)
+  );
 }
 
 function summarizeNowcastPrecipitation(nowcastData, fallbackAmount){
-  var fallback = fallbackAmount == null || !isFinite(Number(fallbackAmount)) ? 0 : Number(fallbackAmount);
+  var fallback =
+    fallbackAmount == null || !isFinite(Number(fallbackAmount))
+      ? 0
+      : Math.max(0, Number(fallbackAmount));
 
-  if(!nowcastData || !nowcastData.properties || !Array.isArray(nowcastData.properties.timeseries)){
+  if(
+    !nowcastData ||
+    !nowcastData.properties ||
+    !Array.isArray(nowcastData.properties.timeseries)
+  ){
     return summarizePrecipitationForCard(Date.now(), fallback, null);
   }
 
@@ -792,18 +870,23 @@ function summarizeNowcastPrecipitation(nowcastData, fallbackAmount){
   }
 
   var now = Date.now();
+  var oneHourFromNow = now + 60 * 60 * 1000;
 
   var timeseries = props.timeseries
     .map(function(item){
       return {
-        raw:item,
-        time:new Date(item.time).getTime(),
-        amount:getPrecipAmountFromPeriod(item),
-        rate:getPrecipRateNow(item)
+        raw: item,
+        time: new Date(item.time).getTime(),
+        amount: getPrecipAmountFromPeriod(item),
+        rate: getPrecipRateNow(item)
       };
     })
-    .filter(function(item){return isFinite(item.time);})
-    .sort(function(a,b){return a.time-b.time;});
+    .filter(function(item){
+      return isFinite(item.time);
+    })
+    .sort(function(a, b){
+      return a.time - b.time;
+    });
 
   if(!timeseries.length){
     return summarizePrecipitationForCard(Date.now(), fallback, null);
@@ -812,8 +895,9 @@ function summarizeNowcastPrecipitation(nowcastData, fallbackAmount){
   var current = timeseries[0];
   var currentDiff = Math.abs(current.time - now);
 
-  for(var i=1;i<timeseries.length;i++){
+  for(var i = 1; i < timeseries.length; i++){
     var diff = Math.abs(timeseries[i].time - now);
+
     if(diff < currentDiff){
       current = timeseries[i];
       currentDiff = diff;
@@ -821,23 +905,15 @@ function summarizeNowcastPrecipitation(nowcastData, fallbackAmount){
   }
 
   var nextHourAmount = current.amount != null ? current.amount : fallback;
-
-  var isRainingNow =
-    (current.rate != null && current.rate > 0.05) ||
-    (current.amount != null && current.amount > 0.05);
-
   var firstWet = null;
 
-  for(var j=0;j<timeseries.length;j++){
+  for(var j = 0; j < timeseries.length; j++){
     var point = timeseries[j];
+
     if(point.time < now - 5 * 60 * 1000) continue;
-    if(point.time > now + 60 * 60 * 1000) break;
+    if(point.time > oneHourFromNow) break;
 
-    var wet =
-      (point.rate != null && point.rate > 0.05) ||
-      (point.amount != null && point.amount > 0.05);
-
-    if(wet){
+    if(isWetPrecipPoint(point)){
       firstWet = point;
       break;
     }
@@ -845,31 +921,40 @@ function summarizeNowcastPrecipitation(nowcastData, fallbackAmount){
 
   var level = getPrecipLevel(nextHourAmount);
 
+  var isRainingNow =
+    isWetPrecipPoint(current) &&
+    currentDiff <= 20 * 60 * 1000;
+
   if(isRainingNow){
     return {
-      label:"Pågår nu",
-      amount:nextHourAmount,
-      detail:formatPrecipAmount(nextHourAmount) + " · närmaste timmen",
-      active:true
+      label: level.tone === "heavy" ? "Kraftig nederbörd nu" : "Nederbörd nu",
+      amount: nextHourAmount,
+      detail: formatPrecipAmount(nextHourAmount) + " · närmaste timmen",
+      active: true,
+      tone: level.tone
     };
   }
 
   if(firstWet){
     var minutes = Math.max(1, Math.round((firstWet.time - now) / (60 * 1000)));
+    var comingAmount = firstWet.amount != null ? firstWet.amount : nextHourAmount;
+    var comingLevel = getPrecipLevel(comingAmount);
 
     return {
-      label:"Nederbörd om ca " + minutes + " min",
-      amount:nextHourAmount,
-      detail:nextHourAmount > 0.05 ? formatPrecipAmount(nextHourAmount) + " · närmaste timmen" : "närmaste timmen",
-      active:true
+      label: "Nederbörd om ca " + minutes + " min",
+      amount: comingAmount,
+      detail: formatPrecipAmount(Math.max(nextHourAmount, comingAmount)) + " · närmaste timmen",
+      active: true,
+      tone: comingLevel.tone
     };
   }
 
   return {
-    label:level.label,
-    amount:nextHourAmount,
-    detail:level.active ? formatPrecipAmount(nextHourAmount) + " · närmaste timmen" : "närmaste timmen",
-    active:level.active
+    label: "Uppehåll",
+    amount: nextHourAmount,
+    detail: "0 mm · närmaste timmen",
+    active: false,
+    tone: "dry"
   };
 }
 
@@ -878,15 +963,22 @@ function summarizePrecipitationForCard(timeValue, yrAmount, nowcastData){
     return summarizeNowcastPrecipitation(nowcastData, yrAmount);
   }
 
-  var amount = yrAmount == null || !isFinite(Number(yrAmount)) ? 0 : Number(yrAmount);
+  var amount =
+    yrAmount == null || !isFinite(Number(yrAmount))
+      ? 0
+      : Math.max(0, Number(yrAmount));
+
   var level = getPrecipLevel(amount);
-  var periodText = isNearNow(timeValue) ? "närmaste timmen" : formatForecastHourRange(timeValue);
+  var periodText = isNearNow(timeValue)
+    ? "närmaste timmen"
+    : formatForecastHourRange(timeValue);
 
   return {
-    label:level.label,
-    amount:amount,
-    detail:level.active ? formatPrecipAmount(amount) + " · " + periodText : periodText,
-    active:level.active
+    label: level.label,
+    amount: amount,
+    detail: formatPrecipAmount(amount) + " · " + periodText,
+    active: level.active,
+    tone: level.tone
   };
 }
 
@@ -894,9 +986,24 @@ function buildPrecipitationMetric(summary){
   if(!summary) return "";
 
   var label = escapeHtml(summary.label || "Nederbörd");
-  var detail = summary.detail ? ' <span class="weather-metric-muted">· '+escapeHtml(summary.detail)+'</span>' : "";
+  var detail = summary.detail
+    ? ' <span class="weather-metric-muted">· ' + escapeHtml(summary.detail) + '</span>'
+    : "";
 
-  return '<div class="weather-metric-line'+(summary.active?' weather-metric-accent':'')+'"><strong>Nederbörd</strong> '+label+detail+'</div>';
+  var toneClass = summary.tone
+    ? " weather-precip-" + escapeHtml(summary.tone)
+    : "";
+
+  return (
+    '<div class="weather-metric-line weather-precip-line' +
+    toneClass +
+    (summary.active ? " weather-metric-accent" : "") +
+    '">' +
+    '<strong>Nederbörd</strong> ' +
+    label +
+    detail +
+    '</div>'
+  );
 }
 
       function distanceKmBetween(lat1, lon1, lat2, lon2){
