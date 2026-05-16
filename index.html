@@ -649,7 +649,97 @@
       var nauticalSeamarkSourceId = "nautical-seamark-source";
       var nauticalSeamarkLayerId = "nautical-seamark-layer";
       var nauticalLayerOrderTimer = null;
+var forecastStartTime = null;
+var forecastEndTime = null;
 
+function roundToForecastHour(timeValue){
+  var t = Number(timeValue);
+  if(!isFinite(t)) return Date.now();
+
+  var d = new Date(t);
+  d.setMinutes(0, 0, 0);
+
+  return d.getTime();
+}
+
+function clampForecastTime(timeValue){
+  var t = roundToForecastHour(timeValue);
+
+  if(forecastStartTime) t = Math.max(forecastStartTime, t);
+  if(forecastEndTime) t = Math.min(forecastEndTime, t);
+
+  return roundToForecastHour(t);
+}
+
+function findNearestWeatherTimeseriesItem(timeValue){
+  if(!Array.isArray(weatherTimeseries) || !weatherTimeseries.length) return null;
+
+  var targetTime = roundToForecastHour(timeValue);
+  var best = weatherTimeseries[0];
+  var bestDiff = Math.abs(new Date(best.time).getTime() - targetTime);
+
+  for(var i = 1; i < weatherTimeseries.length; i++){
+    var itemTime = new Date(weatherTimeseries[i].time).getTime();
+    var diff = Math.abs(itemTime - targetTime);
+
+    if(diff < bestDiff){
+      best = weatherTimeseries[i];
+      bestDiff = diff;
+    }
+  }
+
+  return best;
+}
+
+function getForecastPrecipitation(item){
+  if(!item || !item.data) return {amount:null, hours:1};
+
+  if(
+    item.data.next_1_hours &&
+    item.data.next_1_hours.details &&
+    item.data.next_1_hours.details.precipitation_amount != null
+  ){
+    return {
+      amount: item.data.next_1_hours.details.precipitation_amount,
+      hours: 1
+    };
+  }
+
+  if(
+    item.data.next_6_hours &&
+    item.data.next_6_hours.details &&
+    item.data.next_6_hours.details.precipitation_amount != null
+  ){
+    return {
+      amount: item.data.next_6_hours.details.precipitation_amount,
+      hours: 6
+    };
+  }
+
+  if(
+    item.data.next_12_hours &&
+    item.data.next_12_hours.details &&
+    item.data.next_12_hours.details.precipitation_amount != null
+  ){
+    return {
+      amount: item.data.next_12_hours.details.precipitation_amount,
+      hours: 12
+    };
+  }
+
+  return {amount:null, hours:1};
+}
+
+function formatForecastPeriodRange(timeValue, hours){
+  var start = Number(timeValue);
+  var h = Number(hours || 1);
+
+  if(!isFinite(start)) return "";
+
+  var end = start + h * 60 * 60 * 1000;
+
+  return formatClockDotGlobal(start) + "–" + formatClockDotGlobal(end);
+}
       async function loadSeaAreaData(lat, lon, radiusKm){
         var requestId = ++latestSeaAreaRequestId;
         selectedSeaAreaData = null;
@@ -1825,99 +1915,12 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             if(temperatureLayerVisible) maptilerMap.addLayer(maptilerTemperatureLayer);
 
             var timeSlider=document.getElementById('timeSlider'), timeValueLabel=document.getElementById('timeValueLabel'), timePlayPauseBtn=document.getElementById('timePlayPauseBtn'), timeMinusHourBtn=document.getElementById('timeMinusHourBtn'), timePlusHourBtn=document.getElementById('timePlusHourBtn');
-            var forecastStartTime=null, forecastEndTime=null, isTimePlaying=false;
+            var isTimePlaying = false;
             function setDeskBtn(id,on){var b=document.getElementById(id);if(!b) return;b.textContent=on?'På':'Av';b.classList.toggle('is-on',on);b.classList.toggle('is-off',!on);}
             function setMobToggle(id,on){var b=document.getElementById(id);if(b) b.classList.toggle('is-on',on);}
             function syncAllLayerButtons(){setDeskBtn('toggleWindLayerBtn',windLayerVisible);setDeskBtn('togglePrecipLayerBtn',precipitationLayerVisible);setDeskBtn('toggleSatelliteLayerBtn',satelliteLayerVisible);setDeskBtn('toggleRadarLayerBtn',radarLayerVisible);setDeskBtn('toggleTemperatureLayerBtn',temperatureLayerVisible);setDeskBtn('toggleWaveModeBtn',showWaveObjects);setDeskBtn('toggleLighthouseModeBtn',showLighthouseObjects);setMobToggle('mobileToggleWindBtn',windLayerVisible);setMobToggle('mobileTogglePrecipBtn',precipitationLayerVisible);setMobToggle('mobileToggleSatelliteBtn',satelliteLayerVisible);setMobToggle('mobileToggleRadarBtn',radarLayerVisible);setMobToggle('mobileToggleTemperatureBtn',temperatureLayerVisible);setMobToggle('mobileToggleWaveBtn',showWaveObjects);setMobToggle('mobileToggleLighthouseBtn',showLighthouseObjects);syncBaseMapButtons();syncAisButtons();updateActiveLayersBadge();refreshMobileNavState();}
             function updateTimeSliderProgress(){if(!timeSlider) return;var min=Number(timeSlider.min),max=Number(timeSlider.max),value=Number(timeSlider.value);if(!isFinite(min)||!isFinite(max)||max<=min||!isFinite(value)){timeSlider.style.setProperty('--time-progress','0%');return;}var progress=((value-min)/(max-min))*100;progress=Math.max(0,Math.min(100,progress));timeSlider.style.setProperty('--time-progress',progress+'%');}
-           function roundToForecastHour(timeValue){
-  var t = Number(timeValue);
-  if(!isFinite(t)) return Date.now();
-
-  var d = new Date(t);
-  d.setMinutes(0, 0, 0);
-
-  return d.getTime();
-}
-
-function clampForecastTime(timeValue){
-  var t = roundToForecastHour(timeValue);
-
-  if(forecastStartTime) t = Math.max(forecastStartTime, t);
-  if(forecastEndTime) t = Math.min(forecastEndTime, t);
-
-  return roundToForecastHour(t);
-}
-
-function findNearestWeatherTimeseriesItem(timeValue){
-  if(!Array.isArray(weatherTimeseries) || !weatherTimeseries.length) return null;
-
-  var targetTime = roundToForecastHour(timeValue);
-  var best = weatherTimeseries[0];
-  var bestDiff = Math.abs(new Date(best.time).getTime() - targetTime);
-
-  for(var i = 1; i < weatherTimeseries.length; i++){
-    var itemTime = new Date(weatherTimeseries[i].time).getTime();
-    var diff = Math.abs(itemTime - targetTime);
-
-    if(diff < bestDiff){
-      best = weatherTimeseries[i];
-      bestDiff = diff;
-    }
-  }
-
-  return best;
-}
-
-function getForecastPrecipitation(item){
-  if(!item || !item.data) return {amount:null, hours:1};
-
-  if(
-    item.data.next_1_hours &&
-    item.data.next_1_hours.details &&
-    item.data.next_1_hours.details.precipitation_amount != null
-  ){
-    return {
-      amount: item.data.next_1_hours.details.precipitation_amount,
-      hours: 1
-    };
-  }
-
-  if(
-    item.data.next_6_hours &&
-    item.data.next_6_hours.details &&
-    item.data.next_6_hours.details.precipitation_amount != null
-  ){
-    return {
-      amount: item.data.next_6_hours.details.precipitation_amount,
-      hours: 6
-    };
-  }
-
-  if(
-    item.data.next_12_hours &&
-    item.data.next_12_hours.details &&
-    item.data.next_12_hours.details.precipitation_amount != null
-  ){
-    return {
-      amount: item.data.next_12_hours.details.precipitation_amount,
-      hours: 12
-    };
-  }
-
-  return {amount:null, hours:1};
-}
-
-function formatForecastPeriodRange(timeValue, hours){
-  var start = Number(timeValue);
-  var h = Number(hours || 1);
-
-  if(!isFinite(start)) return "";
-
-  var end = start + h * 60 * 60 * 1000;
-
-  return formatClockDotGlobal(start) + "–" + formatClockDotGlobal(end);
-}
+  
             function updateTimeLabel(){if(timeValueLabel) timeValueLabel.textContent=selectedForecastTime?formatForecastLabelGlobal(selectedForecastTime):'--';var nowLabel=document.getElementById('timeNowLabel');if(nowLabel) nowLabel.textContent='Nu '+formatClockDotGlobal(new Date());updateTimeSliderProgress();updateTimeStepButtons();}
             function updateTimeStepButtons(){var ready=!!(forecastStartTime&&forecastEndTime&&selectedForecastTime);if(timeMinusHourBtn) timeMinusHourBtn.disabled=!ready||selectedForecastTime<=forecastStartTime;if(timePlusHourBtn) timePlusHourBtn.disabled=!ready||selectedForecastTime>=forecastEndTime;}
           function stepForecastTime(hours){
