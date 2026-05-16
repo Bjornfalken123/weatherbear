@@ -275,6 +275,9 @@
 .weather-precip-heavy strong{
   color:var(--accent-gold);
 }
+    .weather-precip-heavy.weather-metric-accent strong{
+  color:var(--accent-gold);
+}
 
 .weather-metric-accent strong{
   color:var(--accent);
@@ -784,7 +787,7 @@ function getPrecipLevel(amount){
 
   if(n < 0.5){
     return {
-      label: "Lätt nederbörd",
+      label: "Lätt",
       tone: "light",
       active: true
     };
@@ -792,19 +795,18 @@ function getPrecipLevel(amount){
 
   if(n < 2.0){
     return {
-      label: "Nederbörd",
+      label: "Måttlig",
       tone: "moderate",
       active: true
     };
   }
 
   return {
-    label: "Kraftig nederbörd",
+    label: "Kraftig",
     tone: "heavy",
     active: true
   };
 }
-
 function getPrecipAmountFromPeriod(item){
   if(!item || !item.data) return null;
 
@@ -985,9 +987,9 @@ function summarizePrecipitationForCard(timeValue, yrAmount, nowcastData){
 function buildPrecipitationMetric(summary){
   if(!summary) return "";
 
-  var label = escapeHtml(summary.label || "Nederbörd");
+  var label = escapeHtml(summary.label || "Uppehåll");
   var detail = summary.detail
-    ? ' <span class="weather-metric-muted">· ' + escapeHtml(summary.detail) + '</span>'
+    ? ' <span class="weather-metric-muted">' + escapeHtml(summary.detail) + '</span>'
     : "";
 
   var toneClass = summary.tone
@@ -1000,12 +1002,11 @@ function buildPrecipitationMetric(summary){
     (summary.active ? " weather-metric-accent" : "") +
     '">' +
     '<strong>Nederbörd</strong> ' +
-    label +
+    '<span>' + label + '</span>' +
     detail +
     '</div>'
   );
 }
-
       function distanceKmBetween(lat1, lon1, lat2, lon2){
         var R=6371, dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
         var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
