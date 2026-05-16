@@ -1,15 +1,18 @@
-app.get("/api/openmeteo-uv", async function(req, res){
+export async function onRequestGet(context){
   try{
-    var lat = Number(req.query.lat);
-    var lon = Number(req.query.lon);
+    var request = context.request;
+    var url = new URL(request.url);
+
+    var lat = Number(url.searchParams.get("lat"));
+    var lon = Number(url.searchParams.get("lon"));
 
     if(!isFinite(lat) || !isFinite(lon)){
-      return res.status(400).json({
+      return Response.json({
         error: "lat/lon saknas eller är ogiltiga"
-      });
+      }, { status: 400 });
     }
 
-    var url =
+    var openMeteoUrl =
       "https://api.open-meteo.com/v1/forecast" +
       "?latitude=" + encodeURIComponent(String(lat)) +
       "&longitude=" + encodeURIComponent(String(lon)) +
@@ -17,14 +20,14 @@ app.get("/api/openmeteo-uv", async function(req, res){
       "&forecast_days=7" +
       "&timezone=auto";
 
-    var response = await fetch(url);
+    var response = await fetch(openMeteoUrl);
     var data = await response.json();
 
     if(!response.ok){
-      return res.status(response.status).json({
+      return Response.json({
         error: "Open-Meteo UV kunde inte hämtas",
         details: data
-      });
+      }, { status: response.status });
     }
 
     var times = data.hourly && data.hourly.time ? data.hourly.time : [];
@@ -39,14 +42,15 @@ app.get("/api/openmeteo-uv", async function(req, res){
       return row.time && row.uvIndex != null && isFinite(Number(row.uvIndex));
     });
 
-    res.json({
+    return Response.json({
       source: "open-meteo",
       timeseries: timeseries
     });
   }catch(error){
     console.error(error);
-    res.status(500).json({
+
+    return Response.json({
       error: "UV-index kunde inte hämtas"
-    });
+    }, { status: 500 });
   }
-});
+}
