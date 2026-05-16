@@ -1696,15 +1696,28 @@ function buildPrecipitationMetric(summary){
       var humidityText = formatHumidity(humidity);
       var uvText = formatUvMetric(uvIndex);
 
-      var detailsHtml = weatherDetailsExpanded
-        ? '<div class="weather-extra-details">' +
-            buildOverlayDataGrid([
-              {label:'Lufttryck', value:pressureText},
-              {label:'Luftfuktighet', value:humidityText},
-              {label:'Koordinater', value:formatCoord(lat) + ', ' + formatCoord(lon)}
-            ]) +
-          '</div>'
-        : '';
+  var detailsItems = [
+  {label:'Lufttryck', value:pressureText},
+  {label:'Luftfuktighet', value:humidityText}
+];
+
+if(uvText !== "--"){
+  detailsItems.push({
+    label:'UV-index',
+    value:uvText
+  });
+}
+
+detailsItems.push({
+  label:'Koordinater',
+  value:formatCoord(lat) + ', ' + formatCoord(lon)
+});
+
+var detailsHtml = weatherDetailsExpanded
+  ? '<div class="weather-extra-details">' +
+      buildOverlayDataGrid(detailsItems) +
+    '</div>'
+  : '';
 
       var precipitationMetric = buildPrecipitationMetric(
         precipSummary || summarizePrecipitationForCard(pt, rain, null, 1)
@@ -1714,9 +1727,7 @@ function buildPrecipitationMetric(summary){
         ? '<div class="weather-feels-like">Känns som ' + escapeHtml(feelsLikeText) + '</div>'
         : '';
 
-      var uvMetric = uvText !== "--"
-        ? '<div class="weather-metric-line"><strong>UV-index</strong> ' + escapeHtml(uvText) + '</div>'
-        : '';
+   
 
       var content =
         '<div class="weather-overview">' +
@@ -1730,10 +1741,9 @@ function buildPrecipitationMetric(summary){
         feelsLikeLine +
         '<div class="weather-primary-metrics">' +
           '<div class="weather-metric-line"><strong>Vind</strong> ' + windText + '</div>' +
-          '<div class="weather-metric-line"><strong>Byvind</strong> ' + gustText + '</div>' +
-          precipitationMetric +
-          uvMetric +
-        '</div>' +
+    '<div class="weather-metric-line"><strong>Byvind</strong> ' + gustText + '</div>' +
+precipitationMetric +
+'</div>' +
         '<div class="weather-point-actions">' +
           '<button type="button" class="weather-favorite-btn" id="saveFavoriteBtn">' + (isFavorite(lat, lon) ? 'Sparad' : 'Spara plats') + '</button>' +
           '<button type="button" class="weather-details-toggle" id="weatherDetailsToggleBtn">' + detailsButtonText + '</button>' +
