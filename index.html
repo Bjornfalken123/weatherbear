@@ -701,7 +701,26 @@
       function formatTemp(v){ return v==null ? "--" : Number(v).toFixed(1)+" °C"; }
       function formatHumidity(v){ return v==null ? "--" : Math.round(Number(v))+" %"; }
       function formatRain(v){ return v==null ? "--" : Number(v).toFixed(1)+" mm"; }
-function isNearNow(timeValue){
+function formatWind(v){
+  return v==null ? "--" : Number(v).toFixed(1)+" m/s";
+}
+
+function formatPressure(v){
+  return v==null ? "--" : Number(v).toFixed(1)+" hPa";
+}
+
+function formatWave(v){
+  return v==null ? "--" : Number(v).toFixed(1)+" m";
+}
+
+function formatWaterLevel(v){
+  return v==null ? "--" : Number(v).toFixed(1)+" cm";
+}
+
+function toRad(value){
+  return value * Math.PI / 180;
+}
+      function isNearNow(timeValue){
   var t = Number(timeValue);
   if(!isFinite(t)) return false;
   return Math.abs(Date.now() - t) <= 75 * 60 * 1000;
@@ -1254,13 +1273,13 @@ function buildPrecipitationMetric(summary){
         Promise.all([
   fetch('/api/weather?lat='+lat+'&lon='+lon),
   fetch('/api/openmeteo-gust?lat='+lat+'&lon='+lon),
-  fetch('/api/yr-nowcast?lat='+lat+'&lon='+lon)
+  fetch('/api/yr-nowcast?lat='+lat+'&lon='+lon).catch(function(){return null;})
 ]).then(async function(responses){
           if(requestId!==latestWeatherRequestId) return;
           var weatherRes=responses[0], gustRes=responses[1], nowcastRes=responses[2],
     weatherText=await weatherRes.text(),
     gustText=await gustRes.text(),
-    nowcastText=await nowcastRes.text();
+    nowcastText=nowcastRes ? await nowcastRes.text() : "";
           if(requestId!==latestWeatherRequestId) return; if(!weatherRes.ok) throw new Error(weatherText);
           var weatherData=JSON.parse(weatherText), ts=(weatherData.properties && weatherData.properties.timeseries)||[]; if(!ts.length) throw new Error('Ingen väderdata hittades.');
           weatherTimeseries=ts; var cur=ts[0], inst=(cur.data&&cur.data.instant&&cur.data.instant.details)||{}, n1=(cur.data&&cur.data.next_1_hours)||{}, n6=(cur.data&&cur.data.next_6_hours)||{}, n12=(cur.data&&cur.data.next_12_hours)||{};
