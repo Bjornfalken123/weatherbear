@@ -245,43 +245,7 @@
     .weather-primary-metrics{display:grid;gap:5px;margin-top:2px;}
     .weather-metric-line{color:var(--text-soft);font-size:12px;font-weight:750;line-height:1.35;}
     .weather-metric-line strong{color:var(--text);font-weight:900;}
-    .weather-metric-accent{
-  color:var(--text);
-}
-    .weather-precip-line{
-  padding:6px 8px;
-  border-radius:10px;
-  background:rgba(255,255,255,0.035);
-  border:1px solid rgba(255,255,255,0.055);
-}
-
-.weather-precip-dry{
-  color:var(--muted-soft);
-}
-
-.weather-precip-light strong{
-  color:var(--accent-2);
-}
-
-.weather-precip-moderate strong{
-  color:var(--accent);
-}
-
-.weather-precip-heavy{
-  background:rgba(232,215,168,0.10);
-  border-color:rgba(232,215,168,0.22);
-}
-
-.weather-precip-heavy strong{
-  color:var(--accent-gold);
-}
-    .weather-precip-heavy.weather-metric-accent strong{
-  color:var(--accent-gold);
-}
-
-.weather-metric-accent strong{
-  color:var(--accent);
-}
+   
     .weather-metric-muted{color:var(--muted-soft);font-weight:700;}
     .weather-point-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;}
     .weather-details-toggle,.weather-favorite-btn{appearance:none;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:var(--text-soft);border-radius:10px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;margin:0;min-height:34px;}
@@ -989,18 +953,11 @@ function buildPrecipitationMetric(summary){
 
   var label = escapeHtml(summary.label || "Uppehåll");
   var detail = summary.detail
-    ? ' <span class="weather-metric-muted">' + escapeHtml(summary.detail) + '</span>'
-    : "";
-
-  var toneClass = summary.tone
-    ? " weather-precip-" + escapeHtml(summary.tone)
+    ? ' <span class="weather-metric-muted">· ' + escapeHtml(summary.detail) + '</span>'
     : "";
 
   return (
-    '<div class="weather-metric-line weather-precip-line' +
-    toneClass +
-    (summary.active ? " weather-metric-accent" : "") +
-    '">' +
+    '<div class="weather-metric-line">' +
     '<strong>Nederbörd</strong> ' +
     '<span>' + label + '</span>' +
     detail +
