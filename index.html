@@ -378,16 +378,74 @@
     #mobileSearchInput::placeholder{color:rgba(255,255,255,0.45);}
     #mobileSearchResults{padding:0 0 6px;}
     .search-result-item{padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:var(--text-soft);}
-    #mobileSearchSheet.places-mode .search-input-wrap,#mobileSearchSheet.places-mode #mobileSearchResults{display:none;}
-    #mobileSearchSheet.places-mode #favoritePlacesWrap{padding-top:4px;}
-    #favoritePlacesWrap{padding-bottom:6px;}
-    #favoritePlacesList{padding:0 0 8px;}
+ #favoritePlacesWrap{
+  display:none;
+  padding-bottom:6px;
+}
+
+#mobileSearchSheet.places-mode .search-input-wrap,
+#mobileSearchSheet.places-mode #mobileSearchResults{
+  display:none;
+}
+
+#mobileSearchSheet.places-mode #favoritePlacesWrap{
+  display:block;
+  padding-top:4px;
+}
+
+#favoritePlacesList{
+  padding:0 0 8px;
+}
+
+.favorite-tabs{
+  display:flex;
+  gap:8px;
+  padding:0 18px 10px;
+}
+
+.favorite-tab-btn{
+  flex:1;
+  appearance:none;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--muted-soft);
+  border-radius:14px;
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.favorite-tab-btn.is-active{
+  background:rgba(43,108,255,0.85);
+  color:#fff;
+  border-color:rgba(123,199,255,0.35);
+}
+
+.favorite-section-title{
+  padding:4px 18px 8px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:0.03em;
+}
     .favorite-place-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.08);}
     .favorite-place-main{min-width:0;flex:1;color:var(--text-soft);cursor:pointer;}
     .favorite-place-name{color:var(--text);font-size:14px;font-weight:700;line-height:1.3;}
     .favorite-place-coords{margin-top:3px;color:var(--muted);font-size:11px;}
     .favorite-place-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
-    .favorite-place-rename,.favorite-place-remove{appearance:none;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:var(--text);border-radius:10px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;}
+   .favorite-place-rename,.favorite-place-remove{
+  appearance:none;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.05);
+  color:var(--text);
+  border-radius:10px;
+  padding:7px 10px;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+}
     .favorite-place-empty{padding:8px 18px 14px;color:var(--muted);font-size:12px;}
 
     .maplibregl-popup-content,.mapboxgl-popup-content{background:rgba(5,11,22,0.96) !important;color:#f3f7ff !important;border:1px solid rgba(255,255,255,0.14);border-radius:14px !important;padding:10px 12px !important;box-shadow:0 14px 34px rgba(0,0,0,0.45);font-size:12px;line-height:1.45;white-space:pre-line;}
@@ -1541,29 +1599,238 @@ function buildPrecipitationMetric(summary){
       function closeSea(){minimizeSea();}
       function openMobileFilterSheet(){activeBottomTab="filter";setSeaAreaVisible(false);seaSelectionActive=false;updateSeaBadge();if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');if(mobileSearchSheet){mobileSearchSheet.classList.remove('is-open');mobileSearchSheet.classList.remove('places-mode');}if(!mobileFilterSheet) return;mobileFilterSheet.classList.add('is-open');refreshMobileNavState();refreshMapSizeSoon();}
       function closeMobileFilterSheet(){if(!mobileFilterSheet) return;mobileFilterSheet.classList.remove('is-open');refreshMobileNavState();refreshMapSizeSoon();}
-      function openSearch(){activeBottomTab="search";setSeaAreaVisible(false);seaSelectionActive=false;updateSeaBadge();if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');if(!mobileSearchSheet) return;mobileSearchSheet.classList.remove('places-mode');mobileSearchSheet.classList.add('is-open');var title=mobileSearchSheet.querySelector('.sheet-title');if(title) title.textContent="Sök plats";refreshMobileNavState();if(mobileSearchInput) setTimeout(function(){mobileSearchInput.focus();},80);}
-      function openPlaces(){activeBottomTab="places";setSeaAreaVisible(false);seaSelectionActive=false;updateSeaBadge();if(mobileSeaSheet) mobileSeaSheet.classList.remove('is-open');if(mobileFilterSheet) mobileFilterSheet.classList.remove('is-open');if(!mobileSearchSheet) return;mobileSearchSheet.classList.add('places-mode');mobileSearchSheet.classList.add('is-open');var title=mobileSearchSheet.querySelector('.sheet-title');if(title) title.textContent="Platser";if(mobileSearchInput){mobileSearchInput.value="";mobileSearchInput.blur();}if(mobileSearchResults) mobileSearchResults.innerHTML="";renderFavoritesList();refreshMobileNavState();}
-      function closeSearch(){if(!mobileSearchSheet) return;mobileSearchSheet.classList.remove('is-open');mobileSearchSheet.classList.remove('places-mode');if(mobileSearchInput) mobileSearchInput.blur();refreshMobileNavState();setTimeout(function(){refreshMapSizeSoon();},120);}
+   function openSearch(){
+  activeBottomTab = "search";
+  setSeaAreaVisible(false);
+  seaSelectionActive = false;
+  updateSeaBadge();
 
-      function renderFavoritesList(){
-        var list=document.getElementById("favoritePlacesList"); if(!list) return;
-        var weatherItems=getStoredFavorites().map(function(item){return Object.assign({},item,{type:"weather"});});
-        var seaItems=getStoredSeaAreas().map(function(item){return Object.assign({},item,{type:"sea"});});
-        var items=weatherItems.concat(seaItems);
-        if(!items.length){list.innerHTML='<div class="favorite-place-empty">Inga sparade platser eller havsområden.</div>';return;}
-        list.innerHTML="";
-        items.forEach(function(item){
-          var row=document.createElement("div"); row.className="favorite-place-item";
-          var main=document.createElement("div"); main.className="favorite-place-main";
-          var label=item.type==="sea"?"Havsområde":"Väderpunkt"; var coordText=formatCoord(item.lat)+", "+formatCoord(item.lon); if(item.type==="sea") coordText += " · "+Number(item.radiusKm || seaAreaRadiusKm)+" km radie";
-          main.innerHTML='<div class="favorite-place-name">'+escapeHtml(item.name)+'</div><div class="favorite-place-coords">'+label+' · '+coordText+'</div>';
-          main.onclick=function(){closeSearch();setTimeout(function(){focusMapOnPoint(item.lat,item.lon,9);if(item.type==="sea"){seaSelectionActive=true;activeBottomTab="sea";setActiveTab("tabSea");selectedSeaArea={lat:item.lat,lon:item.lon,radiusKm:Number(item.radiusKm || seaAreaRadiusKm),selectedAt:Date.now()};selectedSeaAreaData=null;selectedSeaTimeseriesData=null;updateSeaAreaLayer();renderSeaAreaPanel();loadSeaAreaData(item.lat,item.lon,selectedSeaArea.radiusKm);loadSeaTimeseriesData(item.lat,item.lon,selectedSeaArea.radiusKm);enterSeaMode(true);}else{seaSelectionActive=false;setSeaAreaVisible(false);updateSeaBadge();handlePrimaryMapClick(item.lat,item.lon);}refreshMapSizeSoon();},120);};
-          var actions=document.createElement("div"); actions.className="favorite-place-actions";
-          var renameBtn=document.createElement("button"); renameBtn.className="favorite-place-rename"; renameBtn.type="button"; renameBtn.textContent="Byt namn"; renameBtn.onclick=function(e){e.stopPropagation(); item.type==="sea"?renameSeaAreaFavorite(item.id):renameFavorite(item.id);};
-          var removeBtn=document.createElement("button"); removeBtn.className="favorite-place-remove"; removeBtn.type="button"; removeBtn.textContent="Ta bort"; removeBtn.onclick=function(e){e.stopPropagation(); item.type==="sea"?removeSeaAreaFavorite(item.id):removeFavorite(item.id);};
-          actions.appendChild(renameBtn); actions.appendChild(removeBtn); row.appendChild(main); row.appendChild(actions); list.appendChild(row);
-        });
+  if(mobileSeaSheet) mobileSeaSheet.classList.remove("is-open");
+  if(mobileFilterSheet) mobileFilterSheet.classList.remove("is-open");
+  if(!mobileSearchSheet) return;
+
+  mobileSearchSheet.classList.remove("places-mode");
+  mobileSearchSheet.classList.add("is-open");
+
+  var title = mobileSearchSheet.querySelector(".sheet-title");
+  if(title) title.textContent = "Sök plats";
+
+  if(mobileSearchInput){
+    setTimeout(function(){
+      mobileSearchInput.focus();
+    }, 80);
+  }
+
+  refreshMobileNavState();
+}
+
+function openPlaces(){
+  activeBottomTab = "places";
+  setSeaAreaVisible(false);
+  seaSelectionActive = false;
+  updateSeaBadge();
+
+  if(mobileSeaSheet) mobileSeaSheet.classList.remove("is-open");
+  if(mobileFilterSheet) mobileFilterSheet.classList.remove("is-open");
+  if(!mobileSearchSheet) return;
+
+  mobileSearchSheet.classList.add("places-mode");
+  mobileSearchSheet.classList.add("is-open");
+
+  var title = mobileSearchSheet.querySelector(".sheet-title");
+  if(title) title.textContent = "Platser";
+
+  if(mobileSearchInput){
+    mobileSearchInput.value = "";
+    mobileSearchInput.blur();
+  }
+
+  if(mobileSearchResults){
+    mobileSearchResults.innerHTML = "";
+  }
+
+  renderFavoritesList();
+  refreshMobileNavState();
+}
+
+function closeSearch(){
+  if(!mobileSearchSheet) return;
+
+  mobileSearchSheet.classList.remove("is-open");
+  mobileSearchSheet.classList.remove("places-mode");
+
+  if(mobileSearchInput) mobileSearchInput.blur();
+
+  refreshMobileNavState();
+
+  setTimeout(function(){
+    refreshMapSizeSoon();
+  }, 120);
+}
+   function renderFavoritesList(){
+  var list = document.getElementById("favoritePlacesList");
+  if(!list) return;
+
+  var mode = list.dataset.favoriteMode || "weather";
+  if(mode !== "weather" && mode !== "sea") mode = "weather";
+
+  var weatherItems = getStoredFavorites().map(function(item){
+    return Object.assign({}, item, {type:"weather"});
+  });
+
+  var seaItems = getStoredSeaAreas().map(function(item){
+    return Object.assign({}, item, {type:"sea"});
+  });
+
+  function openFavoriteItem(item){
+    closeSearch();
+
+    setTimeout(function(){
+      focusMapOnPoint(item.lat, item.lon, 9);
+
+      if(item.type === "sea"){
+        seaSelectionActive = true;
+        activeBottomTab = "sea";
+        setActiveTab("tabSea");
+
+        selectedSeaArea = {
+          lat:item.lat,
+          lon:item.lon,
+          radiusKm:Number(item.radiusKm || seaAreaRadiusKm),
+          selectedAt:Date.now()
+        };
+
+        selectedSeaAreaData = null;
+        selectedSeaTimeseriesData = null;
+
+        updateSeaAreaLayer();
+        renderSeaAreaPanel();
+        loadSeaAreaData(item.lat, item.lon, selectedSeaArea.radiusKm);
+        loadSeaTimeseriesData(item.lat, item.lon, selectedSeaArea.radiusKm);
+        enterSeaMode(true);
+      }else{
+        seaSelectionActive = false;
+        setSeaAreaVisible(false);
+        updateSeaBadge();
+        handlePrimaryMapClick(item.lat, item.lon);
       }
+
+      refreshMapSizeSoon();
+    }, 120);
+  }
+
+  function buildRow(item){
+    var row = document.createElement("div");
+    row.className = "favorite-place-item";
+
+    var main = document.createElement("div");
+    main.className = "favorite-place-main";
+
+    var coordText = formatCoord(item.lat) + ", " + formatCoord(item.lon);
+
+    if(item.type === "sea"){
+      coordText += " · " + Number(item.radiusKm || seaAreaRadiusKm) + " km radie";
+    }
+
+    main.innerHTML =
+      '<div class="favorite-place-name">' + escapeHtml(item.name || (item.type === "sea" ? "Havsområde" : "Plats")) + '</div>' +
+      '<div class="favorite-place-coords">' + escapeHtml(coordText) + '</div>';
+
+    main.onclick = function(){
+      openFavoriteItem(item);
+    };
+
+    var actions = document.createElement("div");
+    actions.className = "favorite-place-actions";
+
+    var renameBtn = document.createElement("button");
+    renameBtn.className = "favorite-place-rename";
+    renameBtn.type = "button";
+    renameBtn.textContent = "Byt namn";
+    renameBtn.onclick = function(e){
+      e.stopPropagation();
+
+      if(item.type === "sea"){
+        renameSeaAreaFavorite(item.id);
+      }else{
+        renameFavorite(item.id);
+      }
+    };
+
+    var removeBtn = document.createElement("button");
+    removeBtn.className = "favorite-place-remove";
+    removeBtn.type = "button";
+    removeBtn.textContent = "Ta bort";
+    removeBtn.onclick = function(e){
+      e.stopPropagation();
+
+      if(item.type === "sea"){
+        removeSeaAreaFavorite(item.id);
+      }else{
+        removeFavorite(item.id);
+      }
+    };
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(removeBtn);
+
+    row.appendChild(main);
+    row.appendChild(actions);
+
+    return row;
+  }
+
+  function setMode(nextMode){
+    list.dataset.favoriteMode = nextMode;
+    renderFavoritesList();
+  }
+
+  list.innerHTML = "";
+
+  var tabs = document.createElement("div");
+  tabs.className = "favorite-tabs";
+
+  var weatherBtn = document.createElement("button");
+  weatherBtn.type = "button";
+  weatherBtn.className = "favorite-tab-btn" + (mode === "weather" ? " is-active" : "");
+  weatherBtn.textContent = "Platser";
+  weatherBtn.onclick = function(){
+    setMode("weather");
+  };
+
+  var seaBtn = document.createElement("button");
+  seaBtn.type = "button";
+  seaBtn.className = "favorite-tab-btn" + (mode === "sea" ? " is-active" : "");
+  seaBtn.textContent = "Hav";
+  seaBtn.onclick = function(){
+    setMode("sea");
+  };
+
+  tabs.appendChild(weatherBtn);
+  tabs.appendChild(seaBtn);
+  list.appendChild(tabs);
+
+  var title = document.createElement("div");
+  title.className = "favorite-section-title";
+  title.textContent = mode === "sea" ? "Sparade havsområden" : "Sparade platser";
+  list.appendChild(title);
+
+  var items = mode === "sea" ? seaItems : weatherItems;
+
+  if(!items.length){
+    var empty = document.createElement("div");
+    empty.className = "favorite-place-empty";
+    empty.textContent = mode === "sea"
+      ? "Inga sparade havsområden ännu."
+      : "Inga sparade platser ännu.";
+    list.appendChild(empty);
+    return;
+  }
+
+  items.forEach(function(item){
+    list.appendChild(buildRow(item));
+  });
+}
 
       function updateMapViewportOffsets(skipPadding){
         if(!maptilerMap) return;
