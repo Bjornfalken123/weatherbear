@@ -245,6 +245,13 @@
     .weather-primary-metrics{display:grid;gap:5px;margin-top:2px;}
     .weather-metric-line{color:var(--text-soft);font-size:12px;font-weight:750;line-height:1.35;}
     .weather-metric-line strong{color:var(--text);font-weight:900;}
+    .weather-metric-accent{
+  color:var(--text);
+}
+
+.weather-metric-accent strong{
+  color:var(--accent);
+}
     .weather-metric-muted{color:var(--muted-soft);font-weight:700;}
     .weather-point-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;}
     .weather-details-toggle,.weather-favorite-btn{appearance:none;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:var(--text-soft);border-radius:10px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer;margin:0;min-height:34px;}
@@ -699,6 +706,153 @@
       function formatWave(v){ return v==null ? "--" : Number(v).toFixed(1)+" m"; }
       function formatWaterLevel(v){ return v==null ? "--" : Number(v).toFixed(1)+" cm"; }
       function toRad(value){return value * Math.PI / 180;}
+      function getPrecipAmountFromPeriod(item){
+  if(!item || !item.data) return null;
+  var n1=item.data.next_1_hours;
+  var n30=item.data.next_30_minutes;
+  var n15=item.data.next_15_minutes;
+
+  var details =
+    (n15 && n15.details) ||
+    (n30 && n30.details) ||
+    (n1 && n1.details) ||
+    null;
+
+  if(!details || details.precipitation_amount == null) return null;
+
+  var value=Number(details.precipitation_amount);
+  return isFinite(value) ? value : null;
+}
+
+function getPrecipRateNow(item){
+  var details=item && item.data && item.data.instant && item.data.instant.details;
+  if(!details || details.precipitation_rate == null) return null;
+  var value=Number(details.precipitation_rate);
+  return isFinite(value) ? value : null;
+}
+
+function summarizeNowcastPrecipitation(nowcastData, fallbackAmount){
+  var fallback = fallbackAmount == null || !isFinite(Number(fallbackAmount)) ? null : Number(fallbackAmount);
+
+  if(!nowcastData || !nowcastData.properties || !Array.isArray(nowcastData.properties.timeseries)){
+    return {
+      label: fallback && fallback > 0.05 ? "Nederbörd väntas" : "Uppehåll närmaste timmen",
+      amountText: fallback && fallback > 0.05 ? formatRain(fallback) + " nästa timme" : "",
+      active: fallback && fallback > 0.05
+    };
+  }
+
+  var props=nowcastData.properties;
+  var radarCoverage=props.meta && props.meta.radar_coverage;
+  var hasRadarCoverage=!radarCoverage || radarCoverage==="ok";
+
+  var timeseries=props.timeseries
+    .map(function(item){
+      return {
+        raw:item,
+        time:new Date(item.time).getTime(),
+        amount:getPrecipAmountFromPeriod(item),
+        rate:getPrecipRateNow(item)
+      };
+    })
+    .filter(function(item){return isFinite(item.time);})
+    .sort(function(a,b){return a.time-b.time;});
+
+  if(!timeseries.length || !hasRadarCoverage){
+    return {
+      label: fallback && fallback > 0.05 ? "Nederbörd väntas" : "Uppehåll närmaste timmen",
+      amountText: fallback && fallback > 0.05 ? formatRain(fallback) + " nästa timme" : "",
+      active: fallback && fallback > 0.05
+    };
+  }
+
+  var now=Date.now();
+  var current=timeseries[0];
+  var currentDiff=Math.abs(current.time-now);
+
+  for(var i=1;i<timeseries.length;i++){
+    var diff=Math.abs(timeseries[i].time-now);
+    if(diff<currentDiff){
+      current=timeseries[i];
+      currentDiff=diff;
+    }
+  }
+
+  var nextHourEnd=now+60*60*1000;
+  var nextHourItems=timeseries.filter(function(item){
+    return item.time>=now-10*60*1000 && item.time<=nextHourEnd;
+  });
+
+  var nextHourAmount=0;
+  var amountCount=0;
+
+  nextHourItems.forEach(function(item){
+    if(item.amount != null){
+      nextHourAmount += item.amount;
+      amountCount++;
+    }
+  });
+
+  if(!amountCount && fallback != null) nextHourAmount=fallback;
+
+  var currentRate=current.rate;
+  var currentAmount=current.amount;
+  var isRainingNow =
+    (currentRate != null && currentRate > 0.05) ||
+    (currentAmount != null && currentAmount > 0.05);
+
+  var firstWet=null;
+  for(var j=0;j<timeseries.length;j++){
+    var item=timeseries[j];
+    if(item.time < now-5*60*1000) continue;
+    var wet =
+      (item.rate != null && item.rate > 0.05) ||
+      (item.amount != null && item.amount > 0.05);
+
+    if(wet){
+      firstWet=item;
+      break;
+    }
+  }
+
+  if(isRainingNow){
+    return {
+      label:"Pågår nu",
+      amountText:nextHourAmount>0.05 ? formatRain(nextHourAmount) + " nästa timme" : "",
+      active:true
+    };
+  }
+
+  if(firstWet){
+    var minutes=Math.max(1,Math.round((firstWet.time-now)/(60*1000)));
+    return {
+      label:"Nederbörd väntas inom " + minutes + " min",
+      amountText:nextHourAmount>0.05 ? formatRain(nextHourAmount) : "",
+      active:true
+    };
+  }
+
+  if(nextHourAmount>0.05){
+    return {
+      label:"Nederbörd väntas",
+      amountText:formatRain(nextHourAmount) + " nästa timme",
+      active:true
+    };
+  }
+
+  return {
+    label:"Uppehåll närmaste timmen",
+    amountText:"",
+    active:false
+  };
+}
+
+function buildPrecipitationMetric(summary){
+  if(!summary) return "";
+  var value=escapeHtml(summary.label || "--");
+  if(summary.amountText) value += ' <span class="weather-metric-muted">· '+escapeHtml(summary.amountText)+'</span>';
+  return '<div class="weather-metric-line'+(summary.active?' weather-metric-accent':'')+'"><strong>Nederbörd</strong> '+value+'</div>';
+}
 
       function distanceKmBetween(lat1, lon1, lat2, lon2){
         var R=6371, dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
@@ -1071,20 +1225,51 @@
       function loadWeatherForPoint(lat,lon){
         var requestId=++latestWeatherRequestId;
         setOverlayHeaderDot('loading'); updateMapOverlay('Hämtar väder...',formatCoord(lat)+', '+formatCoord(lon));
-        Promise.all([fetch('/api/weather?lat='+lat+'&lon='+lon), fetch('/api/openmeteo-gust?lat='+lat+'&lon='+lon)]).then(async function(responses){
+        Promise.all([
+  fetch('/api/weather?lat='+lat+'&lon='+lon),
+  fetch('/api/openmeteo-gust?lat='+lat+'&lon='+lon),
+  fetch('/api/yr-nowcast?lat='+lat+'&lon='+lon)
+]).then(async function(responses){
           if(requestId!==latestWeatherRequestId) return;
-          var weatherRes=responses[0], gustRes=responses[1], weatherText=await weatherRes.text(), gustText=await gustRes.text();
+          var weatherRes=responses[0], gustRes=responses[1], nowcastRes=responses[2],
+    weatherText=await weatherRes.text(),
+    gustText=await gustRes.text(),
+    nowcastText=await nowcastRes.text();
           if(requestId!==latestWeatherRequestId) return; if(!weatherRes.ok) throw new Error(weatherText);
           var weatherData=JSON.parse(weatherText), ts=(weatherData.properties && weatherData.properties.timeseries)||[]; if(!ts.length) throw new Error('Ingen väderdata hittades.');
           weatherTimeseries=ts; var cur=ts[0], inst=(cur.data&&cur.data.instant&&cur.data.instant.details)||{}, n1=(cur.data&&cur.data.next_1_hours)||{}, n6=(cur.data&&cur.data.next_6_hours)||{}, n12=(cur.data&&cur.data.next_12_hours)||{};
           var sym=(n1.summary&&n1.summary.symbol_code)||(n6.summary&&n6.summary.symbol_code)||(n12.summary&&n12.summary.symbol_code)||null;
           var prec=null; if(n1.details&&n1.details.precipitation_amount!=null) prec=n1.details.precipitation_amount; else if(n6.details&&n6.details.precipitation_amount!=null) prec=n6.details.precipitation_amount; else if(n12.details&&n12.details.precipitation_amount!=null) prec=n12.details.precipitation_amount;
           var gustFormatted='--', gustTimeseries=[]; if(gustRes.ok){var gd=JSON.parse(gustText);gustFormatted=formatWind(gd.value);gustTimeseries=gd.timeseries||[];}
+          var nowcastData=null;
+if(nowcastRes && nowcastRes.ok){
+  try{nowcastData=JSON.parse(nowcastText);}catch(e){nowcastData=null;}
+}
           function getGustForTime(tms){if(!gustTimeseries.length) return gustFormatted;var cl=gustTimeseries[0], md=Math.abs(new Date(cl.time).getTime()-tms);for(var i=0;i<gustTimeseries.length;i++){var df=Math.abs(new Date(gustTimeseries[i].time).getTime()-tms);if(df<md){md=df;cl=gustTimeseries[i];}}return formatWind(cl.value);}
-          function buildWeatherOverlay(pt,temp,ws,wd,gust,rain,pres,humidity,symbol,lat,lon){
+          function buildWeatherOverlay(pt,temp,ws,wd,gust,rain,pres,humidity,symbol,lat,lon,precipSummary){
             var detailsButtonText=weatherDetailsExpanded?'Visa mindre':'Se mer', placeName=(selectedPlaceName&&selectedPlaceName.trim())?selectedPlaceName.trim():'Vald plats', weatherText=weatherLabelFromSymbol(symbol), weatherIcon=weatherIconFromSymbol(symbol), forecastLabel=formatForecastLabelGlobal(pt), tempText=formatTemp(temp), windText=formatWindWithDirection(ws,wd), gustText=gust||'--', rainText=formatRain(rain), pressureText=formatPressure(pres), humidityText=formatHumidity(humidity);
             var detailsHtml=weatherDetailsExpanded?'<div class="weather-extra-details">'+buildOverlayDataGrid([{label:'Lufttryck',value:pressureText},{label:'Luftfuktighet',value:humidityText},{label:'Koordinater',value:formatCoord(lat)+', '+formatCoord(lon)}])+'</div>':'';
-            var content='<div class="weather-overview"><div class="weather-icon">'+weatherIcon+'</div><div class="weather-main"><div class="weather-main-title">'+weatherText+'</div><div class="weather-main-time">'+placeName+' · '+forecastLabel+'</div></div></div><div class="weather-temp-big">'+tempText+'</div><div class="weather-primary-metrics"><div class="weather-metric-line"><strong>Vind</strong> '+windText+'</div><div class="weather-metric-line"><strong>Byar</strong> '+gustText+' <span class="weather-metric-muted">· Regn '+rainText+'</span></div></div><div class="weather-point-actions"><button type="button" class="weather-favorite-btn" id="saveFavoriteBtn">'+(isFavorite(lat,lon)?'Sparad':'Spara plats')+'</button><button type="button" class="weather-details-toggle" id="weatherDetailsToggleBtn">'+detailsButtonText+'</button></div>'+detailsHtml;
+            var precipitationMetric=buildPrecipitationMetric(precipSummary || summarizeNowcastPrecipitation(null, rain));
+
+var content=
+  '<div class="weather-overview">'+
+    '<div class="weather-icon">'+weatherIcon+'</div>'+
+    '<div class="weather-main">'+
+      '<div class="weather-main-title">'+weatherText+'</div>'+
+      '<div class="weather-main-time">'+placeName+' · '+forecastLabel+'</div>'+
+    '</div>'+
+  '</div>'+
+  '<div class="weather-temp-big">'+tempText+'</div>'+
+  '<div class="weather-primary-metrics">'+
+    '<div class="weather-metric-line"><strong>Vind</strong> '+windText+'</div>'+
+    '<div class="weather-metric-line"><strong>Byvind</strong> '+gustText+'</div>'+
+    precipitationMetric+
+  '</div>'+
+  '<div class="weather-point-actions">'+
+    '<button type="button" class="weather-favorite-btn" id="saveFavoriteBtn">'+(isFavorite(lat,lon)?'Sparad':'Spara plats')+'</button>'+
+    '<button type="button" class="weather-details-toggle" id="weatherDetailsToggleBtn">'+detailsButtonText+'</button>'+
+  '</div>'+
+  detailsHtml;
             return {expandedTitle:placeName,collapsedTitle:weatherIcon+' '+weatherText+' · '+tempText,content:content};
           }
           function applyWeatherOverlay(payload){updateMapOverlay(payload.expandedTitle,payload.content,{expandedTitle:payload.expandedTitle,collapsedTitle:payload.collapsedTitle});}
@@ -1095,10 +1280,14 @@
             var si=(cl.data&&cl.data.instant&&cl.data.instant.details)||{}, sn1=(cl.data&&cl.data.next_1_hours)||{}, sn6=(cl.data&&cl.data.next_6_hours)||{}, sn12=(cl.data&&cl.data.next_12_hours)||{};
             var ss=(sn1.summary&&sn1.summary.symbol_code)||(sn6.summary&&sn6.summary.symbol_code)||(sn12.summary&&sn12.summary.symbol_code)||null;
             var sp=null; if(sn1.details&&sn1.details.precipitation_amount!=null) sp=sn1.details.precipitation_amount; else if(sn6.details&&sn6.details.precipitation_amount!=null) sp=sn6.details.precipitation_amount; else if(sn12.details&&sn12.details.precipitation_amount!=null) sp=sn12.details.precipitation_amount;
-            applyWeatherOverlay(buildWeatherOverlay(targetTime,si.air_temperature,si.wind_speed,si.wind_from_direction,getGustForTime(tms),sp,si.air_pressure_at_sea_level,si.relative_humidity,ss,lat,lon));
+            var isNearNow=Math.abs(targetTime-Date.now())<=90*60*1000;
+var precipSummary=isNearNow
+  ? summarizeNowcastPrecipitation(nowcastData, sp)
+  : summarizeNowcastPrecipitation(null, sp);
+           applyWeatherOverlay(buildWeatherOverlay(targetTime,si.air_temperature,si.wind_speed,si.wind_from_direction,getGustForTime(tms),sp,si.air_pressure_at_sea_level,si.relative_humidity,ss,lat,lon,precipSummary));
           };
           if(requestId!==latestWeatherRequestId) return;
-          if(selectedForecastTime) window.updateWeatherForSelectedTime(selectedForecastTime); else applyWeatherOverlay(buildWeatherOverlay(cur.time,inst.air_temperature,inst.wind_speed,inst.wind_from_direction,gustFormatted,prec,inst.air_pressure_at_sea_level,inst.relative_humidity,sym,lat,lon));
+          if(selectedForecastTime) window.updateWeatherForSelectedTime(selectedForecastTime); else applyWeatherOverlay(buildWeatherOverlay(cur.time,inst.air_temperature,inst.wind_speed,inst.wind_from_direction,gustFormatted,prec,inst.air_pressure_at_sea_level,inst.relative_humidity,sym,lat,lon,summarizeNowcastPrecipitation(nowcastData,prec)));
           currentForecastDays=buildDailyForecast(ts); setOverlayHeaderDot('ready');
         }).catch(function(err){if(requestId!==latestWeatherRequestId) return;console.error(err);setOverlayHeaderDot('ready');updateMapOverlay('Väder kunde inte hämtas','Försök igen eller välj en annan punkt på kartan.');});
       }
