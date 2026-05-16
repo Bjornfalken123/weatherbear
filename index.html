@@ -239,6 +239,13 @@
     .weather-main-title{font-size:15px;font-weight:900;color:var(--text);line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .weather-main-time{margin-top:4px;font-size:11px;color:var(--muted-soft);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .weather-temp-big{margin:6px 0 8px;font-size:31px;font-weight:950;color:var(--text);line-height:1;letter-spacing:-0.03em;}
+   .weather-feels-like{
+  margin:-3px 0 8px;
+  color:var(--muted-soft);
+  font-size:12px;
+  font-weight:750;
+  line-height:1.25;
+}
     .weather-point-line{margin:0 0 7px;font-size:11px;color:var(--muted);line-height:1.35;}
     .weather-place-name{color:var(--text);font-size:12px;font-weight:850;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .weather-place-coords{display:none;}
@@ -792,6 +799,119 @@ function formatWind(v){
 function formatPressure(v){
   return v==null ? "--" : Number(v).toFixed(1)+" hPa";
 }
+   function formatFeelsLike(v){
+  return v == null || !isFinite(Number(v))
+    ? "--"
+    : Number(v).toFixed(1).replace(".", ",") + " °C";
+}
+
+function calculateFeelsLikeTemperature(temp, windSpeed, humidity){
+  if(temp == null || !isFinite(Number(temp))) return null;
+
+  var t = Number(temp);
+  var wind = windSpeed == null || !isFinite(Number(windSpeed))
+    ? 0
+    : Math.max(0, Number(windSpeed));
+
+  var rh = humidity == null || !isFinite(Number(humidity))
+    ? 50
+    : Math.max(0, Math.min(100, Number(humidity)));
+
+  var vaporPressure = (rh / 100) * 6.105 * Math.exp((17.27 * t) / (237.7 + t));
+  var apparent = t + (0.33 * vaporPressure) - (0.70 * wind) - 4.00;
+
+  if(!isFinite(apparent)) return t;
+
+  return apparent;
+}
+
+function formatUvIndex(value){
+  if(value == null || !isFinite(Number(value))) return "--";
+
+  var n = Math.max(0, Number(value));
+
+  if(n < 0.5) return "0";
+
+  return n.toFixed(1).replace(".", ",");
+}
+
+function getUvLevel(value){
+  if(value == null || !isFinite(Number(value))) return "";
+
+  var n = Math.max(0, Number(value));
+
+  if(n < 3) return "lågt";
+  if(n < 6) return "måttligt";
+  if(n < 8) return "högt";
+  if(n < 11) return "mycket högt";
+
+  return "extremt";
+}
+
+function formatUvMetric(value){
+  if(value == null || !isFinite(Number(value))) return "--";
+
+  var level = getUvLevel(value);
+
+  return formatUvIndex(value) + (level ? " · " + level : "");
+}
+
+function findNearestHourlyValue(rows, timeValue, valueKeys){
+  if(!Array.isArray(rows) || !rows.length) return null;
+
+  var target = roundToForecastHour(timeValue);
+  var best = null;
+  var bestDiff = Infinity;
+
+  for(var i = 0; i < rows.length; i++){
+    var row = rows[i];
+    var rowTime = new Date(row.time).getTime();
+
+    if(!isFinite(rowTime)) continue;
+
+    var value = null;
+
+    for(var k = 0; k < valueKeys.length; k++){
+      var key = valueKeys[k];
+
+      if(row[key] != null && isFinite(Number(row[key]))){
+        value = Number(row[key]);
+        break;
+      }
+    }
+
+    if(value == null) continue;
+
+    var diff = Math.abs(rowTime - target);
+
+    if(diff < bestDiff){
+      bestDiff = diff;
+      best = value;
+    }
+  }
+
+  return best;
+}
+
+async function fetchOpenMeteoUvTimeseries(lat, lon){
+  try{
+    var url =
+      "/api/openmeteo-uv?lat=" +
+      encodeURIComponent(String(lat)) +
+      "&lon=" +
+      encodeURIComponent(String(lon));
+
+    var res = await fetch(url);
+    var data = await res.json();
+
+    if(!res.ok) throw new Error((data && data.error) || "UV-index kunde inte hämtas");
+
+    return Array.isArray(data.timeseries) ? data.timeseries : [];
+  }catch(e){
+    console.warn("UV-index kunde inte hämtas", e);
+    return [];
+  }
+}   
 
 function formatWave(v){
   return v==null ? "--" : Number(v).toFixed(1)+" m";
@@ -1426,7 +1546,7 @@ function buildPrecipitationMetric(summary){
         for(var i=0;i<ts.length;i++){var item=ts[i], time=item&&item.time; if(!time) continue; var dk=time.slice(0,10), inst=(item.data&&item.data.instant&&item.data.instant.details)||{}, at=inst.air_temperature, prec=((item.data&&item.data.next_1_hours&&item.data.next_1_hours.details&&item.data.next_1_hours.details.precipitation_amount)||0), sym=((item.data&&item.data.next_1_hours&&item.data.next_1_hours.summary&&item.data.next_1_hours.summary.symbol_code)||(item.data&&item.data.next_6_hours&&item.data.next_6_hours.summary&&item.data.next_6_hours.summary.symbol_code)||(item.data&&item.data.next_12_hours&&item.data.next_12_hours.summary&&item.data.next_12_hours.summary.symbol_code)||null), wind=inst.wind_speed||null, hour=new Date(time).getHours(); if(!dm.has(dk)) dm.set(dk,{date:dk,minTemp:at,maxTemp:at,precipitation:0,symbol:sym,windSpeed:wind,bestSymbolDistance:Math.abs(hour-12)}); var day=dm.get(dk); if(at!=null){day.minTemp=day.minTemp==null?at:Math.min(day.minTemp,at);day.maxTemp=day.maxTemp==null?at:Math.max(day.maxTemp,at);} day.precipitation+=Number(prec||0); var sd=Math.abs(hour-12); if(sym && (day.symbol==null || sd<day.bestSymbolDistance)){day.symbol=sym;day.bestSymbolDistance=sd;} if(wind!=null && sd<=day.bestSymbolDistance) day.windSpeed=wind;}
         return Array.from(dm.values()).slice(0,7);
       }
-  function loadWeatherForPoint(lat, lon){
+ function loadWeatherForPoint(lat, lon){
   var requestId = ++latestWeatherRequestId;
 
   setOverlayHeaderDot('loading');
@@ -1435,13 +1555,15 @@ function buildPrecipitationMetric(summary){
   Promise.all([
     fetch('/api/weather?lat=' + lat + '&lon=' + lon),
     fetch('/api/openmeteo-gust?lat=' + lat + '&lon=' + lon).catch(function(){ return null; }),
-    fetch('/api/yr-nowcast?lat=' + lat + '&lon=' + lon).catch(function(){ return null; })
+    fetch('/api/yr-nowcast?lat=' + lat + '&lon=' + lon).catch(function(){ return null; }),
+    fetchOpenMeteoUvTimeseries(lat, lon)
   ]).then(async function(responses){
     if(requestId !== latestWeatherRequestId) return;
 
     var weatherRes = responses[0];
     var gustRes = responses[1];
     var nowcastRes = responses[2];
+    var uvTimeseries = Array.isArray(responses[3]) ? responses[3] : [];
 
     var weatherText = await weatherRes.text();
     var gustText = gustRes ? await gustRes.text() : "";
@@ -1500,6 +1622,167 @@ function buildPrecipitationMetric(summary){
 
       return formatWind(cl.value);
     }
+
+    function getUvForTime(tms){
+      return findNearestHourlyValue(uvTimeseries, tms, [
+        "uvIndex",
+        "uv_index",
+        "value"
+      ]);
+    }
+
+    function buildWeatherOverlay(pt, temp, feelsLike, ws, wd, gust, rain, pres, humidity, symbol, lat, lon, precipSummary, uvIndex){
+      var detailsButtonText = weatherDetailsExpanded ? 'Visa mindre' : 'Se mer';
+      var placeName = (selectedPlaceName && selectedPlaceName.trim()) ? selectedPlaceName.trim() : 'Vald plats';
+      var weatherText = weatherLabelFromSymbol(symbol);
+      var weatherIcon = weatherIconFromSymbol(symbol);
+      var forecastLabel = formatForecastLabelGlobal(pt);
+      var tempText = formatTemp(temp);
+      var feelsLikeText = formatFeelsLike(feelsLike);
+      var windText = formatWindWithDirection(ws, wd);
+      var gustText = gust || '--';
+      var pressureText = formatPressure(pres);
+      var humidityText = formatHumidity(humidity);
+      var uvText = formatUvMetric(uvIndex);
+
+      var detailsHtml = weatherDetailsExpanded
+        ? '<div class="weather-extra-details">' +
+            buildOverlayDataGrid([
+              {label:'Lufttryck', value:pressureText},
+              {label:'Luftfuktighet', value:humidityText},
+              {label:'Koordinater', value:formatCoord(lat) + ', ' + formatCoord(lon)}
+            ]) +
+          '</div>'
+        : '';
+
+      var precipitationMetric = buildPrecipitationMetric(
+        precipSummary || summarizePrecipitationForCard(pt, rain, null, 1)
+      );
+
+      var feelsLikeLine = feelsLikeText !== "--"
+        ? '<div class="weather-feels-like">Känns som ' + escapeHtml(feelsLikeText) + '</div>'
+        : '';
+
+      var uvMetric = uvText !== "--"
+        ? '<div class="weather-metric-line"><strong>UV-index</strong> ' + escapeHtml(uvText) + '</div>'
+        : '';
+
+      var content =
+        '<div class="weather-overview">' +
+          '<div class="weather-icon">' + weatherIcon + '</div>' +
+          '<div class="weather-main">' +
+            '<div class="weather-main-title">' + escapeHtml(weatherText) + '</div>' +
+            '<div class="weather-main-time">' + escapeHtml(placeName) + ' · ' + escapeHtml(forecastLabel) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="weather-temp-big">' + tempText + '</div>' +
+        feelsLikeLine +
+        '<div class="weather-primary-metrics">' +
+          '<div class="weather-metric-line"><strong>Vind</strong> ' + windText + '</div>' +
+          '<div class="weather-metric-line"><strong>Byvind</strong> ' + gustText + '</div>' +
+          precipitationMetric +
+          uvMetric +
+        '</div>' +
+        '<div class="weather-point-actions">' +
+          '<button type="button" class="weather-favorite-btn" id="saveFavoriteBtn">' + (isFavorite(lat, lon) ? 'Sparad' : 'Spara plats') + '</button>' +
+          '<button type="button" class="weather-details-toggle" id="weatherDetailsToggleBtn">' + detailsButtonText + '</button>' +
+        '</div>' +
+        detailsHtml;
+
+      return {
+        expandedTitle: placeName,
+        collapsedTitle: weatherIcon + ' ' + weatherText + ' · ' + tempText,
+        content: content
+      };
+    }
+
+    function applyWeatherOverlay(payload){
+      updateMapOverlay(payload.expandedTitle, payload.content, {
+        expandedTitle: payload.expandedTitle,
+        collapsedTitle: payload.collapsedTitle
+      });
+    }
+
+    window.updateWeatherForSelectedTime = function(timeValue){
+      var targetTime = roundToForecastHour(timeValue || selectedForecastTime);
+
+      if(!weatherTimeseries.length || !targetTime || !isFinite(targetTime)) return;
+
+      var cl = findNearestWeatherTimeseriesItem(targetTime);
+      if(!cl) return;
+
+      var matchedForecastTime = roundToForecastHour(new Date(cl.time).getTime());
+
+      var data = cl.data || {};
+      var si = (data.instant && data.instant.details) || {};
+      var sn1 = data.next_1_hours || {};
+      var sn6 = data.next_6_hours || {};
+      var sn12 = data.next_12_hours || {};
+
+      var ss =
+        (sn1.summary && sn1.summary.symbol_code) ||
+        (sn6.summary && sn6.summary.symbol_code) ||
+        (sn12.summary && sn12.summary.symbol_code) ||
+        null;
+
+      var precip = getForecastPrecipitation(cl);
+      var sp = precip.amount;
+
+      var precipSummary = summarizePrecipitationForCard(
+        matchedForecastTime,
+        sp,
+        nowcastData,
+        precip.hours
+      );
+
+      var feelsLike = calculateFeelsLikeTemperature(
+        si.air_temperature,
+        si.wind_speed,
+        si.relative_humidity
+      );
+
+      var uvIndex = getUvForTime(matchedForecastTime);
+
+      applyWeatherOverlay(
+        buildWeatherOverlay(
+          matchedForecastTime,
+          si.air_temperature,
+          feelsLike,
+          si.wind_speed,
+          si.wind_from_direction,
+          getGustForTime(matchedForecastTime),
+          sp,
+          si.air_pressure_at_sea_level,
+          si.relative_humidity,
+          ss,
+          lat,
+          lon,
+          precipSummary,
+          uvIndex
+        )
+      );
+    };
+
+    if(requestId !== latestWeatherRequestId) return;
+
+    var targetTime = selectedForecastTime
+      ? roundToForecastHour(selectedForecastTime)
+      : roundToForecastHour(Date.now());
+
+    selectedForecastTime = clampForecastTime(targetTime);
+
+    window.updateWeatherForSelectedTime(selectedForecastTime);
+
+    currentForecastDays = buildDailyForecast(ts);
+    setOverlayHeaderDot('ready');
+  }).catch(function(err){
+    if(requestId !== latestWeatherRequestId) return;
+
+    console.error(err);
+    setOverlayHeaderDot('ready');
+    updateMapOverlay('Väder kunde inte hämtas', 'Försök igen eller välj en annan punkt på kartan.');
+  });
+}
 
     function buildWeatherOverlay(pt, temp, ws, wd, gust, rain, pres, humidity, symbol, lat, lon, precipSummary){
       var detailsButtonText = weatherDetailsExpanded ? 'Visa mindre' : 'Se mer';
