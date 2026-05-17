@@ -180,6 +180,192 @@
       opacity:1;
       transform:translateX(-50%) translateY(0);
     }
+.nautical-compass-hud{
+  position:absolute;
+  top:78px;
+  right:16px;
+  z-index:1260;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 11px;
+  border-radius:19px;
+  border:1px solid rgba(255,255,255,0.13);
+  background:rgba(5,11,22,0.84);
+  color:var(--text);
+  box-shadow:0 16px 38px rgba(0,0,0,0.38);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  cursor:pointer;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.nautical-compass-hud.is-hidden{
+  display:none;
+}
+
+.nautical-compass-face{
+  width:58px;
+  height:58px;
+  border-radius:999px;
+  position:relative;
+  flex-shrink:0;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(255,255,255,0.12),rgba(255,255,255,0.035) 58%,rgba(255,255,255,0.02)),
+    linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.025));
+  border:1px solid rgba(255,255,255,0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -10px 22px rgba(0,0,0,0.16);
+  overflow:hidden;
+}
+
+.nautical-compass-ring{
+  position:absolute;
+  inset:4px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.13);
+  transition:transform 180ms ease;
+}
+
+.compass-label{
+  position:absolute;
+  color:rgba(243,247,255,0.78);
+  font-size:8px;
+  font-weight:950;
+  line-height:1;
+  letter-spacing:0.02em;
+}
+
+.compass-label-n{
+  top:4px;
+  left:50%;
+  transform:translateX(-50%);
+  color:var(--accent);
+}
+
+.compass-label-e{
+  right:5px;
+  top:50%;
+  transform:translateY(-50%);
+}
+
+.compass-label-s{
+  bottom:4px;
+  left:50%;
+  transform:translateX(-50%);
+}
+
+.compass-label-w{
+  left:5px;
+  top:50%;
+  transform:translateY(-50%);
+}
+
+.compass-tick{
+  position:absolute;
+  width:1px;
+  height:6px;
+  left:50%;
+  top:3px;
+  background:rgba(255,255,255,0.35);
+  transform-origin:50% 22px;
+}
+
+.compass-tick-ne{transform:translateX(-50%) rotate(45deg);}
+.compass-tick-se{transform:translateX(-50%) rotate(135deg);}
+.compass-tick-sw{transform:translateX(-50%) rotate(225deg);}
+.compass-tick-nw{transform:translateX(-50%) rotate(315deg);}
+
+.nautical-phone-arrow{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transform:rotate(0deg);
+  transition:transform 160ms ease;
+}
+
+.nautical-phone-arrow span{
+  width:0;
+  height:0;
+  border-left:7px solid transparent;
+  border-right:7px solid transparent;
+  border-bottom:24px solid rgba(152,240,219,0.96);
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,0.45));
+  transform:translateY(-5px);
+}
+
+.nautical-compass-center{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  transform:translate(-50%,-50%);
+  background:#f3f7ff;
+  border:2px solid rgba(5,11,22,0.85);
+  box-shadow:0 2px 8px rgba(0,0,0,0.4);
+}
+
+.nautical-compass-info{
+  min-width:62px;
+  text-align:left;
+}
+
+.nautical-speed-value{
+  color:var(--text);
+  font-size:16px;
+  font-weight:950;
+  line-height:1.05;
+  letter-spacing:-0.02em;
+  white-space:nowrap;
+}
+
+.nautical-compass-mode{
+  margin-top:4px;
+  color:var(--muted-soft);
+  font-size:9px;
+  font-weight:850;
+  line-height:1.15;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.nautical-compass-hud.is-following .nautical-compass-mode{
+  color:var(--accent-2);
+}
+
+.nautical-compass-hud.is-missing-heading .nautical-phone-arrow{
+  opacity:0.28;
+}
+
+@media (max-width:700px){
+.nautical-compass-hud{
+  position:fixed;
+  top:calc(var(--safe-top) + 72px);
+  right:12px;
+    z-index:3050;
+    padding:8px 10px;
+    border-radius:18px;
+  }
+
+  .nautical-compass-face{
+    width:52px;
+    height:52px;
+  }
+
+  .nautical-speed-value{
+    font-size:15px;
+  }
+
+  .nautical-compass-mode{
+    font-size:8px;
+  }
+}
 
     #mapOverlayPanel{
       position:absolute;
@@ -585,7 +771,31 @@
             </div>
 
             <div id="aisMapToast" role="status" aria-live="polite">AIS är aktivt · zooma in för att visa fartyg</div>
+<button id="nauticalCompassHud" class="nautical-compass-hud is-hidden" type="button" aria-label="Kompass">
+  <div class="nautical-compass-face">
+    <div id="nauticalCompassRing" class="nautical-compass-ring">
+      <span class="compass-label compass-label-n">N</span>
+      <span class="compass-label compass-label-e">E</span>
+      <span class="compass-label compass-label-s">S</span>
+      <span class="compass-label compass-label-w">W</span>
+      <span class="compass-tick compass-tick-ne"></span>
+      <span class="compass-tick compass-tick-se"></span>
+      <span class="compass-tick compass-tick-sw"></span>
+      <span class="compass-tick compass-tick-nw"></span>
+    </div>
 
+    <div id="nauticalPhoneArrow" class="nautical-phone-arrow">
+      <span></span>
+    </div>
+
+    <div class="nautical-compass-center"></div>
+  </div>
+
+  <div class="nautical-compass-info">
+    <div id="nauticalSpeedValue" class="nautical-speed-value">-- kn</div>
+    <div id="nauticalCompassMode" class="nautical-compass-mode">Nord upp</div>
+  </div>
+</button>
             <div id="mapOverlayPanel">
               <div id="overlayHeader">
                 <div id="overlayHeaderDot"></div>
@@ -768,6 +978,12 @@
       var nauticalSeamarkSourceId = "nautical-seamark-source";
       var nauticalSeamarkLayerId = "nautical-seamark-layer";
       var nauticalLayerOrderTimer = null;
+      var nauticalCompassMode = "north";
+var nauticalGeoWatchId = null;
+var nauticalDeviceHeading = null;
+var nauticalGpsHeading = null;
+var nauticalLastSpeed = null;
+var nauticalOrientationStarted = false;
 var forecastStartTime = null;
 var forecastEndTime = null;
 
@@ -2708,7 +2924,288 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       }
       function setBaseMapMode(mode){baseMapMode=mode==="nautical"?"nautical":"standard";if(maptilerMap){ensureNauticalChartLayers();var visibility=baseMapMode==="nautical"?"visible":"none";try{if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId)) maptilerMap.setLayoutProperty(nauticalBaseLayerId,"visibility",visibility);if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId)) maptilerMap.setLayoutProperty(nauticalSeamarkLayerId,"visibility",visibility);scheduleNauticalLayerOrderRefresh();}catch(e){console.warn("Kunde inte byta kartläge", e);}}syncBaseMapButtons();}
       function toggleBaseMapMode(){setBaseMapMode(baseMapMode==="standard"?"nautical":"standard");}
-      function syncBaseMapButtons(){var desktopBtn=document.getElementById("toggleBaseMapBtn"), mobileBtn=document.getElementById("mobileToggleBaseMapBtn"), nautical=baseMapMode==="nautical";if(desktopBtn){desktopBtn.textContent=nautical?"Sjökort":"Standard";desktopBtn.classList.toggle("is-on",nautical);desktopBtn.classList.toggle("is-off",!nautical);}if(mobileBtn) mobileBtn.classList.toggle("is-on",nautical);}
+      function normalizeBearing(value){
+  var n = Number(value);
+
+  if(!isFinite(n)) return null;
+
+  n = n % 360;
+
+  if(n < 0) n += 360;
+
+  return n;
+}
+
+function getMapBearing(){
+  if(!maptilerMap || typeof maptilerMap.getBearing !== "function") return 0;
+
+  var bearing = Number(maptilerMap.getBearing());
+
+  return isFinite(bearing) ? bearing : 0;
+}
+
+function setMapBearing(bearing){
+  if(!maptilerMap) return;
+
+  var b = normalizeBearing(bearing);
+  if(b == null) return;
+
+  try{
+    if(typeof maptilerMap.easeTo === "function"){
+      maptilerMap.easeTo({
+        bearing:b,
+        duration:420,
+        essential:true
+      });
+    }else if(typeof maptilerMap.rotateTo === "function"){
+      maptilerMap.rotateTo(b, {
+        duration:420
+      });
+    }
+  }catch(e){}
+}
+
+function formatKnotsFromMetersPerSecond(speed){
+  if(speed == null || !isFinite(Number(speed))) return "-- kn";
+
+  var knots = Math.max(0, Number(speed) * 1.943844);
+
+  return knots.toFixed(1).replace(".", ",") + " kn";
+}
+
+function getBestNauticalHeading(){
+  if(nauticalDeviceHeading != null && isFinite(Number(nauticalDeviceHeading))){
+    return normalizeBearing(nauticalDeviceHeading);
+  }
+
+  if(nauticalGpsHeading != null && isFinite(Number(nauticalGpsHeading))){
+    return normalizeBearing(nauticalGpsHeading);
+  }
+
+  return null;
+}
+
+function updateNauticalCompassHud(){
+  var hud = document.getElementById("nauticalCompassHud");
+  var ring = document.getElementById("nauticalCompassRing");
+  var arrow = document.getElementById("nauticalPhoneArrow");
+  var speedEl = document.getElementById("nauticalSpeedValue");
+  var modeEl = document.getElementById("nauticalCompassMode");
+
+  if(!hud) return;
+
+  var nautical = baseMapMode === "nautical";
+  var mapBearing = getMapBearing();
+  var heading = getBestNauticalHeading();
+
+  hud.classList.toggle("is-hidden", !nautical);
+  hud.classList.toggle("is-following", nauticalCompassMode === "follow");
+  hud.classList.toggle("is-missing-heading", heading == null);
+
+  if(ring){
+    ring.style.transform = "rotate(" + (-mapBearing).toFixed(1) + "deg)";
+  }
+
+  if(arrow){
+    var arrowBearing = heading == null ? 0 : heading - mapBearing;
+    arrow.style.transform = "rotate(" + arrowBearing.toFixed(1) + "deg)";
+  }
+
+  if(speedEl){
+    speedEl.textContent = formatKnotsFromMetersPerSecond(nauticalLastSpeed);
+  }
+
+  if(modeEl){
+    if(nauticalCompassMode === "follow"){
+      modeEl.textContent = heading == null ? "Riktning saknas" : "Följer riktning";
+    }else{
+      modeEl.textContent = "Nord upp";
+    }
+  }
+}
+
+function handleNauticalPosition(position){
+  if(!position || !position.coords) return;
+
+  nauticalLastSpeed = position.coords.speed;
+
+  if(
+    position.coords.heading != null &&
+    isFinite(Number(position.coords.heading)) &&
+    Number(position.coords.speed || 0) > 0.4
+  ){
+    nauticalGpsHeading = normalizeBearing(position.coords.heading);
+  }
+
+  if(nauticalCompassMode === "follow"){
+    var heading = getBestNauticalHeading();
+
+    if(heading != null){
+      setMapBearing(heading);
+    }
+  }
+
+  updateNauticalCompassHud();
+}
+
+function startNauticalGps(){
+  if(nauticalGeoWatchId != null) return;
+  if(!navigator.geolocation) return;
+
+  try{
+    nauticalGeoWatchId = navigator.geolocation.watchPosition(
+      handleNauticalPosition,
+      function(){
+        nauticalLastSpeed = null;
+        updateNauticalCompassHud();
+      },
+      {
+        enableHighAccuracy:true,
+        maximumAge:3000,
+        timeout:12000
+      }
+    );
+  }catch(e){}
+}
+
+function stopNauticalGps(){
+  if(nauticalGeoWatchId == null) return;
+
+  try{
+    navigator.geolocation.clearWatch(nauticalGeoWatchId);
+  }catch(e){}
+
+  nauticalGeoWatchId = null;
+}
+
+function handleDeviceOrientation(event){
+  var heading = null;
+
+  if(event && typeof event.webkitCompassHeading === "number"){
+    heading = event.webkitCompassHeading;
+  }else if(event && event.absolute === true && typeof event.alpha === "number"){
+    heading = 360 - event.alpha;
+  }else if(event && typeof event.alpha === "number"){
+    heading = 360 - event.alpha;
+  }
+
+  heading = normalizeBearing(heading);
+
+  if(heading == null) return;
+
+  nauticalDeviceHeading = heading;
+
+  if(nauticalCompassMode === "follow"){
+    setMapBearing(heading);
+  }
+
+  updateNauticalCompassHud();
+}
+
+async function startNauticalOrientation(){
+  if(nauticalOrientationStarted) return;
+
+  try{
+    if(
+      window.DeviceOrientationEvent &&
+      typeof DeviceOrientationEvent.requestPermission === "function"
+    ){
+      var permission = await DeviceOrientationEvent.requestPermission();
+
+      if(permission !== "granted"){
+        updateNauticalCompassHud();
+        return;
+      }
+    }
+
+    window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+
+    nauticalOrientationStarted = true;
+  }catch(e){
+    updateNauticalCompassHud();
+  }
+}
+
+function startNauticalHud(){
+  startNauticalGps();
+  updateNauticalCompassHud();
+}
+
+function stopNauticalHud(){
+  stopNauticalGps();
+  nauticalCompassMode = "north";
+  setMapBearing(0);
+  updateNauticalCompassHud();
+}
+
+function toggleNauticalCompassMode(){
+  if(baseMapMode !== "nautical") return;
+
+  if(nauticalCompassMode === "follow"){
+    nauticalCompassMode = "north";
+    setMapBearing(0);
+    updateNauticalCompassHud();
+    return;
+  }
+
+  nauticalCompassMode = "follow";
+
+  startNauticalOrientation();
+
+  var heading = getBestNauticalHeading();
+
+  if(heading != null){
+    setMapBearing(heading);
+  }else{
+    updateNauticalCompassHud();
+  }
+}
+
+function bindNauticalCompassHud(){
+  var hud = document.getElementById("nauticalCompassHud");
+
+  if(!hud || hud.dataset.bound === "1") return;
+
+  hud.dataset.bound = "1";
+
+  hud.addEventListener("click", function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    toggleNauticalCompassMode();
+  });
+
+  hud.addEventListener("touchstart", function(e){
+    e.stopPropagation();
+  }, {passive:true});
+}
+
+function syncNauticalHud(){
+  bindNauticalCompassHud();
+
+  if(baseMapMode === "nautical"){
+    startNauticalHud();
+  }else{
+    stopNauticalHud();
+  }
+}
+      function syncBaseMapButtons(){
+  var desktopBtn = document.getElementById("toggleBaseMapBtn");
+  var mobileBtn = document.getElementById("mobileToggleBaseMapBtn");
+  var nautical = baseMapMode === "nautical";
+
+  if(desktopBtn){
+    desktopBtn.textContent = nautical ? "Sjökort" : "Standard";
+    desktopBtn.classList.toggle("is-on", nautical);
+    desktopBtn.classList.toggle("is-off", !nautical);
+  }
+
+  if(mobileBtn){
+    mobileBtn.classList.toggle("is-on", nautical);
+  }
+
+  syncNauticalHud();
+}
 
       function isOpenMeteoWeatherLayerAvailable(){return !!(window.OMWeatherMapLayer && window.OMWeatherMapLayer.omProtocol);}
       function registerOpenMeteoProtocol(){if(openMeteoProtocolRegistered) return true;if(!window.maptilersdk || !isOpenMeteoWeatherLayerAvailable()) return false;try{var omProtocolSettings=window.OMWeatherMapLayer.defaultOmProtocolSettings;maptilersdk.addProtocol("om",function(params,abortController){params.url=params.url.replace("https//","https://");return window.OMWeatherMapLayer.omProtocol(params,abortController,omProtocolSettings);});openMeteoProtocolRegistered=true;return true;}catch(e){console.warn("Open-Meteo protokoll kunde inte registreras", e);openMeteoCloudLastError=e;return false;}}
@@ -2770,6 +3267,15 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       if(window.maptilersdk){
         maptilersdk.config.apiKey=MAPTILER_API_KEY;
         maptilerMap=new maptilersdk.Map({container:'maptilerMap',style:maptilersdk.MapStyle.STREETS.DARK,center:[13.0,58.6],zoom:5,geolocateControl:false});
+        maptilerMap.on("rotate", function(){
+  updateNauticalCompassHud();
+});
+
+maptilerMap.on("move", function(){
+  if(baseMapMode === "nautical"){
+    updateNauticalCompassHud();
+  }
+});
         var weatherGeolocateControl=new maptilersdk.GeolocateControl({positionOptions:{enableHighAccuracy:true,maximumAge:0,timeout:10000},fitBoundsOptions:{maxZoom:12},trackUserLocation:true,showUserLocation:true,showAccuracyCircle:true,showUserHeading:true});
         maptilerMap.addControl(weatherGeolocateControl,'top-right');
         var lastGeolocateWeatherAt=0, GEOLOCATE_CLICK_WINDOW_MS=2500, weatherSelectionMode="manual", lastUserWeatherLat=null,lastUserWeatherLon=null,lastUserWeatherAt=0, USER_WEATHER_MIN_MOVE_KM=0.5, USER_WEATHER_MIN_INTERVAL_MS=60*1000;
