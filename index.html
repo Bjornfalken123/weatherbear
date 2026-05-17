@@ -186,16 +186,16 @@
   bottom:calc(var(--time-control-bottom) + 92px);
   z-index:1260;
   display:flex;
+  flex-direction:column;
   align-items:center;
-  gap:10px;
-  padding:9px 11px;
-  border-radius:19px;
-  border:1px solid rgba(255,255,255,0.13);
-  background:rgba(5,11,22,0.84);
+  gap:6px;
+  padding:0;
+  border:none;
+  background:transparent;
   color:var(--text);
-  box-shadow:0 16px 38px rgba(0,0,0,0.38);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
   cursor:pointer;
   touch-action:manipulation;
   -webkit-tap-highlight-color:transparent;
@@ -312,27 +312,28 @@
 }
 
 .nautical-compass-info{
-  min-width:62px;
-  text-align:left;
+  min-width:0;
+  text-align:center;
+  padding:5px 8px;
+  border-radius:999px;
+  background:rgba(5,11,22,0.72);
+  border:1px solid rgba(255,255,255,0.10);
+  box-shadow:0 8px 22px rgba(0,0,0,0.28);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
 }
 
 .nautical-speed-value{
   color:var(--text);
-  font-size:16px;
+  font-size:13px;
   font-weight:950;
-  line-height:1.05;
+  line-height:1;
   letter-spacing:-0.02em;
   white-space:nowrap;
 }
 
 .nautical-compass-mode{
-  margin-top:4px;
-  color:var(--muted-soft);
-  font-size:9px;
-  font-weight:850;
-  line-height:1.15;
-  text-transform:uppercase;
-  white-space:nowrap;
+  display:none;
 }
 
 .nautical-compass-hud.is-following .nautical-compass-mode{
@@ -346,13 +347,11 @@
 @media (max-width:700px){
 .nautical-compass-hud{
   position:fixed;
-  right:12px;
+  right:14px;
   top:auto;
   bottom:calc(var(--time-control-bottom) + 86px);
-    z-index:3050;
-    padding:8px 10px;
-    border-radius:18px;
-  }
+  z-index:3050;
+}
 
   .nautical-compass-face{
     width:52px;
