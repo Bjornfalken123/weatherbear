@@ -368,6 +368,60 @@
     .sea-metric-now-label{color:var(--muted);font-size:9px;font-weight:850;text-transform:uppercase;line-height:1.1;}
     .sea-metric-now-value{margin-top:3px;color:var(--accent-2);font-size:14px;font-weight:950;line-height:1.1;}
     .sea-combined-chart{width:100%;height:188px;display:block;overflow:visible;}
+    .sea-chart-interactive{
+  position:relative;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.sea-chart-interactive svg{
+  touch-action:none;
+}
+
+.sea-selected-line{
+  pointer-events:none;
+}
+
+.sea-selected-dot{
+  pointer-events:none;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+}
+
+.sea-chart-readout{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:12px;
+  background:rgba(255,255,255,0.045);
+  border:1px solid rgba(255,255,255,0.065);
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+}
+
+.sea-chart-readout-time{
+  color:var(--muted-soft);
+  font-size:11px;
+  font-weight:800;
+  line-height:1.25;
+}
+
+.sea-chart-readout-value{
+  color:var(--text);
+  font-size:13px;
+  font-weight:950;
+  line-height:1.25;
+  white-space:nowrap;
+}
+
+.sea-chart-help{
+  margin-top:7px;
+  color:var(--muted-soft);
+  font-size:10px;
+  font-weight:700;
+  line-height:1.35;
+}
     .sea-chart-footer{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--muted-soft);font-size:10px;line-height:1.35;}
     .sea-chart-footer strong{color:var(--text-soft);}
     .sea-chart-note{margin-top:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:var(--muted-soft);font-size:11px;line-height:1.45;}
@@ -1429,41 +1483,205 @@ function buildPrecipitationMetric(summary){
       }
       function findClosestSeaPoint(points,targetTime){if(!Array.isArray(points)||!points.length) return null;var closest=points[0], closestDiff=Math.abs(points[0].timestamp-targetTime);for(var i=1;i<points.length;i++){var diff=Math.abs(points[i].timestamp-targetTime);if(diff<closestDiff){closest=points[i];closestDiff=diff;}}return closest;}
       function buildSeaPath(points,xForTime,yForValue){if(!Array.isArray(points)||!points.length) return "";return points.map(function(point,index){var x=xForTime(point.timestamp), y=yForValue(point.value);return (index===0?"M":"L")+x.toFixed(1)+" "+y.toFixed(1);}).join(" ");}
-      function buildSeaCombinedSvgChart(metricData, config){
-        var series=getVisibleSeaSeries(metricData), points=series.all;
-        if(!points.length) return '<div class="sea-chart-empty">'+escapeHtml(config.emptyText)+'</div>';
-        if(points.length===1) return '<div class="sea-chart-empty">Endast ett värde finns i valt intervall: <strong>'+escapeHtml(formatSeaChartValue(points[0].value,config.unit))+'</strong><br><span>'+escapeHtml(formatSeaChartTime(points[0].time))+'</span></div>';
-        var width=340,height=188,padLeft=32,padRight=16,padTop=18,padBottom=38;
-        var values=points.map(function(point){return point.value;});
-        var minValue=Math.min.apply(null,values), maxValue=Math.max.apply(null,values);
-        if(minValue===maxValue){minValue=minValue-1;maxValue=maxValue+1;}
-        var valuePadding=(maxValue-minValue)*0.12;minValue-=valuePadding;maxValue+=valuePadding;
-        var minTime=points[0].timestamp,maxTime=points[points.length-1].timestamp;if(maxTime<=minTime) maxTime=minTime+60*60*1000;
-        var usableW=width-padLeft-padRight, usableH=height-padTop-padBottom;
-        function xForTime(timestamp){return padLeft+((timestamp-minTime)/(maxTime-minTime))*usableW;}
-        function yForValue(value){return padTop+(1-((value-minValue)/(maxValue-minValue)))*usableH;}
-        var historyPath=buildSeaPath(series.history,xForTime,yForValue), forecastPath=buildSeaPath(series.forecast,xForTime,yForValue);
-        var nowX=Math.max(padLeft,Math.min(width-padRight,xForTime(series.now)));
-        var nowPoint=findClosestSeaPoint(points,series.now), nowPointX=nowPoint?xForTime(nowPoint.timestamp):nowX, nowPointY=nowPoint?yForValue(nowPoint.value):padTop+usableH/2;
-        var axisTicks=[{timestamp:series.now-seaHistoryHours*60*60*1000},{timestamp:series.now-Math.round(seaHistoryHours/2)*60*60*1000},{timestamp:series.now},{timestamp:series.now+Math.round(seaForecastHours/2)*60*60*1000},{timestamp:series.now+seaForecastHours*60*60*1000}].filter(function(tick){return tick.timestamp>=minTime && tick.timestamp<=maxTime;});
-        var svg='<svg class="sea-combined-chart" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+escapeHtml(config.label)+'">'+
-          '<line x1="'+padLeft+'" y1="'+padTop+'" x2="'+padLeft+'" y2="'+(height-padBottom)+'" stroke="rgba(255,255,255,0.13)" stroke-width="1"></line>'+
-          '<line x1="'+padLeft+'" y1="'+(height-padBottom)+'" x2="'+(width-padRight)+'" y2="'+(height-padBottom)+'" stroke="rgba(255,255,255,0.16)" stroke-width="1"></line>'+
-          '<line x1="'+padLeft+'" y1="'+padTop+'" x2="'+(width-padRight)+'" y2="'+padTop+'" stroke="rgba(255,255,255,0.06)" stroke-width="1"></line>'+
-          '<line x1="'+padLeft+'" y1="'+(padTop+usableH/2)+'" x2="'+(width-padRight)+'" y2="'+(padTop+usableH/2)+'" stroke="rgba(255,255,255,0.06)" stroke-width="1"></line>'+
-          '<text x="2" y="'+(padTop+3)+'" fill="rgba(255,255,255,0.58)" font-size="8">'+escapeHtml(formatSeaChartValue(maxValue,config.unit))+'</text>'+
-          '<text x="2" y="'+(height-padBottom+3)+'" fill="rgba(255,255,255,0.58)" font-size="8">'+escapeHtml(formatSeaChartValue(minValue,config.unit))+'</text>';
-        if(historyPath) svg+='<path d="'+historyPath+'" fill="none" stroke="rgba(123,199,255,0.96)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>';
-        if(forecastPath) svg+='<path d="'+forecastPath+'" fill="none" stroke="rgba(152,240,219,0.95)" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round" stroke-linejoin="round"></path>';
-        svg+='<line x1="'+nowX.toFixed(1)+'" y1="'+padTop+'" x2="'+nowX.toFixed(1)+'" y2="'+(height-padBottom)+'" stroke="rgba(232,215,168,0.92)" stroke-width="1.5" stroke-dasharray="4 4"></line>'+ '<circle cx="'+nowPointX.toFixed(1)+'" cy="'+nowPointY.toFixed(1)+'" r="4.6" fill="rgba(232,215,168,1)" stroke="rgba(4,9,19,0.95)" stroke-width="2"></circle>'+ '<text x="'+Math.min(width-padRight-22,nowX+5).toFixed(1)+'" y="'+(padTop+10)+'" fill="rgba(232,215,168,0.95)" font-size="9" font-weight="800">Nu</text>';
-        svg += axisTicks.map(function(tick,index){
-          var x=xForTime(tick.timestamp), label=formatSeaRelativeHourLabel(tick.timestamp,series.now), clock=formatSeaAxisClock(tick.timestamp), anchor="middle";
-          if(index===0) anchor="start"; if(index===axisTicks.length-1) anchor="end";
-          var isNow=label==="Nu";
-          return '<line x1="'+x.toFixed(1)+'" y1="'+(height-padBottom)+'" x2="'+x.toFixed(1)+'" y2="'+(height-padBottom+5)+'" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>'+ '<text x="'+x.toFixed(1)+'" y="'+(height-22)+'" text-anchor="'+anchor+'" fill="'+(isNow?"rgba(232,215,168,0.98)":"rgba(255,255,255,0.62)")+'" font-size="8" font-weight="'+(isNow?"900":"750")+'">'+escapeHtml(label)+'</text>'+ '<text x="'+x.toFixed(1)+'" y="'+(height-8)+'" text-anchor="'+anchor+'" fill="rgba(255,255,255,0.42)" font-size="8">'+escapeHtml(clock)+'</text>';
-        }).join("") + '</svg>';
-        return svg;
-      }
+   function buildSeaCombinedSvgChart(metricData, config){
+  var series = getVisibleSeaSeries(metricData);
+  var points = series.all;
+
+  if(!points.length){
+    return '<div class="sea-chart-empty">' + escapeHtml(config.emptyText) + '</div>';
+  }
+
+  if(points.length === 1){
+    return (
+      '<div class="sea-chart-empty">' +
+      'Endast ett värde finns i valt intervall: <strong>' +
+      escapeHtml(formatSeaChartValue(points[0].value, config.unit)) +
+      '</strong><br><span>' +
+      escapeHtml(formatSeaChartTime(points[0].time)) +
+      '</span></div>'
+    );
+  }
+
+  var width = 340;
+  var height = 188;
+  var padLeft = 32;
+  var padRight = 16;
+  var padTop = 18;
+  var padBottom = 38;
+
+  var values = points.map(function(point){
+    return point.value;
+  });
+
+  var minValue = Math.min.apply(null, values);
+  var maxValue = Math.max.apply(null, values);
+
+  if(minValue === maxValue){
+    minValue = minValue - 1;
+    maxValue = maxValue + 1;
+  }
+
+  var valuePadding = (maxValue - minValue) * 0.12;
+  minValue -= valuePadding;
+  maxValue += valuePadding;
+
+  var minTime = points[0].timestamp;
+  var maxTime = points[points.length - 1].timestamp;
+
+  if(maxTime <= minTime){
+    maxTime = minTime + 60 * 60 * 1000;
+  }
+
+  var usableW = width - padLeft - padRight;
+  var usableH = height - padTop - padBottom;
+
+  function xForTime(timestamp){
+    return padLeft + ((timestamp - minTime) / (maxTime - minTime)) * usableW;
+  }
+
+  function yForValue(value){
+    return padTop + (1 - ((value - minValue) / (maxValue - minValue))) * usableH;
+  }
+
+  function formatSeaAxisDay(timestamp){
+    var d = new Date(timestamp);
+    var today = new Date();
+    var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    var dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    var diffDays = Math.round((dayStart - todayStart) / (24 * 60 * 60 * 1000));
+
+    if(Math.abs(timestamp - series.now) <= 30 * 60 * 1000) return "Nu";
+    if(diffDays === -1) return "Igår";
+    if(diffDays === 0) return "Idag";
+    if(diffDays === 1) return "Imorgon";
+
+    return String(d.getDate()) + "/" + String(d.getMonth() + 1);
+  }
+
+  function formatSeaAxisClock(timestamp){
+    return formatClockDotGlobal(timestamp);
+  }
+
+  var historyPath = buildSeaPath(series.history, xForTime, yForValue);
+  var forecastPath = buildSeaPath(series.forecast, xForTime, yForValue);
+
+  var nowX = Math.max(padLeft, Math.min(width - padRight, xForTime(series.now)));
+  var nowPoint = findClosestSeaPoint(points, series.now) || points[0];
+
+  var selectedPoint = nowPoint;
+  var selectedX = xForTime(selectedPoint.timestamp);
+  var selectedY = yForValue(selectedPoint.value);
+
+  var axisCandidates = [
+    minTime,
+    minTime + (series.now - minTime) / 2,
+    series.now,
+    series.now + (maxTime - series.now) / 2,
+    maxTime
+  ];
+
+  var axisTicks = [];
+  var seenTicks = {};
+
+  for(var i = 0; i < axisCandidates.length; i++){
+    var t = axisCandidates[i];
+
+    if(!isFinite(t)) continue;
+    if(t < minTime - 1 || t > maxTime + 1) continue;
+
+    var rounded = Math.round(t / (60 * 60 * 1000)) * 60 * 60 * 1000;
+    var key = String(rounded);
+
+    if(seenTicks[key]) continue;
+
+    seenTicks[key] = true;
+    axisTicks.push({timestamp:rounded});
+  }
+
+  axisTicks.sort(function(a, b){
+    return a.timestamp - b.timestamp;
+  });
+
+  var pointPayload = points.map(function(point){
+    return {
+      timestamp:point.timestamp,
+      value:point.value,
+      time:point.time,
+      type:point.type
+    };
+  });
+
+  var encodedPoints = encodeURIComponent(JSON.stringify(pointPayload));
+
+  var svg =
+    '<div class="sea-chart-interactive" ' +
+      'data-sea-points="' + encodedPoints + '" ' +
+      'data-sea-unit="' + escapeHtml(config.unit || "") + '" ' +
+      'data-sea-min-time="' + escapeHtml(String(minTime)) + '" ' +
+      'data-sea-max-time="' + escapeHtml(String(maxTime)) + '" ' +
+      'data-sea-min-value="' + escapeHtml(String(minValue)) + '" ' +
+      'data-sea-max-value="' + escapeHtml(String(maxValue)) + '" ' +
+      'data-sea-width="' + width + '" ' +
+      'data-sea-height="' + height + '" ' +
+      'data-sea-pad-left="' + padLeft + '" ' +
+      'data-sea-pad-right="' + padRight + '" ' +
+      'data-sea-pad-top="' + padTop + '" ' +
+      'data-sea-pad-bottom="' + padBottom + '"' +
+    '>' +
+    '<svg class="sea-combined-chart" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none">' +
+
+      '<line x1="' + padLeft + '" y1="' + (height - padBottom) + '" x2="' + (width - padRight) + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>' +
+
+      '<line x1="' + padLeft + '" y1="' + padTop + '" x2="' + padLeft + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.12)" stroke-width="1"></line>' +
+
+      '<line x1="' + nowX.toFixed(1) + '" y1="' + padTop + '" x2="' + nowX.toFixed(1) + '" y2="' + (height - padBottom) + '" stroke="rgba(232,215,168,0.7)" stroke-width="1.3" stroke-dasharray="4 4"></line>' +
+
+      (historyPath
+        ? '<path d="' + historyPath + '" fill="none" stroke="rgba(123,199,255,0.95)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>'
+        : ''
+      ) +
+
+      (forecastPath
+        ? '<path d="' + forecastPath + '" fill="none" stroke="rgba(152,240,219,0.82)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 5"></path>'
+        : ''
+      ) +
+
+      '<line class="sea-selected-line" x1="' + selectedX.toFixed(1) + '" y1="' + padTop + '" x2="' + selectedX.toFixed(1) + '" y2="' + (height - padBottom) + '" stroke="rgba(255,255,255,0.72)" stroke-width="1.2"></line>' +
+
+      '<circle class="sea-selected-dot" cx="' + selectedX.toFixed(1) + '" cy="' + selectedY.toFixed(1) + '" r="4.5" fill="rgba(255,255,255,0.96)" stroke="rgba(5,11,22,0.9)" stroke-width="2"></circle>' +
+
+      '<circle cx="' + xForTime(nowPoint.timestamp).toFixed(1) + '" cy="' + yForValue(nowPoint.value).toFixed(1) + '" r="3.5" fill="rgba(232,215,168,0.96)"></circle>' +
+
+      axisTicks.map(function(tick, index){
+        var x = Math.max(padLeft, Math.min(width - padRight, xForTime(tick.timestamp)));
+        var label = formatSeaAxisDay(tick.timestamp);
+        var clock = formatSeaAxisClock(tick.timestamp);
+        var anchor = "middle";
+
+        if(index === 0) anchor = "start";
+        if(index === axisTicks.length - 1) anchor = "end";
+
+        var isNow = label === "Nu";
+
+        return (
+          '<line x1="' + x.toFixed(1) + '" y1="' + (height - padBottom) + '" x2="' + x.toFixed(1) + '" y2="' + (height - padBottom + 5) + '" stroke="rgba(255,255,255,0.18)" stroke-width="1"></line>' +
+          '<text x="' + x.toFixed(1) + '" y="' + (height - 22) + '" text-anchor="' + anchor + '" fill="' + (isNow ? "rgba(232,215,168,0.98)" : "rgba(255,255,255,0.62)") + '" font-size="8" font-weight="' + (isNow ? "900" : "750") + '">' + escapeHtml(label) + '</text>' +
+          '<text x="' + x.toFixed(1) + '" y="' + (height - 8) + '" text-anchor="' + anchor + '" fill="rgba(255,255,255,0.42)" font-size="8">' + escapeHtml(clock) + '</text>'
+        );
+      }).join("") +
+
+    '</svg>' +
+
+    '<div class="sea-chart-readout">' +
+      '<div class="sea-chart-readout-time">' + escapeHtml(formatSeaSelectedTime(selectedPoint.timestamp)) + '</div>' +
+      '<div class="sea-chart-readout-value">' + escapeHtml(formatSeaChartValue(selectedPoint.value, config.unit)) + '</div>' +
+    '</div>' +
+
+    '<div class="sea-chart-help">Tryck eller dra i diagrammet för exakt timvärde.</div>' +
+    '</div>';
+
+  return svg;
+}
       function buildSeaRangeControls(){
         return '<div class="sea-range-panel"><div class="sea-range-row"><div class="sea-range-label">Historik</div><div class="sea-range-buttons">'+[12,24,72].map(function(hours){return '<button type="button" class="sea-range-btn '+(seaHistoryHours===hours?'is-active':'')+'" data-sea-history-hours="'+hours+'">'+hours+'h</button>';}).join("")+'</div></div><div class="sea-range-row"><div class="sea-range-label">Prognos</div><div class="sea-range-buttons">'+[12,24,72].map(function(hours){return '<button type="button" class="sea-range-btn '+(seaForecastHours===hours?'is-active':'')+'" data-sea-forecast-hours="'+hours+'">'+hours+'h</button>';}).join("")+'</div></div></div>';
       }
@@ -1477,6 +1695,173 @@ function buildPrecipitationMetric(summary){
         }
         return '<div class="sea-metric-card"><div class="sea-metric-card-header"><div><div class="sea-metric-card-title">'+escapeHtml(config.label)+'</div><div class="sea-metric-card-subtitle">'+escapeHtml(sourceText)+'</div></div><div class="sea-metric-now"><div class="sea-metric-now-label">Nu</div><div class="sea-metric-now-value">'+escapeHtml(nowPoint?formatSeaChartValue(nowPoint.value,config.unit):"--")+'</div></div></div>'+buildSeaCombinedSvgChart(metricData,config)+'<div class="sea-chart-footer"><span><strong>Heldragen</strong> historik</span><span><strong>Streckad</strong> prognos</span></div>'+note+'</div>';
       }
+      function formatSeaSelectedTime(timestamp){
+  var t = Number(timestamp);
+
+  if(!isFinite(t)) return "";
+
+  var d = new Date(t);
+  var today = new Date();
+
+  var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  var dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  var diffDays = Math.round((dayStart - todayStart) / (24 * 60 * 60 * 1000));
+
+  var dayText = "";
+
+  if(diffDays === -1){
+    dayText = "Igår";
+  }else if(diffDays === 0){
+    dayText = "Idag";
+  }else if(diffDays === 1){
+    dayText = "Imorgon";
+  }else{
+    dayText = String(d.getDate()) + "/" + String(d.getMonth() + 1);
+  }
+
+  return dayText + " " + formatClockDotGlobal(t);
+}
+
+function setupSeaChartInteractions(){
+  if(window.__seaChartInteractionsReady) return;
+
+  window.__seaChartInteractionsReady = true;
+
+  var activeChart = null;
+
+  function parseSeaChartPoints(chart){
+    try{
+      return JSON.parse(decodeURIComponent(chart.getAttribute("data-sea-points") || "[]"));
+    }catch(e){
+      return [];
+    }
+  }
+
+  function findNearestPointByX(chart, clientX){
+    var points = parseSeaChartPoints(chart);
+
+    if(!points.length) return null;
+
+    var rect = chart.getBoundingClientRect();
+    var chartWidth = Number(chart.getAttribute("data-sea-width") || 340);
+    var padLeft = Number(chart.getAttribute("data-sea-pad-left") || 32);
+    var padRight = Number(chart.getAttribute("data-sea-pad-right") || 16);
+    var minTime = Number(chart.getAttribute("data-sea-min-time"));
+    var maxTime = Number(chart.getAttribute("data-sea-max-time"));
+
+    if(!isFinite(minTime) || !isFinite(maxTime) || maxTime <= minTime) return points[0];
+
+    var localX = ((clientX - rect.left) / Math.max(1, rect.width)) * chartWidth;
+
+    localX = Math.max(padLeft, Math.min(chartWidth - padRight, localX));
+
+    var progress = (localX - padLeft) / Math.max(1, chartWidth - padLeft - padRight);
+    var targetTime = minTime + progress * (maxTime - minTime);
+
+    var closest = points[0];
+    var closestDiff = Math.abs(points[0].timestamp - targetTime);
+
+    for(var i = 1; i < points.length; i++){
+      var diff = Math.abs(points[i].timestamp - targetTime);
+
+      if(diff < closestDiff){
+        closest = points[i];
+        closestDiff = diff;
+      }
+    }
+
+    return closest;
+  }
+
+  function updateSeaChartSelection(chart, point){
+    if(!chart || !point) return;
+
+    var chartWidth = Number(chart.getAttribute("data-sea-width") || 340);
+    var chartHeight = Number(chart.getAttribute("data-sea-height") || 188);
+    var padLeft = Number(chart.getAttribute("data-sea-pad-left") || 32);
+    var padRight = Number(chart.getAttribute("data-sea-pad-right") || 16);
+    var padTop = Number(chart.getAttribute("data-sea-pad-top") || 18);
+    var padBottom = Number(chart.getAttribute("data-sea-pad-bottom") || 38);
+    var minTime = Number(chart.getAttribute("data-sea-min-time"));
+    var maxTime = Number(chart.getAttribute("data-sea-max-time"));
+    var minValue = Number(chart.getAttribute("data-sea-min-value"));
+    var maxValue = Number(chart.getAttribute("data-sea-max-value"));
+    var unit = chart.getAttribute("data-sea-unit") || "";
+
+    if(!isFinite(minTime) || !isFinite(maxTime) || maxTime <= minTime) return;
+    if(!isFinite(minValue) || !isFinite(maxValue) || maxValue <= minValue) return;
+
+    var usableW = chartWidth - padLeft - padRight;
+    var usableH = chartHeight - padTop - padBottom;
+
+    var x = padLeft + ((point.timestamp - minTime) / (maxTime - minTime)) * usableW;
+    var y = padTop + (1 - ((point.value - minValue) / (maxValue - minValue))) * usableH;
+
+    x = Math.max(padLeft, Math.min(chartWidth - padRight, x));
+    y = Math.max(padTop, Math.min(chartHeight - padBottom, y));
+
+    var line = chart.querySelector(".sea-selected-line");
+    var dot = chart.querySelector(".sea-selected-dot");
+    var timeEl = chart.querySelector(".sea-chart-readout-time");
+    var valueEl = chart.querySelector(".sea-chart-readout-value");
+
+    if(line){
+      line.setAttribute("x1", x.toFixed(1));
+      line.setAttribute("x2", x.toFixed(1));
+    }
+
+    if(dot){
+      dot.setAttribute("cx", x.toFixed(1));
+      dot.setAttribute("cy", y.toFixed(1));
+    }
+
+    if(timeEl){
+      timeEl.textContent = formatSeaSelectedTime(point.timestamp);
+    }
+
+    if(valueEl){
+      valueEl.textContent = formatSeaChartValue(point.value, unit);
+    }
+  }
+
+  function updateFromEvent(e){
+    if(!activeChart) return;
+
+    var point = findNearestPointByX(activeChart, e.clientX);
+
+    updateSeaChartSelection(activeChart, point);
+  }
+
+  document.addEventListener("pointerdown", function(e){
+    var chart = e.target && e.target.closest ? e.target.closest(".sea-chart-interactive") : null;
+
+    if(!chart) return;
+
+    activeChart = chart;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    updateFromEvent(e);
+  });
+
+  document.addEventListener("pointermove", function(e){
+    if(!activeChart) return;
+
+    e.preventDefault();
+    updateFromEvent(e);
+  });
+
+  document.addEventListener("pointerup", function(){
+    activeChart = null;
+  });
+
+  document.addEventListener("pointercancel", function(){
+    activeChart = null;
+  });
+}
+
+setupSeaChartInteractions();
       function getSeaOverviewValueFromTimeseries(metricKey, fallbackValue){
         if(!selectedSeaTimeseriesData || selectedSeaTimeseriesData.error) return fallbackValue || "--";
 
