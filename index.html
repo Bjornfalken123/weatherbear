@@ -182,8 +182,8 @@
     }
 .nautical-compass-hud{
   position:absolute;
-  top:78px;
   right:16px;
+  bottom:calc(var(--time-control-bottom) + 92px);
   z-index:1260;
   display:flex;
   align-items:center;
@@ -346,8 +346,9 @@
 @media (max-width:700px){
 .nautical-compass-hud{
   position:fixed;
-  top:calc(var(--safe-top) + 72px);
   right:12px;
+  top:auto;
+  bottom:calc(var(--time-control-bottom) + 86px);
     z-index:3050;
     padding:8px 10px;
     border-radius:18px;
