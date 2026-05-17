@@ -13,6 +13,19 @@ export async function onRequestGet(context) {
 
     const baseUrl = url.origin;
 
+    /*
+      Vi testar inte hur många stationer som helst, för då kan API:t bli långsamt.
+      Topp 10 närmaste inom radien räcker oftast bra.
+    */
+    const MAX_CANDIDATE_STATIONS = 10;
+
+    /*
+      Om två stationer är nästan lika färska väljer vi den närmaste.
+      Det gör att appen inte hoppar till en mycket längre bort station bara
+      för att den är några minuter färskare.
+    */
+    const FRESHNESS_TIE_MS = 90 * 60 * 1000;
+
     function toRad(value) {
       return value * Math.PI / 180;
     }
@@ -56,37 +69,38 @@ export async function onRequestGet(context) {
       return Number.isFinite(number) ? number : null;
     }
 
-   function parseTimeToTimestamp(value) {
-  if (value == null || value === "") return null;
+    function parseTimeToTimestamp(value) {
+      if (value == null || value === "") return null;
 
-  if (typeof value === "number") {
-    const timestamp = new Date(value).getTime();
-    return Number.isFinite(timestamp) ? timestamp : null;
-  }
+      if (typeof value === "number") {
+        const timestamp = new Date(value).getTime();
+        return Number.isFinite(timestamp) ? timestamp : null;
+      }
 
-  let text = String(value).trim();
+      let text = String(value).trim();
 
-  if (/^\d+$/.test(text)) {
-    const numeric = Number(text);
+      if (/^\d+$/.test(text)) {
+        const numeric = Number(text);
 
-    if (Number.isFinite(numeric)) {
-      const timestamp = new Date(numeric).getTime();
+        if (Number.isFinite(numeric)) {
+          const timestamp = new Date(numeric).getTime();
+          return Number.isFinite(timestamp) ? timestamp : null;
+        }
+      }
+
+      /*
+        Open-Meteo med timezone=GMT returnerar ofta tider utan Z,
+        t.ex. 2026-05-13T12:00. Vi tolkar dem som UTC.
+      */
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(text)) {
+        text += "Z";
+      }
+
+      const timestamp = new Date(text).getTime();
+
       return Number.isFinite(timestamp) ? timestamp : null;
     }
-  }
 
-  /*
-    Open-Meteo med timezone=GMT returnerar ofta tider utan Z,
-    t.ex. 2026-05-13T12:00. Vi tolkar dem som UTC.
-  */
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(text)) {
-    text += "Z";
-  }
-
-  const timestamp = new Date(text).getTime();
-
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
     function normalizeTime(value) {
       const timestamp = parseTimeToTimestamp(value);
       return timestamp == null ? null : new Date(timestamp).toISOString();
@@ -191,6 +205,15 @@ export async function onRequestGet(context) {
       };
     }
 
+    function getCandidateStations(stations) {
+      return stations
+        .map(normalizeStation)
+        .filter(Boolean)
+        .filter((station) => station.distanceKm <= radiusKm)
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+        .slice(0, MAX_CANDIDATE_STATIONS);
+    }
+
     function normalizeTimeseries(data) {
       const raw = Array.isArray(data?.value)
         ? data.value
@@ -282,72 +305,150 @@ export async function onRequestGet(context) {
         forecast
       };
     }
+
     function dedupeAndSortSeries(series) {
-  const map = new Map();
+      const map = new Map();
 
-  for (const point of series || []) {
-    if (!point || point.value == null || !point.time) continue;
+      for (const point of series || []) {
+        if (!point || point.value == null || !point.time) continue;
 
-    const timestamp = parseTimeToTimestamp(point.time);
-    if (timestamp == null) continue;
+        const timestamp = parseTimeToTimestamp(point.time);
+        if (timestamp == null) continue;
 
-    const hourTimestamp = Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000;
+        const hourTimestamp =
+          Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000;
 
-    map.set(hourTimestamp, {
-      time: new Date(hourTimestamp).toISOString(),
-      value: Number(point.value)
-    });
-  }
+        map.set(hourTimestamp, {
+          time: new Date(hourTimestamp).toISOString(),
+          value: Number(point.value)
+        });
+      }
 
-  return Array.from(map.values())
-    .filter((point) => Number.isFinite(point.value))
-    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-}
-
-function mergeHistoryPreferStation(stationHistory, modelHistory) {
-  const station = dedupeAndSortSeries(stationHistory);
-  const model = dedupeAndSortSeries(modelHistory);
-
-  if (!station.length) return model;
-  if (!model.length) return station;
-
-  const stationTimes = new Set(
-    station.map((point) => {
-      const timestamp = parseTimeToTimestamp(point.time);
-      return String(Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000);
-    })
-  );
-
-  const merged = [];
-
-  for (const point of model) {
-    const timestamp = parseTimeToTimestamp(point.time);
-    if (timestamp == null) continue;
-
-    const key = String(Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000);
-
-    if (!stationTimes.has(key)) {
-      merged.push(point);
+      return Array.from(map.values())
+        .filter((point) => Number.isFinite(point.value))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
     }
-  }
 
-  merged.push(...station);
+    function mergeHistoryPreferStation(stationHistory, modelHistory) {
+      const station = dedupeAndSortSeries(stationHistory);
+      const model = dedupeAndSortSeries(modelHistory);
 
-  return dedupeAndSortSeries(merged);
-}
+      if (!station.length) return model;
+      if (!model.length) return station;
 
-function getSeriesCoverageHours(series) {
-  const sorted = dedupeAndSortSeries(series);
+      const stationTimes = new Set(
+        station.map((point) => {
+          const timestamp = parseTimeToTimestamp(point.time);
+          return String(
+            Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000
+          );
+        })
+      );
 
-  if (sorted.length < 2) return 0;
+      const merged = [];
 
-  const first = parseTimeToTimestamp(sorted[0].time);
-  const last = parseTimeToTimestamp(sorted[sorted.length - 1].time);
+      for (const point of model) {
+        const timestamp = parseTimeToTimestamp(point.time);
+        if (timestamp == null) continue;
 
-  if (first == null || last == null || last <= first) return 0;
+        const key = String(
+          Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000
+        );
 
-  return Math.round((last - first) / (60 * 60 * 1000));
-}
+        if (!stationTimes.has(key)) {
+          merged.push(point);
+        }
+      }
+
+      merged.push(...station);
+
+      return dedupeAndSortSeries(merged);
+    }
+
+    function getLatestTimestamp(series) {
+      let latest = null;
+
+      for (const point of series || []) {
+        const timestamp = parseTimeToTimestamp(point.time);
+
+        if (timestamp == null) continue;
+
+        if (latest == null || timestamp > latest) {
+          latest = timestamp;
+        }
+      }
+
+      return latest;
+    }
+
+    function chooseFreshestSeriesResult(results) {
+      const valid = results
+        .filter((item) => item && item.station && Array.isArray(item.history))
+        .filter((item) => item.history.length)
+        .map((item) => ({
+          ...item,
+          latestTimestamp: getLatestTimestamp(item.history)
+        }))
+        .filter((item) => item.latestTimestamp != null);
+
+      if (!valid.length) {
+        return {
+          station: null,
+          history: [],
+          latestTimestamp: null
+        };
+      }
+
+      valid.sort((a, b) => {
+        const freshnessDiff = b.latestTimestamp - a.latestTimestamp;
+
+        if (Math.abs(freshnessDiff) > FRESHNESS_TIE_MS) {
+          return freshnessDiff;
+        }
+
+        return a.station.distanceKm - b.station.distanceKm;
+      });
+
+      return {
+        station: valid[0].station,
+        history: valid[0].history,
+        latestTimestamp: valid[0].latestTimestamp
+      };
+    }
+
+    function chooseFreshestObservationResult(results) {
+      const valid = results
+        .filter((item) => item && item.station && item.observation)
+        .map((item) => ({
+          ...item,
+          latestTimestamp: parseTimeToTimestamp(item.observation.time)
+        }))
+        .filter((item) => item.latestTimestamp != null);
+
+      if (!valid.length) {
+        return {
+          station: null,
+          observation: null,
+          latestTimestamp: null
+        };
+      }
+
+      valid.sort((a, b) => {
+        const freshnessDiff = b.latestTimestamp - a.latestTimestamp;
+
+        if (Math.abs(freshnessDiff) > FRESHNESS_TIE_MS) {
+          return freshnessDiff;
+        }
+
+        return a.station.distanceKm - b.station.distanceKm;
+      });
+
+      return {
+        station: valid[0].station,
+        observation: valid[0].observation,
+        latestTimestamp: valid[0].latestTimestamp
+      };
+    }
 
     function extractVivaSample(stationData, names) {
       const samples = Array.isArray(stationData?.Samples)
@@ -392,20 +493,14 @@ function getSeriesCoverageHours(series) {
       return null;
     }
 
-    async function getNearestWaveStation() {
+    async function getWaveStationCandidates() {
       const data = await safeJson("/api/ocean-wave-stations");
       const stations = Array.isArray(data?.stations) ? data.stations : [];
 
-      return (
-        stations
-          .map(normalizeStation)
-          .filter(Boolean)
-          .filter((station) => station.distanceKm <= radiusKm)
-          .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null
-      );
+      return getCandidateStations(stations);
     }
 
-    async function getNearestWaterLevelStation() {
+    async function getWaterLevelStationCandidates() {
       const data = await safeJson("/api/ocean-stations");
 
       const stations = Array.isArray(data?.station)
@@ -416,16 +511,10 @@ function getSeriesCoverageHours(series) {
             ? data.resource
             : [];
 
-      return (
-        stations
-          .map(normalizeStation)
-          .filter(Boolean)
-          .filter((station) => station.distanceKm <= radiusKm)
-          .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null
-      );
+      return getCandidateStations(stations);
     }
 
-    async function getNearestVivaStation() {
+    async function getVivaStationCandidates() {
       const data = await safeJson("/api/viva-stations");
 
       const stations = Array.isArray(data?.stations)
@@ -434,13 +523,7 @@ function getSeriesCoverageHours(series) {
           ? data
           : [];
 
-      return (
-        stations
-          .map(normalizeStation)
-          .filter(Boolean)
-          .filter((station) => station.distanceKm <= radiusKm)
-          .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null
-      );
+      return getCandidateStations(stations);
     }
 
     async function getWaveHistory(station) {
@@ -460,7 +543,7 @@ function getSeriesCoverageHours(series) {
 
           if (series.length) return series;
         } catch (error) {
-          console.warn("wave history failed", period, error);
+          console.warn("wave history failed", station.id, period, error);
         }
       }
 
@@ -484,7 +567,7 @@ function getSeriesCoverageHours(series) {
 
           if (series.length) return series;
         } catch (error) {
-          console.warn("water level history failed", period, error);
+          console.warn("water level history failed", station.id, period, error);
         }
       }
 
@@ -509,9 +592,60 @@ function getSeriesCoverageHours(series) {
           "Water temperature"
         ]);
       } catch (error) {
-        console.warn("water temp observation failed", error);
+        console.warn("water temp observation failed", station.id, error);
         return null;
       }
+    }
+
+    async function getFreshestWaveHistory() {
+      const candidates = await getWaveStationCandidates();
+
+      const results = await Promise.all(
+        candidates.map(async (station) => {
+          const history = await getWaveHistory(station);
+
+          return {
+            station,
+            history
+          };
+        })
+      );
+
+      return chooseFreshestSeriesResult(results);
+    }
+
+    async function getFreshestWaterLevelHistory() {
+      const candidates = await getWaterLevelStationCandidates();
+
+      const results = await Promise.all(
+        candidates.map(async (station) => {
+          const history = await getWaterLevelHistory(station);
+
+          return {
+            station,
+            history
+          };
+        })
+      );
+
+      return chooseFreshestSeriesResult(results);
+    }
+
+    async function getFreshestWaterTempObservation() {
+      const candidates = await getVivaStationCandidates();
+
+      const results = await Promise.all(
+        candidates.map(async (station) => {
+          const observation = await getWaterTempObservation(station);
+
+          return {
+            station,
+            observation
+          };
+        })
+      );
+
+      return chooseFreshestObservationResult(results);
     }
 
     async function getMarineSeries() {
@@ -567,46 +701,48 @@ function getSeriesCoverageHours(series) {
       }
     }
 
-    const [waveStation, waterLevelStation, vivaStation] = await Promise.all([
-      getNearestWaveStation(),
-      getNearestWaterLevelStation(),
-      getNearestVivaStation()
-    ]);
-
     const [
-      waveHistoryFromStation,
-      waterLevelHistory,
-      waterTempObservation,
+      waveResult,
+      waterLevelResult,
+      waterTempObservationResult,
       marineSeries
     ] = await Promise.all([
-      getWaveHistory(waveStation),
-      getWaterLevelHistory(waterLevelStation),
-      getWaterTempObservation(vivaStation),
+      getFreshestWaveHistory(),
+      getFreshestWaterLevelHistory(),
+      getFreshestWaterTempObservation(),
       getMarineSeries()
     ]);
 
     /*
       Vattentemperatur:
       - Historik/prognos kommer från Open-Meteo Marine, så grafen får en riktig tidsserie.
-      - VIVA-observation sparas separat som aktuell observation, men används inte som fejkad historik.
+      - Färskaste VIVA-observation inom valt område skickas separat som aktuell uppmätt vattentemperatur.
 
       Våghöjd:
-      - Om SMHI-stationshistorik finns används den för historik.
+      - Färskaste användbara SMHI-stationshistorik inom valt område används där den finns.
+      - Saknade äldre historiktimmar fylls med Open-Meteo Marine.
       - Prognos kommer från Open-Meteo Marine.
-      - Om stationshistorik saknas används Open-Meteo-historik som fallback.
 
       Vattenstånd:
-      - Historik kommer från SMHI-station.
+      - Färskaste användbara SMHI-stationshistorik inom valt område används.
       - Prognos lämnas tom tills referensnivå är säkert löst.
     */
+
+    const waveStation = waveResult.station;
+    const waterLevelStation = waterLevelResult.station;
+    const vivaStation = waterTempObservationResult.station;
+
+    const waveHistoryFromStation = waveResult.history || [];
+    const waterLevelHistory = waterLevelResult.history || [];
+    const waterTempObservation = waterTempObservationResult.observation;
 
     const waterTempHistory = marineSeries.waterTemp.history;
     const waterTempForecast = marineSeries.waterTemp.forecast;
 
-   const waveHistory = mergeHistoryPreferStation(
-  waveHistoryFromStation,
-  marineSeries.waveHeight.history
-);
+    const waveHistory = mergeHistoryPreferStation(
+      waveHistoryFromStation,
+      marineSeries.waveHeight.history
+    );
 
     const waveForecast = marineSeries.waveHeight.forecast;
 
@@ -623,28 +759,43 @@ function getSeriesCoverageHours(series) {
       radiusKm,
       updatedAt: new Date().toISOString(),
 
-      sources: {
- waveHeight: waveHistoryFromStation.length
-  ? {
-      ...waveStation,
-      note:
-        "Stationshistorik används där den finns. Saknade äldre timmar fylls med Open-Meteo Marine."
-    }
-  : {
-      name: "Open-Meteo Marine",
-      distanceKm: 0,
-      note:
-        "Stationshistorik saknades inom valt område. Visar modellhistorik och prognos för vald punkt."
-    },
+      stationSelection: {
+        strategy:
+          "Färskaste användbara station inom valt område prioriteras. Om flera stationer är ungefär lika färska väljs den närmaste.",
+        freshnessTieMinutes: Math.round(FRESHNESS_TIE_MS / (60 * 1000)),
+        maxCandidateStations: MAX_CANDIDATE_STATIONS
+      },
 
-        waterLevel: waterLevelStation,
+      sources: {
+        waveHeight: waveHistoryFromStation.length && waveStation
+          ? {
+              ...waveStation,
+              note:
+                "Färskaste användbara stationshistorik inom valt område används där den finns. Saknade äldre timmar fylls med Open-Meteo Marine."
+            }
+          : {
+              name: "Open-Meteo Marine",
+              distanceKm: 0,
+              note:
+                "Användbar stationshistorik saknades inom valt område. Visar modellhistorik och prognos för vald punkt."
+            },
+
+        waterLevel: waterLevelStation
+          ? {
+              ...waterLevelStation,
+              note:
+                "Färskaste användbara vattenståndsstation inom valt område."
+            }
+          : null,
+
         waterTemp: waterTempSource,
 
         observations: {
           waterTemp: vivaStation
             ? {
                 ...vivaStation,
-                note: "Närmaste VIVA-station för aktuell uppmätt vattentemperatur."
+                note:
+                  "Färskaste VIVA-station inom valt område för aktuell uppmätt vattentemperatur."
               }
             : null
         },
@@ -676,7 +827,7 @@ function getSeriesCoverageHours(series) {
           forecast: waterTempForecast,
           sourceType: "model",
           note:
-            "Historik och prognos kommer från Open-Meteo Marine. Aktuell VIVA-observation skickas separat när den finns."
+            "Historik och prognos kommer från Open-Meteo Marine. Färskaste VIVA-observation inom valt område skickas separat när den finns."
         },
 
         waveHeight: {
@@ -684,12 +835,12 @@ function getSeriesCoverageHours(series) {
           unit: "m",
           history: waveHistory,
           forecast: waveForecast,
-        sourceType: waveHistoryFromStation.length
-  ? "station-and-model-history-model-forecast"
-  : "model",
-note: waveHistoryFromStation.length
-  ? "Senaste historik kommer från närmaste station. Äldre saknade timmar fylls med Open-Meteo Marine. Prognos kommer från Open-Meteo Marine."
-  : "Historik och prognos kommer från Open-Meteo Marine."
+          sourceType: waveHistoryFromStation.length
+            ? "fresh-station-and-model-history-model-forecast"
+            : "model",
+          note: waveHistoryFromStation.length
+            ? "Färskaste stationshistorik inom valt område används där den finns. Äldre saknade timmar fylls med Open-Meteo Marine. Prognos kommer från Open-Meteo Marine."
+            : "Historik och prognos kommer från Open-Meteo Marine."
         },
 
         waterLevel: {
@@ -697,9 +848,12 @@ note: waveHistoryFromStation.length
           unit: "cm",
           history: waterLevelHistory,
           forecast: marineSeries.waterLevel.forecast,
-          sourceType: "station-history",
-          note:
-            "Vattenståndsprognos är avvaktad tills en källa med säker referensnivå kopplas."
+          sourceType: waterLevelHistory.length
+            ? "fresh-station-history"
+            : "none",
+          note: waterLevelHistory.length
+            ? "Färskaste användbara vattenståndsstation inom valt område används. Vattenståndsprognos är avvaktad tills en källa med säker referensnivå kopplas."
+            : "Ingen användbar vattenståndshistorik hittades inom valt område."
         }
       },
 
