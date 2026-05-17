@@ -282,6 +282,72 @@ export async function onRequestGet(context) {
         forecast
       };
     }
+    function dedupeAndSortSeries(series) {
+  const map = new Map();
+
+  for (const point of series || []) {
+    if (!point || point.value == null || !point.time) continue;
+
+    const timestamp = parseTimeToTimestamp(point.time);
+    if (timestamp == null) continue;
+
+    const hourTimestamp = Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000;
+
+    map.set(hourTimestamp, {
+      time: new Date(hourTimestamp).toISOString(),
+      value: Number(point.value)
+    });
+  }
+
+  return Array.from(map.values())
+    .filter((point) => Number.isFinite(point.value))
+    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+}
+
+function mergeHistoryPreferStation(stationHistory, modelHistory) {
+  const station = dedupeAndSortSeries(stationHistory);
+  const model = dedupeAndSortSeries(modelHistory);
+
+  if (!station.length) return model;
+  if (!model.length) return station;
+
+  const stationTimes = new Set(
+    station.map((point) => {
+      const timestamp = parseTimeToTimestamp(point.time);
+      return String(Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000);
+    })
+  );
+
+  const merged = [];
+
+  for (const point of model) {
+    const timestamp = parseTimeToTimestamp(point.time);
+    if (timestamp == null) continue;
+
+    const key = String(Math.round(timestamp / (60 * 60 * 1000)) * 60 * 60 * 1000);
+
+    if (!stationTimes.has(key)) {
+      merged.push(point);
+    }
+  }
+
+  merged.push(...station);
+
+  return dedupeAndSortSeries(merged);
+}
+
+function getSeriesCoverageHours(series) {
+  const sorted = dedupeAndSortSeries(series);
+
+  if (sorted.length < 2) return 0;
+
+  const first = parseTimeToTimestamp(sorted[0].time);
+  const last = parseTimeToTimestamp(sorted[sorted.length - 1].time);
+
+  if (first == null || last == null || last <= first) return 0;
+
+  return Math.round((last - first) / (60 * 60 * 1000));
+}
 
     function extractVivaSample(stationData, names) {
       const samples = Array.isArray(stationData?.Samples)
@@ -537,9 +603,10 @@ export async function onRequestGet(context) {
     const waterTempHistory = marineSeries.waterTemp.history;
     const waterTempForecast = marineSeries.waterTemp.forecast;
 
-    const waveHistory = waveHistoryFromStation.length
-      ? waveHistoryFromStation
-      : marineSeries.waveHeight.history;
+   const waveHistory = mergeHistoryPreferStation(
+  waveHistoryFromStation,
+  marineSeries.waveHeight.history
+);
 
     const waveForecast = marineSeries.waveHeight.forecast;
 
@@ -557,14 +624,18 @@ export async function onRequestGet(context) {
       updatedAt: new Date().toISOString(),
 
       sources: {
-        waveHeight: waveHistoryFromStation.length
-          ? waveStation
-          : {
-              name: "Open-Meteo Marine",
-              distanceKm: 0,
-              note:
-                "Stationshistorik saknades inom valt område. Visar modellhistorik och prognos för vald punkt."
-            },
+ waveHeight: waveHistoryFromStation.length
+  ? {
+      ...waveStation,
+      note:
+        "Stationshistorik används där den finns. Saknade äldre timmar fylls med Open-Meteo Marine."
+    }
+  : {
+      name: "Open-Meteo Marine",
+      distanceKm: 0,
+      note:
+        "Stationshistorik saknades inom valt område. Visar modellhistorik och prognos för vald punkt."
+    },
 
         waterLevel: waterLevelStation,
         waterTemp: waterTempSource,
@@ -613,12 +684,12 @@ export async function onRequestGet(context) {
           unit: "m",
           history: waveHistory,
           forecast: waveForecast,
-          sourceType: waveHistoryFromStation.length
-            ? "station-history-and-model-forecast"
-            : "model",
-          note: waveHistoryFromStation.length
-            ? "Historik kommer från närmaste station. Prognos kommer från Open-Meteo Marine."
-            : "Historik och prognos kommer från Open-Meteo Marine."
+        sourceType: waveHistoryFromStation.length
+  ? "station-and-model-history-model-forecast"
+  : "model",
+note: waveHistoryFromStation.length
+  ? "Senaste historik kommer från närmaste station. Äldre saknade timmar fylls med Open-Meteo Marine. Prognos kommer från Open-Meteo Marine."
+  : "Historik och prognos kommer från Open-Meteo Marine."
         },
 
         waterLevel: {
