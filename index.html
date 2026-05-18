@@ -344,6 +344,73 @@
 .nautical-compass-hud.is-missing-heading .nautical-phone-arrow{
   opacity:0.28;
 }
+  .custom-user-location-marker{
+  width:38px;
+  height:38px;
+  position:relative;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+
+.custom-user-location-marker::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  transform:translate(-50%,-50%);
+  background:rgba(123,199,255,0.16);
+  border:1px solid rgba(123,199,255,0.28);
+  box-shadow:0 0 22px rgba(123,199,255,0.26);
+}
+
+.custom-user-location-dot{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:17px;
+  height:17px;
+  border-radius:999px;
+  transform:translate(-50%,-50%);
+  background:#48a8ff;
+  border:3px solid rgba(255,255,255,0.96);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.42),
+    0 0 0 2px rgba(5,11,22,0.55);
+}
+
+.custom-user-location-arrow{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:0;
+  height:0;
+  border-left:6px solid transparent;
+  border-right:6px solid transparent;
+  border-bottom:18px solid rgba(152,240,219,0.98);
+  transform:translate(-50%,-27px) rotate(0deg);
+  transform-origin:50% 27px;
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,0.55));
+  opacity:0;
+  transition:opacity 160ms ease, transform 180ms ease;
+}
+
+.custom-user-location-marker.has-heading .custom-user-location-arrow{
+  opacity:1;
+}
+
+.custom-user-location-marker.is-nautical .custom-user-location-dot{
+  background:#5fb6ff;
+  border-color:rgba(255,255,255,0.98);
+}
+
+.custom-user-location-marker.is-nautical::before{
+  background:rgba(152,240,219,0.13);
+  border-color:rgba(152,240,219,0.34);
+  box-shadow:0 0 26px rgba(152,240,219,0.28);
+}  
 
 @media (max-width:700px){
 .nautical-compass-hud{
@@ -985,6 +1052,14 @@ var nauticalDeviceHeading = null;
 var nauticalGpsHeading = null;
 var nauticalLastSpeed = null;
 var nauticalOrientationStarted = false;
+      var customUserLocationMarker = null;
+var customUserLocationEl = null;
+var customUserLocationArrowEl = null;
+var customUserLocation = null;
+var customUserAccuracySourceId = "custom-user-accuracy-source";
+var customUserAccuracyLayerId = "custom-user-accuracy-layer";
+var customUserCourseSourceId = "custom-user-course-source";
+var customUserCourseLayerId = "custom-user-course-layer";
 var forecastStartTime = null;
 var forecastEndTime = null;
 
@@ -3190,6 +3265,307 @@ function syncNauticalHud(){
     stopNauticalHud();
   }
 }
+     function makeCirclePolygon(lon, lat, radiusMeters){
+  var points = [];
+  var earthRadius = 6371000;
+  var latRad = lat * Math.PI / 180;
+  var lonRad = lon * Math.PI / 180;
+  var distance = Math.max(5, Number(radiusMeters || 0)) / earthRadius;
+
+  for(var i = 0; i <= 72; i++){
+    var bearing = i * 2 * Math.PI / 72;
+
+    var pointLat = Math.asin(
+      Math.sin(latRad) * Math.cos(distance) +
+      Math.cos(latRad) * Math.sin(distance) * Math.cos(bearing)
+    );
+
+    var pointLon = lonRad + Math.atan2(
+      Math.sin(bearing) * Math.sin(distance) * Math.cos(latRad),
+      Math.cos(distance) - Math.sin(latRad) * Math.sin(pointLat)
+    );
+
+    points.push([
+      pointLon * 180 / Math.PI,
+      pointLat * 180 / Math.PI
+    ]);
+  }
+
+  return {
+    type:"Feature",
+    geometry:{
+      type:"Polygon",
+      coordinates:[points]
+    },
+    properties:{}
+  };
+}
+
+function destinationPoint(lon, lat, bearingDeg, distanceMeters){
+  var earthRadius = 6371000;
+  var bearing = Number(bearingDeg) * Math.PI / 180;
+  var distance = Math.max(0, Number(distanceMeters || 0)) / earthRadius;
+  var lat1 = lat * Math.PI / 180;
+  var lon1 = lon * Math.PI / 180;
+
+  var lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(distance) +
+    Math.cos(lat1) * Math.sin(distance) * Math.cos(bearing)
+  );
+
+  var lon2 = lon1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(distance) * Math.cos(lat1),
+    Math.cos(distance) - Math.sin(lat1) * Math.sin(lat2)
+  );
+
+  return [
+    lon2 * 180 / Math.PI,
+    lat2 * 180 / Math.PI
+  ];
+}
+
+function ensureCustomUserLocationLayers(){
+  if(!maptilerMap || !maptilerMap.getSource) return;
+
+  try{
+    if(!maptilerMap.getSource(customUserAccuracySourceId)){
+      maptilerMap.addSource(customUserAccuracySourceId, {
+        type:"geojson",
+        data:{
+          type:"FeatureCollection",
+          features:[]
+        }
+      });
+    }
+
+    if(!maptilerMap.getLayer(customUserAccuracyLayerId)){
+      maptilerMap.addLayer({
+        id:customUserAccuracyLayerId,
+        type:"fill",
+        source:customUserAccuracySourceId,
+        paint:{
+          "fill-color":"rgba(123,199,255,0.18)",
+          "fill-outline-color":"rgba(123,199,255,0.34)"
+        }
+      });
+    }
+
+    if(!maptilerMap.getSource(customUserCourseSourceId)){
+      maptilerMap.addSource(customUserCourseSourceId, {
+        type:"geojson",
+        data:{
+          type:"FeatureCollection",
+          features:[]
+        }
+      });
+    }
+
+    if(!maptilerMap.getLayer(customUserCourseLayerId)){
+      maptilerMap.addLayer({
+        id:customUserCourseLayerId,
+        type:"line",
+        source:customUserCourseSourceId,
+        layout:{
+          "line-cap":"round",
+          "line-join":"round"
+        },
+        paint:{
+          "line-color":"rgba(152,240,219,0.92)",
+          "line-width":3,
+          "line-opacity":0.88,
+          "line-blur":0.4
+        }
+      });
+    }
+  }catch(e){
+    console.warn("Kunde inte skapa egen Min plats-visning", e);
+  }
+}
+
+function createCustomUserLocationMarker(){
+  if(customUserLocationMarker || !maptilerMap || !window.maptilersdk) return;
+
+  customUserLocationEl = document.createElement("div");
+  customUserLocationEl.className = "custom-user-location-marker";
+
+  customUserLocationArrowEl = document.createElement("div");
+  customUserLocationArrowEl.className = "custom-user-location-arrow";
+
+  var dot = document.createElement("div");
+  dot.className = "custom-user-location-dot";
+
+  customUserLocationEl.appendChild(customUserLocationArrowEl);
+  customUserLocationEl.appendChild(dot);
+
+  customUserLocationMarker = new maptilersdk.Marker({
+    element: customUserLocationEl,
+    anchor: "center"
+  });
+}
+
+function getCourseLineLengthMeters(speedMs){
+  var speed = Number(speedMs || 0);
+  var knots = speed * 1.943844;
+
+  if(!isFinite(knots) || knots < 0.7) return 0;
+
+  var length = 90 + knots * 34;
+
+  return Math.max(90, Math.min(420, length));
+}
+
+function clearCustomUserLocationCourse(){
+  if(!maptilerMap || !maptilerMap.getSource) return;
+
+  var courseSource = maptilerMap.getSource(customUserCourseSourceId);
+
+  if(courseSource){
+    courseSource.setData({
+      type:"FeatureCollection",
+      features:[]
+    });
+  }
+}
+
+function updateCustomUserLocationLayers(){
+  if(!customUserLocation || !maptilerMap || !maptilerMap.getSource) return;
+
+  ensureCustomUserLocationLayers();
+
+  var lon = customUserLocation.lon;
+  var lat = customUserLocation.lat;
+  var accuracy = customUserLocation.accuracy;
+  var heading = getBestNauticalHeading();
+  var speed = customUserLocation.speed;
+
+  var accuracySource = maptilerMap.getSource(customUserAccuracySourceId);
+  var courseSource = maptilerMap.getSource(customUserCourseSourceId);
+
+  if(accuracySource){
+    accuracySource.setData({
+      type:"FeatureCollection",
+      features:[
+        makeCirclePolygon(lon, lat, Math.min(Math.max(Number(accuracy || 20), 10), 800))
+      ]
+    });
+  }
+
+  if(courseSource){
+    if(baseMapMode === "nautical" && heading != null){
+      var lengthMeters = getCourseLineLengthMeters(speed);
+
+      if(lengthMeters > 0){
+        var end = destinationPoint(lon, lat, heading, lengthMeters);
+
+        courseSource.setData({
+          type:"FeatureCollection",
+          features:[{
+            type:"Feature",
+            geometry:{
+              type:"LineString",
+              coordinates:[
+                [lon, lat],
+                end
+              ]
+            },
+            properties:{}
+          }]
+        });
+      }else{
+        clearCustomUserLocationCourse();
+      }
+    }else{
+      clearCustomUserLocationCourse();
+    }
+  }
+
+  try{
+    if(maptilerMap.getLayer(customUserAccuracyLayerId)){
+      maptilerMap.setLayoutProperty(
+        customUserAccuracyLayerId,
+        "visibility",
+        customUserLocation ? "visible" : "none"
+      );
+    }
+
+    if(maptilerMap.getLayer(customUserCourseLayerId)){
+      maptilerMap.setLayoutProperty(
+        customUserCourseLayerId,
+        "visibility",
+        baseMapMode === "nautical" ? "visible" : "none"
+      );
+    }
+  }catch(e){}
+}
+
+function updateCustomUserLocationMarker(){
+  if(!customUserLocation || !maptilerMap) return;
+
+  createCustomUserLocationMarker();
+
+  if(!customUserLocationMarker) return;
+
+  customUserLocationMarker.setLngLat([
+    customUserLocation.lon,
+    customUserLocation.lat
+  ]);
+
+  if(!customUserLocationMarker._map){
+    customUserLocationMarker.addTo(maptilerMap);
+  }
+
+  var heading = getBestNauticalHeading();
+  var mapBearing = getMapBearing();
+
+  if(customUserLocationEl){
+    customUserLocationEl.classList.toggle("has-heading", heading != null);
+    customUserLocationEl.classList.toggle("is-nautical", baseMapMode === "nautical");
+  }
+
+  if(customUserLocationArrowEl && heading != null){
+    customUserLocationArrowEl.style.transform =
+      "translate(-50%,-27px) rotate(" + (heading - mapBearing).toFixed(1) + "deg)";
+  }
+}
+
+function updateCustomUserLocationFromCoords(coords){
+  if(!coords) return;
+
+  var lat = Number(coords.latitude);
+  var lon = Number(coords.longitude);
+
+  if(!isFinite(lat) || !isFinite(lon)) return;
+
+  customUserLocation = {
+    lat: lat,
+    lon: lon,
+    accuracy: Number(coords.accuracy || 30),
+    speed: coords.speed,
+    heading: coords.heading,
+    updatedAt: Date.now()
+  };
+
+  nauticalLastSpeed = coords.speed;
+
+  if(
+    coords.heading != null &&
+    isFinite(Number(coords.heading)) &&
+    Number(coords.speed || 0) > 0.4
+  ){
+    nauticalGpsHeading = normalizeBearing(coords.heading);
+  }
+
+  updateCustomUserLocationMarker();
+  updateCustomUserLocationLayers();
+  updateNauticalCompassHud();
+}
+
+function syncCustomUserLocationVisuals(){
+  if(!customUserLocation) return;
+
+  updateCustomUserLocationMarker();
+  updateCustomUserLocationLayers();
+}
       function syncBaseMapButtons(){
   var desktopBtn = document.getElementById("toggleBaseMapBtn");
   var mobileBtn = document.getElementById("mobileToggleBaseMapBtn");
@@ -3206,6 +3582,7 @@ function syncNauticalHud(){
   }
 
   syncNauticalHud();
+     syncCustomUserLocationVisuals();   
 }
 
       function isOpenMeteoWeatherLayerAvailable(){return !!(window.OMWeatherMapLayer && window.OMWeatherMapLayer.omProtocol);}
@@ -3268,23 +3645,54 @@ function syncNauticalHud(){
       if(window.maptilersdk){
         maptilersdk.config.apiKey=MAPTILER_API_KEY;
         maptilerMap=new maptilersdk.Map({container:'maptilerMap',style:maptilersdk.MapStyle.STREETS.DARK,center:[13.0,58.6],zoom:5,geolocateControl:false});
-        maptilerMap.on("rotate", function(){
+maptilerMap.on("rotate", function(){
   updateNauticalCompassHud();
+  syncCustomUserLocationVisuals();
 });
 
 maptilerMap.on("move", function(){
   if(baseMapMode === "nautical"){
     updateNauticalCompassHud();
   }
+
+  syncCustomUserLocationVisuals();
 });
-        var weatherGeolocateControl=new maptilersdk.GeolocateControl({positionOptions:{enableHighAccuracy:true,maximumAge:0,timeout:10000},fitBoundsOptions:{maxZoom:12},trackUserLocation:true,showUserLocation:true,showAccuracyCircle:true,showUserHeading:true});
+        var weatherGeolocateControl=new maptilersdk.GeolocateControl({
+  positionOptions:{
+    enableHighAccuracy:true,
+    maximumAge:0,
+    timeout:10000
+  },
+  fitBoundsOptions:{
+    maxZoom:12
+  },
+  trackUserLocation:true,
+  showUserLocation:false,
+  showAccuracyCircle:false,
+  showUserHeading:false
+});
         maptilerMap.addControl(weatherGeolocateControl,'top-right');
         var lastGeolocateWeatherAt=0, GEOLOCATE_CLICK_WINDOW_MS=2500, weatherSelectionMode="manual", lastUserWeatherLat=null,lastUserWeatherLon=null,lastUserWeatherAt=0, USER_WEATHER_MIN_MOVE_KM=0.5, USER_WEATHER_MIN_INTERVAL_MS=60*1000;
         setTimeout(function(){var geolocateButton=document.querySelector(".maplibregl-ctrl-geolocate, .mapboxgl-ctrl-geolocate");if(geolocateButton){var markLocateButtonPressed=function(){lastGeolocateWeatherAt=Date.now();};geolocateButton.addEventListener("pointerdown",markLocateButtonPressed,true);geolocateButton.addEventListener("touchstart",markLocateButtonPressed,true);geolocateButton.addEventListener("click",markLocateButtonPressed,true);}},0);
         function shouldRefreshWeatherForUserLocation(lat,lon){var now=Date.now();if(lastUserWeatherLat==null||lastUserWeatherLon==null){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=now;return true;}var movedKm=distanceKmBetween(lastUserWeatherLat,lastUserWeatherLon,lat,lon), movedEnough=movedKm>=USER_WEATHER_MIN_MOVE_KM, waitedEnough=now-lastUserWeatherAt>=USER_WEATHER_MIN_INTERVAL_MS;if(movedEnough||waitedEnough){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=now;return true;}return false;}
         async function updateWeatherFromUserLocation(lat,lon){weatherSelectionMode="user";clearWeatherSelectionMarker();saveSelection('weather',{lat:lat,lon:lon});selectedPlaceName="";updateMapOverlay("Hämtar plats...","Söker närmaste plats...");try{selectedPlaceName=await reverseGeocodePlace(lat,lon);}catch(e){selectedPlaceName="";}loadWeatherForPoint(lat,lon);}
         function handleUserLocationUpdate(lat,lon,options){options=options||{};if(options.suppressWeather) return;if(options.fromLocateButton){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=Date.now();updateWeatherFromUserLocation(lat,lon);return;}if(weatherSelectionMode!=="user") return;if(shouldRefreshWeatherForUserLocation(lat,lon)) updateWeatherFromUserLocation(lat,lon);}
-        weatherGeolocateControl.on('geolocate',function(e){if(!e||!e.coords) return;var lat=Number(e.coords.latitude), lon=Number(e.coords.longitude);if(!isFinite(lat)||!isFinite(lon)) return;var clickedLocateRecently=Date.now()-lastGeolocateWeatherAt<GEOLOCATE_CLICK_WINDOW_MS;handleUserLocationUpdate(lat,lon,{fromLocateButton:clickedLocateRecently});});
+        weatherGeolocateControl.on('geolocate',function(e){
+  if(!e || !e.coords) return;
+
+  updateCustomUserLocationFromCoords(e.coords);
+
+  var lat = Number(e.coords.latitude);
+  var lon = Number(e.coords.longitude);
+
+  if(!isFinite(lat) || !isFinite(lon)) return;
+
+  var clickedLocateRecently = Date.now() - lastGeolocateWeatherAt < GEOLOCATE_CLICK_WINDOW_MS;
+
+  handleUserLocationUpdate(lat, lon, {
+    fromLocateButton: clickedLocateRecently
+  });
+});
         weatherGeolocateControl.on('error',function(e){console.warn("Min plats kunde inte aktiveras", e);});
 
         maptilerMap.on('load',function(){
@@ -3296,7 +3704,7 @@ maptilerMap.on("move", function(){
             maptilerTemperatureLayer=new maptilerweather.TemperatureLayer({id:'main-temperature-layer',colorramp:maptilerweather.ColorRamp.builtin.TEMPERATURE_2,opacity:0.45});
             maptilerTimelineLayer=new maptilerweather.PrecipitationLayer({id:'timeline-controller-layer',opacity:0,smooth:true});
             maptilerMap.addLayer(maptilerTimelineLayer);
-            ensureNauticalChartLayers(); setBaseMapMode(baseMapMode); ensureSeaAreaLayers(); renderSeaAreaPanel();
+           ensureNauticalChartLayers(); setBaseMapMode(baseMapMode); ensureSeaAreaLayers(); ensureCustomUserLocationLayers(); renderSeaAreaPanel();
             if(windLayerVisible) maptilerMap.addLayer(maptilerWindLayer);
             if(precipitationLayerVisible) maptilerMap.addLayer(maptilerPrecipitationLayer);
             if(satelliteLayerVisible) syncOpenMeteoCloudLayerForSelectedTime(selectedForecastTime || Date.now(),{immediate:true,preload:true});
