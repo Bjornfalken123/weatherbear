@@ -2998,7 +2998,32 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         if(!maptilerMap) return false;
         try{if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))) maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"© OpenStreetMap contributors © CARTO"});if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId))) maptilerMap.addLayer({id:nauticalBaseLayerId,type:"raster",source:nauticalBaseSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalSeamarkSourceId))) maptilerMap.addSource(nauticalSeamarkSourceId,{type:"raster",tiles:[NAUTICAL_SEAMARK_TILE_URL],tileSize:256,attribution:"© OpenSeaMap contributors"});if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId))) maptilerMap.addLayer({id:nauticalSeamarkLayerId,type:"raster",source:nauticalSeamarkSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);scheduleNauticalLayerOrderRefresh();return true;}catch(e){console.warn("Sjökortslagret kunde inte läggas till", e);return false;}
       }
-      function setBaseMapMode(mode){baseMapMode=mode==="nautical"?"nautical":"standard";if(maptilerMap){ensureNauticalChartLayers();var visibility=baseMapMode==="nautical"?"visible":"none";try{if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId)) maptilerMap.setLayoutProperty(nauticalBaseLayerId,"visibility",visibility);if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId)) maptilerMap.setLayoutProperty(nauticalSeamarkLayerId,"visibility",visibility);scheduleNauticalLayerOrderRefresh();}catch(e){console.warn("Kunde inte byta kartläge", e);}}syncBaseMapButtons();}
+      function setBaseMapMode(mode){
+  baseMapMode = mode === "nautical" ? "nautical" : "standard";
+
+  if(maptilerMap){
+    ensureNauticalChartLayers();
+
+    var visibility = baseMapMode === "nautical" ? "visible" : "none";
+
+    try{
+      if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalBaseLayerId)){
+        maptilerMap.setLayoutProperty(nauticalBaseLayerId, "visibility", visibility);
+      }
+
+      if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalSeamarkLayerId)){
+        maptilerMap.setLayoutProperty(nauticalSeamarkLayerId, "visibility", visibility);
+      }
+
+      scheduleNauticalLayerOrderRefresh();
+    }catch(e){
+      console.warn("Kunde inte byta kartläge", e);
+    }
+  }
+
+  syncBaseMapButtons();
+  syncCustomUserLocationVisuals();
+}
       function toggleBaseMapMode(){setBaseMapMode(baseMapMode==="standard"?"nautical":"standard");}
       function normalizeBearing(value){
   var n = Number(value);
@@ -3176,6 +3201,7 @@ function handleDeviceOrientation(event){
   }
 
   updateNauticalCompassHud();
+  syncCustomUserLocationVisuals();
 }
 
 async function startNauticalOrientation(){
@@ -3407,11 +3433,11 @@ function getCourseLineLengthMeters(speedMs){
   var speed = Number(speedMs || 0);
   var knots = speed * 1.943844;
 
-  if(!isFinite(knots) || knots < 0.7) return 0;
+  if(!isFinite(knots)) knots = 0;
 
-  var length = 90 + knots * 34;
+  var length = 180 + knots * 34;
 
-  return Math.max(90, Math.min(420, length));
+  return Math.max(180, Math.min(520, length));
 }
 
 function clearCustomUserLocationCourse(){
@@ -3560,6 +3586,8 @@ function updateCustomUserLocationFromCoords(coords){
   ){
     nauticalGpsHeading = normalizeBearing(coords.heading);
   }
+
+  startNauticalOrientation();
 
   updateCustomUserLocationMarker();
   updateCustomUserLocationLayers();
