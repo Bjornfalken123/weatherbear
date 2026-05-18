@@ -1055,13 +1055,33 @@ var nauticalOrientationStarted = false;
 var customUserLocationMarker = null;
 var customUserLocationEl = null;
 var customUserLocationArrowEl = null;
-var customUserLocation = null;
+
 var customUserAccuracySourceId = "custom-user-accuracy-source";
 var customUserAccuracyLayerId = "custom-user-accuracy-layer";
 var customUserCourseSourceId = "custom-user-course-source";
 var customUserCourseLayerId = "custom-user-course-layer";
-var lastGpsCoursePoint = null;
-var lastComputedGpsHeading = null;
+
+var userTrackingMode = "off";
+// "off" = följ inte
+// "follow" = följ position, nord upp
+// "follow-course" = följ position och rotera efter GPS-kurs
+
+var userPositionState = {
+  lat: null,
+  lon: null,
+  accuracy: null,
+  speed: null,
+  rawHeading: null,
+  updatedAt: 0,
+  previous: null
+};
+
+var navigationCourse = {
+  heading: null,
+  source: null,
+  updatedAt: 0,
+  confidence: 0
+};
 var forecastStartTime = null;
 var forecastEndTime = null;
 
@@ -3033,6 +3053,16 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
 
   syncBaseMapButtons();
   syncCustomUserLocationVisuals();
+        if(baseMapMode === "nautical"){
+  userTrackingMode = "follow";
+  startNauticalGps();
+
+  if(hasUserPosition()){
+    updateNavigationCamera({ immediate:true });
+  }
+}else{
+  userTrackingMode = "off";
+}
 }
       function toggleBaseMapMode(){setBaseMapMode(baseMapMode==="standard"?"nautical":"standard");}
       function normalizeBearing(value){
@@ -3046,6 +3076,76 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
 
   return n;
 }
+function hasUserPosition(){
+  return (
+    userPositionState &&
+    isFinite(Number(userPositionState.lat)) &&
+    isFinite(Number(userPositionState.lon))
+  );
+}
+
+function getCurrentUserLocation(){
+  if(!hasUserPosition()) return null;
+
+  return {
+    lat: userPositionState.lat,
+    lon: userPositionState.lon,
+    accuracy: userPositionState.accuracy,
+    speed: userPositionState.speed,
+    heading: navigationCourse.heading,
+    updatedAt: userPositionState.updatedAt
+  };
+}
+
+function distanceMetersBetween(lon1, lat1, lon2, lat2){
+  var R = 6371000;
+  var toRad = Math.PI / 180;
+
+  var p1 = lat1 * toRad;
+  var p2 = lat2 * toRad;
+  var dp = (lat2 - lat1) * toRad;
+  var dl = (lon2 - lon1) * toRad;
+
+  var a =
+    Math.sin(dp / 2) * Math.sin(dp / 2) +
+    Math.cos(p1) * Math.cos(p2) *
+    Math.sin(dl / 2) * Math.sin(dl / 2);
+
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+function bearingBetweenPoints(lon1, lat1, lon2, lat2){
+  var toRad = Math.PI / 180;
+  var toDeg = 180 / Math.PI;
+
+  var p1 = lat1 * toRad;
+  var p2 = lat2 * toRad;
+  var dl = (lon2 - lon1) * toRad;
+
+  var y = Math.sin(dl) * Math.cos(p2);
+  var x =
+    Math.cos(p1) * Math.sin(p2) -
+    Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+
+  return normalizeBearing(Math.atan2(y, x) * toDeg);
+}
+
+function isNavigationCourseFresh(){
+  return (
+    navigationCourse &&
+    navigationCourse.heading != null &&
+    isFinite(Number(navigationCourse.heading)) &&
+    Date.now() - navigationCourse.updatedAt < 12000
+  );
+}
+
+function getNavigationCourseHeading(){
+  if(!isNavigationCourseFresh()) return null;
+
+  return normalizeBearing(navigationCourse.heading);
+}      
 
 function getMapBearing(){
   if(!maptilerMap || typeof maptilerMap.getBearing !== "function") return 0;
@@ -3118,27 +3218,16 @@ function formatKnotsFromMetersPerSecond(speed){
   return knots.toFixed(1).replace(".", ",") + " kn";
 }
 
-function getBestNauticalHeading(){
-  if(baseMapMode === "nautical"){
-    return getGpsCourseHeading();
-  }
-
-  return getGpsCourseHeading() || getDeviceCompassHeading();
-}
 function getGpsCourseHeading(){
-  if(nauticalGpsHeading != null && isFinite(Number(nauticalGpsHeading))){
-    return normalizeBearing(nauticalGpsHeading);
-  }
-
-  return null;
+  return getNavigationCourseHeading();
 }
 
 function getDeviceCompassHeading(){
-  if(nauticalDeviceHeading != null && isFinite(Number(nauticalDeviceHeading))){
-    return normalizeBearing(nauticalDeviceHeading);
-  }
-
   return null;
+}
+
+function getBestNauticalHeading(){
+  return getNavigationCourseHeading();
 }
 function updateNauticalCompassHud(){
   var hud = document.getElementById("nauticalCompassHud");
@@ -3178,20 +3267,11 @@ if(modeEl){
 function handleNauticalPosition(position){
   if(!position || !position.coords) return;
 
-  updateCustomUserLocationFromCoords(position.coords, {
-    suppressWeather:true,
-    followMap: baseMapMode === "nautical"
+  handleUserPosition(position.coords, {
+    allowWeatherRefresh: false,
+    allowCameraFollow: baseMapMode === "nautical",
+    immediateCamera: false
   });
-
-  if(nauticalCompassMode === "follow" && baseMapMode === "nautical"){
-    var heading = getGpsCourseHeading();
-
-    if(heading != null){
-      setMapBearing(heading);
-    }
-  }
-
-  updateNauticalCompassHud();
 }
 function startNauticalGps(){
   if(nauticalGeoWatchId != null) return;
@@ -3224,26 +3304,8 @@ function stopNauticalGps(){
 }
 
 function handleDeviceOrientation(event){
-  var heading = null;
-
-  if(event && typeof event.webkitCompassHeading === "number"){
-    heading = event.webkitCompassHeading;
-  }else if(event && event.absolute === true && typeof event.alpha === "number"){
-    heading = 360 - event.alpha;
-  }else if(event && typeof event.alpha === "number"){
-    heading = 360 - event.alpha;
-  }
-
-  heading = normalizeBearing(heading);
-
-  if(heading == null) return;
-
-nauticalDeviceHeading = heading;
-
-updateNauticalCompassHud();
-syncCustomUserLocationVisuals();
+  return;
 }
-
 async function startNauticalOrientation(){
   if(nauticalOrientationStarted) return;
 
@@ -3270,43 +3332,45 @@ async function startNauticalOrientation(){
 }
 
 function startNauticalHud(){
+  userTrackingMode = "follow";
   startNauticalGps();
   updateNauticalCompassHud();
 
-  if(customUserLocation && baseMapMode === "nautical"){
-    followCustomUserLocation();
+  if(hasUserPosition()){
+    updateNavigationCamera({ immediate:true });
   }
 }
 function stopNauticalHud(){
   stopNauticalGps();
+  userTrackingMode = "off";
   nauticalCompassMode = "north";
   setMapBearing(0);
   updateNauticalCompassHud();
 }
-
 function toggleNauticalCompassMode(){
   if(baseMapMode !== "nautical") return;
 
-  if(nauticalCompassMode === "follow"){
+  if(userTrackingMode === "follow-course"){
+    userTrackingMode = "follow";
     nauticalCompassMode = "north";
     setMapBearing(0);
     updateNauticalCompassHud();
+
+    if(hasUserPosition()){
+      updateNavigationCamera({ immediate:true });
+    }
+
     return;
   }
 
+  userTrackingMode = "follow-course";
   nauticalCompassMode = "follow";
 
-  var heading = getGpsCourseHeading();
-
-  if(heading != null){
-    setMapBearing(heading);
-  }
-
-  if(customUserLocation){
-    followCustomUserLocation();
-  }
-
   updateNauticalCompassHud();
+
+  if(hasUserPosition()){
+    updateNavigationCamera({ immediate:true });
+  }
 }
 function bindNauticalCompassHud(){
   var hud = document.getElementById("nauticalCompassHud");
@@ -3497,17 +3561,31 @@ function clearCustomUserLocationCourse(){
     });
   }
 }
+function bringCustomUserLocationLayersToFront(){
+  if(!maptilerMap || !maptilerMap.getLayer) return;
 
+  try{
+    if(maptilerMap.getLayer(customUserAccuracyLayerId)){
+      maptilerMap.moveLayer(customUserAccuracyLayerId);
+    }
+
+    if(maptilerMap.getLayer(customUserCourseLayerId)){
+      maptilerMap.moveLayer(customUserCourseLayerId);
+    }
+  }catch(e){}
+}
 function updateCustomUserLocationLayers(){
-  if(!customUserLocation || !maptilerMap || !maptilerMap.getSource) return;
+  var loc = getCurrentUserLocation();
+
+  if(!loc || !maptilerMap || !maptilerMap.getSource) return;
 
   ensureCustomUserLocationLayers();
 
-  var lon = customUserLocation.lon;
-  var lat = customUserLocation.lat;
-  var accuracy = customUserLocation.accuracy;
-  var heading = getGpsCourseHeading();
-  var speed = customUserLocation.speed;
+  var lon = loc.lon;
+  var lat = loc.lat;
+  var accuracy = loc.accuracy;
+  var heading = getNavigationCourseHeading();
+  var speed = loc.speed;
 
   var accuracySource = maptilerMap.getSource(customUserAccuracySourceId);
   var courseSource = maptilerMap.getSource(customUserCourseSourceId);
@@ -3521,16 +3599,20 @@ function updateCustomUserLocationLayers(){
     });
   }
 
- if(courseSource){
-  if(baseMapMode === "nautical" && heading != null){
+var showCourseLine =
+  baseMapMode === "nautical" &&
+  heading != null &&
+  isNavigationCourseFresh();
+
+if(courseSource){
+  if(showCourseLine){
     var lengthMeters = getCourseLineLengthMeters(speed);
+    var end = destinationPoint(lon, lat, heading, lengthMeters);
 
-    if(lengthMeters > 0){
-      var end = destinationPoint(lon, lat, heading, lengthMeters);
-
-      courseSource.setData({
-        type:"FeatureCollection",
-        features:[{
+    courseSource.setData({
+      type:"FeatureCollection",
+      features:[
+        {
           type:"Feature",
           geometry:{
             type:"LineString",
@@ -3540,14 +3622,9 @@ function updateCustomUserLocationLayers(){
             ]
           },
           properties:{}
-        }]
-      });
-    }else{
-      courseSource.setData({
-        type:"FeatureCollection",
-        features:[]
-      });
-    }
+        }
+      ]
+    });
   }else{
     courseSource.setData({
       type:"FeatureCollection",
@@ -3561,7 +3638,7 @@ function updateCustomUserLocationLayers(){
       maptilerMap.setLayoutProperty(
         customUserAccuracyLayerId,
         "visibility",
-        customUserLocation ? "visible" : "none"
+       hasUserPosition() ? "visible" : "none"
       );
     }
 
@@ -3576,16 +3653,18 @@ function updateCustomUserLocationLayers(){
 }
 
 function updateCustomUserLocationMarker(){
-  if(!customUserLocation || !maptilerMap) return;
+  var loc = getCurrentUserLocation();
+
+  if(!loc || !maptilerMap) return;
 
   createCustomUserLocationMarker();
 
   if(!customUserLocationMarker) return;
 
-  customUserLocationMarker.setLngLat([
-    customUserLocation.lon,
-    customUserLocation.lat
-  ]);
+customUserLocationMarker.setLngLat([
+  loc.lon,
+  loc.lat
+]);
 
   if(!customUserLocationMarker._map){
     customUserLocationMarker.addTo(maptilerMap);
@@ -3604,28 +3683,35 @@ function updateCustomUserLocationMarker(){
       "translate(-50%,-27px) rotate(" + (heading - mapBearing).toFixed(1) + "deg)";
   }
 }
-  var lastNauticalFollowAt = 0;
-var NAUTICAL_FOLLOW_INTERVAL_MS = 1200;
+var lastNavigationCameraAt = 0;
+var NAVIGATION_CAMERA_INTERVAL_MS = 1200;
 
-function followCustomUserLocation(){
-  if(!maptilerMap || !customUserLocation) return;
+function updateNavigationCamera(options){
+  options = options || {};
 
-  var now = Date.now();
+  if(!maptilerMap || !hasUserPosition()) return;
+  if(baseMapMode !== "nautical") return;
 
-  if(now - lastNauticalFollowAt < NAUTICAL_FOLLOW_INTERVAL_MS){
+  if(userTrackingMode !== "follow" && userTrackingMode !== "follow-course"){
     return;
   }
 
-  lastNauticalFollowAt = now;
+  var now = Date.now();
+
+  if(!options.immediate && now - lastNavigationCameraAt < NAVIGATION_CAMERA_INTERVAL_MS){
+    return;
+  }
+
+  lastNavigationCameraAt = now;
 
   var easeOptions = {
-    center: [customUserLocation.lon, customUserLocation.lat],
-    duration: 650,
+    center: [userPositionState.lon, userPositionState.lat],
+    duration: options.immediate ? 350 : 650,
     essential: true
   };
 
-  if(nauticalCompassMode === "follow"){
-    var heading = getGpsCourseHeading();
+  if(userTrackingMode === "follow-course"){
+    var heading = getNavigationCourseHeading();
 
     if(heading != null){
       easeOptions.bearing = heading;
@@ -3633,9 +3719,55 @@ function followCustomUserLocation(){
   }
 
   maptilerMap.easeTo(easeOptions);
-}    
+}
+function updateNavigationCourseFromCoords(coords, lat, lon, now){
+  var speed = Number(coords.speed);
+  var accuracy = Number(coords.accuracy);
+  var rawHeading = normalizeBearing(coords.heading);
 
-function updateCustomUserLocationFromCoords(coords, options){
+  var hasUsableSpeed = isFinite(speed) && speed > 0.5;
+
+  if(rawHeading != null && hasUsableSpeed){
+    navigationCourse.heading = rawHeading;
+    navigationCourse.source = "gps-heading";
+    navigationCourse.updatedAt = now;
+    navigationCourse.confidence = 1;
+    return;
+  }
+
+  if(userPositionState.previous){
+    var prev = userPositionState.previous;
+
+    var movedMeters = distanceMetersBetween(
+      prev.lon,
+      prev.lat,
+      lon,
+      lat
+    );
+
+    var accuracyOk =
+      !isFinite(accuracy) ||
+      accuracy <= 80;
+
+    if(movedMeters >= 10 && accuracyOk){
+      var computedHeading = bearingBetweenPoints(
+        prev.lon,
+        prev.lat,
+        lon,
+        lat
+      );
+
+      if(computedHeading != null){
+        navigationCourse.heading = computedHeading;
+        navigationCourse.source = "computed-from-movement";
+        navigationCourse.updatedAt = now;
+        navigationCourse.confidence = 0.7;
+      }
+    }
+  }
+}
+
+function handleUserPosition(coords, options){
   options = options || {};
 
   if(!coords) return;
@@ -3645,66 +3777,60 @@ function updateCustomUserLocationFromCoords(coords, options){
 
   if(!isFinite(lat) || !isFinite(lon)) return;
 
-  customUserLocation = {
-    lat: lat,
-    lon: lon,
-    accuracy: Number(coords.accuracy || 30),
-    speed: coords.speed,
-    heading: coords.heading,
-    updatedAt: Date.now()
-  };
+  var now = Date.now();
+
+  var previousPosition = hasUserPosition()
+    ? {
+        lat: userPositionState.lat,
+        lon: userPositionState.lon,
+        accuracy: userPositionState.accuracy,
+        speed: userPositionState.speed,
+        rawHeading: userPositionState.rawHeading,
+        updatedAt: userPositionState.updatedAt
+      }
+    : null;
+
+  userPositionState.previous = previousPosition;
+  userPositionState.lat = lat;
+  userPositionState.lon = lon;
+  userPositionState.accuracy = Number(coords.accuracy || 30);
+  userPositionState.speed = coords.speed;
+  userPositionState.rawHeading = coords.heading;
+  userPositionState.updatedAt = now;
 
   nauticalLastSpeed = coords.speed;
 
-var speed = Number(coords.speed);
-var hasUsableSpeed = isFinite(speed) && speed > 0.4;
+  updateNavigationCourseFromCoords(coords, lat, lon, now);
 
-if(
-  coords.heading != null &&
-  isFinite(Number(coords.heading)) &&
-  hasUsableSpeed
-){
-  nauticalGpsHeading = normalizeBearing(coords.heading);
-}else if(lastGpsCoursePoint){
-  var movedMeters = distanceMetersBetween(
-    lastGpsCoursePoint.lon,
-    lastGpsCoursePoint.lat,
-    lon,
-    lat
-  );
+  updateCustomUserLocationMarker();
+  updateCustomUserLocationLayers();
+  updateNauticalCompassHud();
 
-  if(movedMeters >= 4){
-    var computedHeading = bearingBetweenPoints(
-      lastGpsCoursePoint.lon,
-      lastGpsCoursePoint.lat,
-      lon,
-      lat
-    );
+  if(options.allowCameraFollow){
+    updateNavigationCamera({
+      immediate: !!options.immediateCamera
+    });
+  }
 
-    if(computedHeading != null){
-      nauticalGpsHeading = computedHeading;
-      lastComputedGpsHeading = computedHeading;
-    }
+  if(options.allowWeatherRefresh){
+    handleUserLocationUpdate(lat, lon, {
+      fromLocateButton: !!options.fromLocateButton
+    });
   }
 }
 
-lastGpsCoursePoint = {
-  lon: lon,
-  lat: lat,
-  time: Date.now()
-};
+function updateCustomUserLocationFromCoords(coords, options){
+  options = options || {};
 
- updateCustomUserLocationMarker();
-updateCustomUserLocationLayers();
-updateNauticalCompassHud();
-
-  if(options.followMap && baseMapMode === "nautical"){
-    followCustomUserLocation();
-  }
+  handleUserPosition(coords, {
+    allowCameraFollow: !!options.followMap,
+    allowWeatherRefresh: !options.suppressWeather,
+    fromLocateButton: !!options.fromLocateButton,
+    immediateCamera: !!options.immediateCamera
+  });
 }
-
 function syncCustomUserLocationVisuals(){
-  if(!customUserLocation) return;
+  if(!hasUserPosition()) return;
 
   updateCustomUserLocationMarker();
   updateCustomUserLocationLayers();
@@ -3823,25 +3949,25 @@ maptilerMap.on("move", function(){
 weatherGeolocateControl.on('geolocate',function(e){
   if(!e || !e.coords) return;
 
-  updateCustomUserLocationFromCoords(e.coords, {
-    suppressWeather:true,
-    followMap: baseMapMode === "nautical"
-  });
-
-  var lat = Number(e.coords.latitude);
-  var lon = Number(e.coords.longitude);
-
-  if(!isFinite(lat) || !isFinite(lon)) return;
-
-  var clickedLocateRecently = Date.now() - lastGeolocateWeatherAt < GEOLOCATE_CLICK_WINDOW_MS;
+  var clickedLocateRecently =
+    Date.now() - lastGeolocateWeatherAt < GEOLOCATE_CLICK_WINDOW_MS;
 
   if(clickedLocateRecently){
     lastGeolocateWeatherAt = 0;
-
-    handleUserLocationUpdate(lat, lon, {
-      fromLocateButton:true
-    });
   }
+
+  if(baseMapMode === "nautical"){
+    userTrackingMode = "follow";
+  }else{
+    userTrackingMode = "off";
+  }
+
+  handleUserPosition(e.coords, {
+    allowWeatherRefresh: clickedLocateRecently,
+    fromLocateButton: clickedLocateRecently,
+    allowCameraFollow: baseMapMode === "nautical",
+    immediateCamera: true
+  });
 });
         weatherGeolocateControl.on('error',function(e){console.warn("Min plats kunde inte aktiveras", e);});
 
