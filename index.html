@@ -1052,7 +1052,7 @@ var nauticalDeviceHeading = null;
 var nauticalGpsHeading = null;
 var nauticalLastSpeed = null;
 var nauticalOrientationStarted = false;
-      var customUserLocationMarker = null;
+var customUserLocationMarker = null;
 var customUserLocationEl = null;
 var customUserLocationArrowEl = null;
 var customUserLocation = null;
@@ -1060,6 +1060,8 @@ var customUserAccuracySourceId = "custom-user-accuracy-source";
 var customUserAccuracyLayerId = "custom-user-accuracy-layer";
 var customUserCourseSourceId = "custom-user-course-source";
 var customUserCourseLayerId = "custom-user-course-layer";
+var lastGpsCoursePoint = null;
+var lastComputedGpsHeading = null;
 var forecastStartTime = null;
 var forecastEndTime = null;
 
@@ -3073,6 +3075,40 @@ function setMapBearing(bearing){
     }
   }catch(e){}
 }
+      function distanceMetersBetween(lon1, lat1, lon2, lat2){
+  var R = 6371000;
+  var toRad = Math.PI / 180;
+
+  var p1 = lat1 * toRad;
+  var p2 = lat2 * toRad;
+  var dp = (lat2 - lat1) * toRad;
+  var dl = (lon2 - lon1) * toRad;
+
+  var a =
+    Math.sin(dp / 2) * Math.sin(dp / 2) +
+    Math.cos(p1) * Math.cos(p2) *
+    Math.sin(dl / 2) * Math.sin(dl / 2);
+
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+function bearingBetweenPoints(lon1, lat1, lon2, lat2){
+  var toRad = Math.PI / 180;
+  var toDeg = 180 / Math.PI;
+
+  var p1 = lat1 * toRad;
+  var p2 = lat2 * toRad;
+  var dl = (lon2 - lon1) * toRad;
+
+  var y = Math.sin(dl) * Math.cos(p2);
+  var x =
+    Math.cos(p1) * Math.sin(p2) -
+    Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+
+  return normalizeBearing(Math.atan2(y, x) * toDeg);
+}
 
 function formatKnotsFromMetersPerSecond(speed){
   if(speed == null || !isFinite(Number(speed))) return "-- kn";
@@ -3403,11 +3439,11 @@ function ensureCustomUserLocationLayers(){
           "line-cap":"round",
           "line-join":"round"
         },
-        paint:{
-          "line-color":"rgba(152,240,219,0.92)",
-          "line-width":3,
-          "line-opacity":0.88,
-          "line-blur":0.4
+          paint:{
+          "line-color":"#98f0db",
+          "line-width":6,
+          "line-opacity":1,
+          "line-blur":0
         }
       });
     }
@@ -3441,28 +3477,14 @@ function getCourseLineLengthMeters(speedMs){
   var speed = Number(speedMs);
 
   if(!isFinite(speed) || speed < 0.4){
-    return 0;
+    return 180;
   }
 
   var knots = speed * 1.943844;
   var length = 140 + knots * 45;
 
-  return Math.max(140, Math.min(650, length));
+  return Math.max(180, Math.min(650, length));
 }
-      function bringCustomUserLocationLayersToFront(){
-  if(!maptilerMap || !maptilerMap.getLayer) return;
-
-  try{
-    if(maptilerMap.getLayer(customUserAccuracyLayerId)){
-      maptilerMap.moveLayer(customUserAccuracyLayerId);
-    }
-
-    if(maptilerMap.getLayer(customUserCourseLayerId)){
-      maptilerMap.moveLayer(customUserCourseLayerId);
-    }
-  }catch(e){}
-}
-
 function clearCustomUserLocationCourse(){
   if(!maptilerMap || !maptilerMap.getSource) return;
 
@@ -3634,13 +3656,43 @@ function updateCustomUserLocationFromCoords(coords, options){
 
   nauticalLastSpeed = coords.speed;
 
-  if(
-    coords.heading != null &&
-    isFinite(Number(coords.heading)) &&
-    Number(coords.speed || 0) > 0.4
-  ){
-    nauticalGpsHeading = normalizeBearing(coords.heading);
+var speed = Number(coords.speed);
+var hasUsableSpeed = isFinite(speed) && speed > 0.4;
+
+if(
+  coords.heading != null &&
+  isFinite(Number(coords.heading)) &&
+  hasUsableSpeed
+){
+  nauticalGpsHeading = normalizeBearing(coords.heading);
+}else if(lastGpsCoursePoint){
+  var movedMeters = distanceMetersBetween(
+    lastGpsCoursePoint.lon,
+    lastGpsCoursePoint.lat,
+    lon,
+    lat
+  );
+
+  if(movedMeters >= 4){
+    var computedHeading = bearingBetweenPoints(
+      lastGpsCoursePoint.lon,
+      lastGpsCoursePoint.lat,
+      lon,
+      lat
+    );
+
+    if(computedHeading != null){
+      nauticalGpsHeading = computedHeading;
+      lastComputedGpsHeading = computedHeading;
+    }
   }
+}
+
+lastGpsCoursePoint = {
+  lon: lon,
+  lat: lat,
+  time: Date.now()
+};
 
   updateCustomUserLocationMarker();
   updateCustomUserLocationLayers();
