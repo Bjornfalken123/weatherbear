@@ -3694,10 +3694,9 @@ lastGpsCoursePoint = {
   time: Date.now()
 };
 
-  updateCustomUserLocationMarker();
-  updateCustomUserLocationLayers();
-  bringCustomUserLocationLayersToFront();
-  updateNauticalCompassHud();
+ updateCustomUserLocationMarker();
+updateCustomUserLocationLayers();
+updateNauticalCompassHud();
 
   if(options.followMap && baseMapMode === "nautical"){
     followCustomUserLocation();
@@ -3709,7 +3708,6 @@ function syncCustomUserLocationVisuals(){
 
   updateCustomUserLocationMarker();
   updateCustomUserLocationLayers();
-  bringCustomUserLocationLayersToFront();
 }
       function syncBaseMapButtons(){
   var desktopBtn = document.getElementById("toggleBaseMapBtn");
@@ -3822,10 +3820,13 @@ maptilerMap.on("move", function(){
         function shouldRefreshWeatherForUserLocation(lat,lon){var now=Date.now();if(lastUserWeatherLat==null||lastUserWeatherLon==null){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=now;return true;}var movedKm=distanceKmBetween(lastUserWeatherLat,lastUserWeatherLon,lat,lon), movedEnough=movedKm>=USER_WEATHER_MIN_MOVE_KM, waitedEnough=now-lastUserWeatherAt>=USER_WEATHER_MIN_INTERVAL_MS;if(movedEnough||waitedEnough){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=now;return true;}return false;}
         async function updateWeatherFromUserLocation(lat,lon){weatherSelectionMode="user";clearWeatherSelectionMarker();saveSelection('weather',{lat:lat,lon:lon});selectedPlaceName="";updateMapOverlay("Hämtar plats...","Söker närmaste plats...");try{selectedPlaceName=await reverseGeocodePlace(lat,lon);}catch(e){selectedPlaceName="";}loadWeatherForPoint(lat,lon);}
         function handleUserLocationUpdate(lat,lon,options){options=options||{};if(options.suppressWeather) return;if(options.fromLocateButton){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=Date.now();updateWeatherFromUserLocation(lat,lon);return;}if(weatherSelectionMode!=="user") return;if(shouldRefreshWeatherForUserLocation(lat,lon)) updateWeatherFromUserLocation(lat,lon);}
-        weatherGeolocateControl.on('geolocate',function(e){
+weatherGeolocateControl.on('geolocate',function(e){
   if(!e || !e.coords) return;
 
-  updateCustomUserLocationFromCoords(e.coords);
+  updateCustomUserLocationFromCoords(e.coords, {
+    suppressWeather:true,
+    followMap: baseMapMode === "nautical"
+  });
 
   var lat = Number(e.coords.latitude);
   var lon = Number(e.coords.longitude);
@@ -3834,9 +3835,13 @@ maptilerMap.on("move", function(){
 
   var clickedLocateRecently = Date.now() - lastGeolocateWeatherAt < GEOLOCATE_CLICK_WINDOW_MS;
 
-  handleUserLocationUpdate(lat, lon, {
-    fromLocateButton: clickedLocateRecently
-  });
+  if(clickedLocateRecently){
+    lastGeolocateWeatherAt = 0;
+
+    handleUserLocationUpdate(lat, lon, {
+      fromLocateButton:true
+    });
+  }
 });
         weatherGeolocateControl.on('error',function(e){console.warn("Min plats kunde inte aktiveras", e);});
 
