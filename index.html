@@ -2992,7 +2992,15 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         if(!maptilerMap||!maptilerMap.getStyle) return null;var style=maptilerMap.getStyle(), layers=Array.isArray(style&&style.layers)?style.layers:[], fixedIds=["timeline-controller-layer","main-wind-layer","main-precipitation-layer","main-radar-layer","main-temperature-layer"];
         for(var i=0;i<layers.length;i++){var id=layers[i].id || "";if(fixedIds.indexOf(id)!==-1) return id;if(id.indexOf(OPEN_METEO_CLOUD_LAYER_ID+"-")===0) return id;}return null;
       }
-      function refreshNauticalLayerOrder(){if(!maptilerMap) return;try{var hasBase=maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId), hasSeamark=maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId);if(hasBase){var firstWeatherLayerId=getFirstWeatherOverlayLayerId();if(firstWeatherLayerId&&firstWeatherLayerId!==nauticalBaseLayerId) maptilerMap.moveLayer(nauticalBaseLayerId,firstWeatherLayerId);else if(hasSeamark) maptilerMap.moveLayer(nauticalBaseLayerId,nauticalSeamarkLayerId);}if(hasSeamark) maptilerMap.moveLayer(nauticalSeamarkLayerId);if(typeof bringSeaAreaLayersToFront==="function") bringSeaAreaLayersToFront();}catch(e){console.warn("Kunde inte justera sjökortets lagerordning", e);}}
+      function refreshNauticalLayerOrder(){if(!maptilerMap) return;try{var hasBase=maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId), hasSeamark=maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId);if(hasBase){var firstWeatherLayerId=getFirstWeatherOverlayLayerId();if(firstWeatherLayerId&&firstWeatherLayerId!==nauticalBaseLayerId) maptilerMap.moveLayer(nauticalBaseLayerId,firstWeatherLayerId);else if(hasSeamark) maptilerMap.moveLayer(nauticalBaseLayerId,nauticalSeamarkLayerId);}if(hasSeamark) maptilerMap.moveLayer(nauticalSeamarkLayerId);
+
+if(typeof bringSeaAreaLayersToFront === "function"){
+  bringSeaAreaLayersToFront();
+}
+
+if(typeof bringCustomUserLocationLayersToFront === "function"){
+  bringCustomUserLocationLayersToFront();
+}}catch(e){console.warn("Kunde inte justera sjökortets lagerordning", e);}}
       function scheduleNauticalLayerOrderRefresh(){if(nauticalLayerOrderTimer) clearTimeout(nauticalLayerOrderTimer);nauticalLayerOrderTimer=setTimeout(function(){nauticalLayerOrderTimer=null;refreshNauticalLayerOrder();},0);setTimeout(refreshNauticalLayerOrder,180);}
       function ensureNauticalChartLayers(){
         if(!maptilerMap) return false;
@@ -3075,10 +3083,13 @@ function formatKnotsFromMetersPerSecond(speed){
 }
 
 function getBestNauticalHeading(){
-  if(nauticalDeviceHeading != null && isFinite(Number(nauticalDeviceHeading))){
-    return normalizeBearing(nauticalDeviceHeading);
+  if(baseMapMode === "nautical"){
+    return getGpsCourseHeading();
   }
 
+  return getGpsCourseHeading() || getDeviceCompassHeading();
+}
+function getGpsCourseHeading(){
   if(nauticalGpsHeading != null && isFinite(Number(nauticalGpsHeading))){
     return normalizeBearing(nauticalGpsHeading);
   }
@@ -3086,6 +3097,13 @@ function getBestNauticalHeading(){
   return null;
 }
 
+function getDeviceCompassHeading(){
+  if(nauticalDeviceHeading != null && isFinite(Number(nauticalDeviceHeading))){
+    return normalizeBearing(nauticalDeviceHeading);
+  }
+
+  return null;
+}
 function updateNauticalCompassHud(){
   var hud = document.getElementById("nauticalCompassHud");
   var ring = document.getElementById("nauticalCompassRing");
@@ -3116,30 +3134,21 @@ function updateNauticalCompassHud(){
     speedEl.textContent = formatKnotsFromMetersPerSecond(nauticalLastSpeed);
   }
 
-  if(modeEl){
-    if(nauticalCompassMode === "follow"){
-      modeEl.textContent = heading == null ? "Riktning saknas" : "Följer riktning";
-    }else{
-      modeEl.textContent = "Nord upp";
-    }
-  }
+if(modeEl){
+  modeEl.textContent = nauticalCompassMode === "follow" ? "Följer" : "Nord upp";
+}
 }
 
 function handleNauticalPosition(position){
   if(!position || !position.coords) return;
 
-  nauticalLastSpeed = position.coords.speed;
+  updateCustomUserLocationFromCoords(position.coords, {
+    suppressWeather:true,
+    followMap: baseMapMode === "nautical"
+  });
 
-  if(
-    position.coords.heading != null &&
-    isFinite(Number(position.coords.heading)) &&
-    Number(position.coords.speed || 0) > 0.4
-  ){
-    nauticalGpsHeading = normalizeBearing(position.coords.heading);
-  }
-
-  if(nauticalCompassMode === "follow"){
-    var heading = getBestNauticalHeading();
+  if(nauticalCompassMode === "follow" && baseMapMode === "nautical"){
+    var heading = getGpsCourseHeading();
 
     if(heading != null){
       setMapBearing(heading);
@@ -3148,7 +3157,6 @@ function handleNauticalPosition(position){
 
   updateNauticalCompassHud();
 }
-
 function startNauticalGps(){
   if(nauticalGeoWatchId != null) return;
   if(!navigator.geolocation) return;
@@ -3194,14 +3202,10 @@ function handleDeviceOrientation(event){
 
   if(heading == null) return;
 
-  nauticalDeviceHeading = heading;
+nauticalDeviceHeading = heading;
 
-  if(nauticalCompassMode === "follow"){
-    setMapBearing(heading);
-  }
-
-  updateNauticalCompassHud();
-  syncCustomUserLocationVisuals();
+updateNauticalCompassHud();
+syncCustomUserLocationVisuals();
 }
 
 async function startNauticalOrientation(){
@@ -3232,8 +3236,11 @@ async function startNauticalOrientation(){
 function startNauticalHud(){
   startNauticalGps();
   updateNauticalCompassHud();
-}
 
+  if(customUserLocation && baseMapMode === "nautical"){
+    followCustomUserLocation();
+  }
+}
 function stopNauticalHud(){
   stopNauticalGps();
   nauticalCompassMode = "north";
@@ -3253,17 +3260,18 @@ function toggleNauticalCompassMode(){
 
   nauticalCompassMode = "follow";
 
-  startNauticalOrientation();
-
-  var heading = getBestNauticalHeading();
+  var heading = getGpsCourseHeading();
 
   if(heading != null){
     setMapBearing(heading);
-  }else{
-    updateNauticalCompassHud();
   }
-}
 
+  if(customUserLocation){
+    followCustomUserLocation();
+  }
+
+  updateNauticalCompassHud();
+}
 function bindNauticalCompassHud(){
   var hud = document.getElementById("nauticalCompassHud");
 
@@ -3430,14 +3438,29 @@ function createCustomUserLocationMarker(){
 }
 
 function getCourseLineLengthMeters(speedMs){
-  var speed = Number(speedMs || 0);
+  var speed = Number(speedMs);
+
+  if(!isFinite(speed) || speed < 0.4){
+    return 0;
+  }
+
   var knots = speed * 1.943844;
+  var length = 140 + knots * 45;
 
-  if(!isFinite(knots)) knots = 0;
+  return Math.max(140, Math.min(650, length));
+}
+      function bringCustomUserLocationLayersToFront(){
+  if(!maptilerMap || !maptilerMap.getLayer) return;
 
-  var length = 180 + knots * 34;
+  try{
+    if(maptilerMap.getLayer(customUserAccuracyLayerId)){
+      maptilerMap.moveLayer(customUserAccuracyLayerId);
+    }
 
-  return Math.max(180, Math.min(520, length));
+    if(maptilerMap.getLayer(customUserCourseLayerId)){
+      maptilerMap.moveLayer(customUserCourseLayerId);
+    }
+  }catch(e){}
 }
 
 function clearCustomUserLocationCourse(){
@@ -3461,7 +3484,7 @@ function updateCustomUserLocationLayers(){
   var lon = customUserLocation.lon;
   var lat = customUserLocation.lat;
   var accuracy = customUserLocation.accuracy;
-  var heading = getBestNauticalHeading();
+  var heading = getGpsCourseHeading();
   var speed = customUserLocation.speed;
 
   var accuracySource = maptilerMap.getSource(customUserAccuracySourceId);
@@ -3559,8 +3582,40 @@ function updateCustomUserLocationMarker(){
       "translate(-50%,-27px) rotate(" + (heading - mapBearing).toFixed(1) + "deg)";
   }
 }
+  var lastNauticalFollowAt = 0;
+var NAUTICAL_FOLLOW_INTERVAL_MS = 1200;
 
-function updateCustomUserLocationFromCoords(coords){
+function followCustomUserLocation(){
+  if(!maptilerMap || !customUserLocation) return;
+
+  var now = Date.now();
+
+  if(now - lastNauticalFollowAt < NAUTICAL_FOLLOW_INTERVAL_MS){
+    return;
+  }
+
+  lastNauticalFollowAt = now;
+
+  var easeOptions = {
+    center: [customUserLocation.lon, customUserLocation.lat],
+    duration: 650,
+    essential: true
+  };
+
+  if(nauticalCompassMode === "follow"){
+    var heading = getGpsCourseHeading();
+
+    if(heading != null){
+      easeOptions.bearing = heading;
+    }
+  }
+
+  maptilerMap.easeTo(easeOptions);
+}    
+
+function updateCustomUserLocationFromCoords(coords, options){
+  options = options || {};
+
   if(!coords) return;
 
   var lat = Number(coords.latitude);
@@ -3587,11 +3642,14 @@ function updateCustomUserLocationFromCoords(coords){
     nauticalGpsHeading = normalizeBearing(coords.heading);
   }
 
-  startNauticalOrientation();
-
   updateCustomUserLocationMarker();
   updateCustomUserLocationLayers();
+  bringCustomUserLocationLayersToFront();
   updateNauticalCompassHud();
+
+  if(options.followMap && baseMapMode === "nautical"){
+    followCustomUserLocation();
+  }
 }
 
 function syncCustomUserLocationVisuals(){
@@ -3599,6 +3657,7 @@ function syncCustomUserLocationVisuals(){
 
   updateCustomUserLocationMarker();
   updateCustomUserLocationLayers();
+  bringCustomUserLocationLayersToFront();
 }
       function syncBaseMapButtons(){
   var desktopBtn = document.getElementById("toggleBaseMapBtn");
