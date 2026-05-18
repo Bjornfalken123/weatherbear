@@ -3450,34 +3450,40 @@ function updateCustomUserLocationLayers(){
     });
   }
 
-  if(courseSource){
-    if(baseMapMode === "nautical" && heading != null){
-      var lengthMeters = getCourseLineLengthMeters(speed);
+ if(courseSource){
+  if(baseMapMode === "nautical" && heading != null){
+    var lengthMeters = getCourseLineLengthMeters(speed);
 
-      if(lengthMeters > 0){
-        var end = destinationPoint(lon, lat, heading, lengthMeters);
+    if(lengthMeters > 0){
+      var end = destinationPoint(lon, lat, heading, lengthMeters);
 
-        courseSource.setData({
-          type:"FeatureCollection",
-          features:[{
-            type:"Feature",
-            geometry:{
-              type:"LineString",
-              coordinates:[
-                [lon, lat],
-                end
-              ]
-            },
-            properties:{}
-          }]
-        });
-      }else{
-        clearCustomUserLocationCourse();
-      }
+      courseSource.setData({
+        type:"FeatureCollection",
+        features:[{
+          type:"Feature",
+          geometry:{
+            type:"LineString",
+            coordinates:[
+              [lon, lat],
+              end
+            ]
+          },
+          properties:{}
+        }]
+      });
     }else{
-      clearCustomUserLocationCourse();
+      courseSource.setData({
+        type:"FeatureCollection",
+        features:[]
+      });
     }
+  }else{
+    courseSource.setData({
+      type:"FeatureCollection",
+      features:[]
+    });
   }
+}
 
   try{
     if(maptilerMap.getLayer(customUserAccuracyLayerId)){
