@@ -3076,6 +3076,25 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
 
   return n;
 }
+      function smoothBearing(previous, next, factor){
+  if(previous == null || !isFinite(Number(previous))){
+    return normalizeBearing(next);
+  }
+
+  if(next == null || !isFinite(Number(next))){
+    return normalizeBearing(previous);
+  }
+
+  var prev = normalizeBearing(previous);
+  var target = normalizeBearing(next);
+
+  if(prev == null) return target;
+  if(target == null) return prev;
+
+  var diff = ((target - prev + 540) % 360) - 180;
+
+  return normalizeBearing(prev + diff * factor);
+}
 function hasUserPosition(){
   return (
     userPositionState &&
@@ -3504,11 +3523,11 @@ function ensureCustomUserLocationLayers(){
           "line-join":"round"
         },
           paint:{
-          "line-color":"#98f0db",
-          "line-width":6,
-          "line-opacity":1,
-          "line-blur":0
-        }
+  "line-color":"#000000",
+  "line-width":2,
+  "line-opacity":0.9,
+  "line-blur":0
+}
       });
     }
   }catch(e){
@@ -3728,7 +3747,7 @@ function updateNavigationCourseFromCoords(coords, lat, lon, now){
   var hasUsableSpeed = isFinite(speed) && speed > 0.5;
 
   if(rawHeading != null && hasUsableSpeed){
-    navigationCourse.heading = rawHeading;
+    navigationCourse.heading = smoothBearing(navigationCourse.heading, rawHeading, 0.35);
     navigationCourse.source = "gps-heading";
     navigationCourse.updatedAt = now;
     navigationCourse.confidence = 1;
@@ -3758,7 +3777,7 @@ function updateNavigationCourseFromCoords(coords, lat, lon, now){
       );
 
       if(computedHeading != null){
-        navigationCourse.heading = computedHeading;
+        navigationCourse.heading = smoothBearing(navigationCourse.heading, computedHeading, 0.25);
         navigationCourse.source = "computed-from-movement";
         navigationCourse.updatedAt = now;
         navigationCourse.confidence = 0.7;
