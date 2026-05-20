@@ -759,7 +759,36 @@
     .maplibregl-popup-content,.mapboxgl-popup-content{background:rgba(5,11,22,0.96) !important;color:#f3f7ff !important;border:1px solid rgba(255,255,255,0.14);border-radius:14px !important;padding:10px 12px !important;box-shadow:0 14px 34px rgba(0,0,0,0.45);font-size:12px;line-height:1.45;white-space:pre-line;}
     .maplibregl-popup-tip,.mapboxgl-popup-tip{border-top-color:rgba(5,11,22,0.96) !important;border-bottom-color:rgba(5,11,22,0.96) !important;}
     .maplibregl-popup-close-button,.mapboxgl-popup-close-button{color:#f3f7ff !important;font-size:16px;padding:4px 7px;}
+.mobile-mode-switch{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:8px;
+  margin-bottom:14px;
+}
 
+.mobile-mode-btn{
+  appearance:none;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.05);
+  color:var(--muted-soft);
+  border-radius:14px;
+  padding:10px 8px;
+  font-size:11px;
+  font-weight:850;
+  cursor:pointer;
+}
+
+.mobile-mode-btn.is-active{
+  background:rgba(43,108,255,0.85);
+  color:#fff;
+  border-color:rgba(123,199,255,0.35);
+}
+
+@media (min-width:701px){
+  #mobileModeSwitch{
+    display:none !important;
+  }
+}
     @media (min-width:701px){#bottomTabBar,#mobileFilterSheet,#mobileSearchSheet,#mobileSeaSheet{display:none !important;}}
 
     @media (max-width:700px){
@@ -945,11 +974,15 @@
         Hav
         <span class="tab-btn-badge" id="seaBadge"></span>
       </button>
-      <button class="tab-btn" id="tabFilter" type="button">
-        <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="11" y1="18" x2="13" y2="18"></line></svg>
-        Filter
-        <span class="tab-btn-badge" id="filterBadge"></span>
-      </button>
+    <button class="tab-btn" id="tabFilter" type="button">
+  <svg viewBox="0 0 24 24">
+    <line x1="4" y1="6" x2="20" y2="6"></line>
+    <line x1="8" y1="12" x2="16" y2="12"></line>
+    <line x1="11" y1="18" x2="13" y2="18"></line>
+  </svg>
+  Lager
+  <span class="tab-btn-badge" id="filterBadge"></span>
+</button>
       <button class="tab-btn" id="tabSearch" type="button">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="16.65" y1="16.65" x2="21" y2="21"></line></svg>
         Sök
@@ -985,6 +1018,17 @@
         <div class="sheet-title">Visa på kartan</div>
       </div>
       <div class="sheet-body">
+        <div id="mobileModeSwitch" class="mobile-mode-switch" aria-label="App-läge">
+  <button class="mobile-mode-btn is-active" type="button" data-mobile-app-mode="standard">
+    Väder
+  </button>
+  <button class="mobile-mode-btn" type="button" data-mobile-app-mode="advanced-weather">
+    Avancerat
+  </button>
+  <button class="mobile-mode-btn" type="button" data-mobile-app-mode="navigation">
+    Sjökort
+  </button>
+</div>
         <div class="sheet-group">
           <div class="sheet-group-title">Kartlager</div>
           <div class="sheet-row"><div class="sheet-row-left"><span class="layer-dot chart"></span><span>Sjökort</span></div><button class="sheet-toggle" id="mobileToggleBaseMapBtn" type="button"></button></div>
@@ -1026,7 +1070,10 @@
         showWaveObjects=false, showLighthouseObjects=false, showAisObjects=false, lastObjectInteractionAt=0, forecastExpanded=false,
         currentForecastDays=[], weatherTimeseries=[], selectedForecastTime=null, timePlaybackTimer=null, weatherDetailsExpanded=false,
         timelineApplyTimer=null, pendingForecastTime=null;
-
+var mobileAppMode = "standard";
+// "standard" = enkelt väderläge
+// "advanced-weather" = full väderfunktionalitet
+// "navigation" = sjökort/navigering
       var selectedSeaAreaData = null;
       var latestSeaAreaRequestId = 0;
       var selectedSeaTimeseriesData = null;
@@ -1664,6 +1711,91 @@ function buildPrecipitationMetric(summary){
 
       function setText(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
       function isMobileView(){ return window.matchMedia("(max-width:700px)").matches; }
+      function getMobileLayerRowByButtonId(buttonId){
+  var btn = document.getElementById(buttonId);
+  if(!btn || !btn.closest) return null;
+  return btn.closest(".sheet-row");
+}
+
+function setMobileLayerRowVisible(buttonId, visible){
+  var row = getMobileLayerRowByButtonId(buttonId);
+  if(row) row.style.display = visible ? "" : "none";
+}
+
+function setMobileAppMode(nextMode){
+  mobileAppMode = (
+    nextMode === "advanced-weather" ||
+    nextMode === "navigation"
+  ) ? nextMode : "standard";
+
+  applyMobileAppModeRules();
+  applyMobileAppModeUI();
+
+  if(typeof refreshMobileNavState === "function"){
+    refreshMobileNavState();
+  }
+
+  if(typeof refreshMapSizeSoon === "function"){
+    refreshMapSizeSoon();
+  }
+}
+
+function applyMobileAppModeRules(){
+  if(!isMobileView()) return;
+
+  if(mobileAppMode !== "navigation"){
+    if(showAisObjects && typeof onAisToggle === "function"){
+      onAisToggle();
+    }
+
+    if(baseMapMode === "nautical" && typeof setBaseMapMode === "function"){
+      setBaseMapMode("standard");
+    }
+  }
+
+  if(mobileAppMode === "navigation"){
+    if(typeof setBaseMapMode === "function"){
+      setBaseMapMode("nautical");
+    }
+  }
+}
+
+function applyMobileAppModeUI(){
+  if(!isMobileView()) return;
+
+  document.querySelectorAll("[data-mobile-app-mode]").forEach(function(btn){
+    btn.classList.toggle("is-active", btn.dataset.mobileAppMode === mobileAppMode);
+  });
+
+  var isStandard = mobileAppMode === "standard";
+  var isAdvancedWeather = mobileAppMode === "advanced-weather";
+  var isNavigation = mobileAppMode === "navigation";
+  var showAdvancedWeatherTools = isAdvancedWeather || isNavigation;
+
+  setMobileLayerRowVisible("mobileToggleBaseMapBtn", isNavigation);
+
+  setMobileLayerRowVisible("mobileToggleWindBtn", true);
+  setMobileLayerRowVisible("mobileTogglePrecipBtn", true);
+  setMobileLayerRowVisible("mobileToggleSatelliteBtn", true);
+  setMobileLayerRowVisible("mobileToggleRadarBtn", true);
+  setMobileLayerRowVisible("mobileToggleTemperatureBtn", true);
+
+  setMobileLayerRowVisible("mobileToggleWaveBtn", showAdvancedWeatherTools);
+  setMobileLayerRowVisible("mobileToggleLighthouseBtn", showAdvancedWeatherTools);
+
+  setMobileLayerRowVisible("mobileToggleAisBtn", isNavigation);
+
+  var title = document.querySelector("#mobileFilterSheet .sheet-title");
+  if(title){
+    if(isStandard){
+      title.textContent = "Väder på kartan";
+    }else if(isAdvancedWeather){
+      title.textContent = "Avancerat väder";
+    }else{
+      title.textContent = "Sjökort och navigering";
+    }
+  }
+}
       function isSeaActive(){ return seaSelectionActive === true; }
       function markObjectInteraction(){ lastObjectInteractionAt=Date.now(); }
       function setOverlayHeaderDot(state){ var dot=document.getElementById("overlayHeaderDot"); if(dot) dot.classList.toggle("loading",state==="loading"); }
@@ -2882,6 +3014,13 @@ precipitationMetric +
       }
       if(mobileSeaSheet) mobileSeaSheet.addEventListener("click", handleSaveSeaAreaClick);
       if(mobileSearchCloseBtn) mobileSearchCloseBtn.addEventListener('click',function(e){e.stopPropagation();closeSearch();});
+      document.querySelectorAll("[data-mobile-app-mode]").forEach(function(btn){
+  btn.addEventListener("click", function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    setMobileAppMode(btn.dataset.mobileAppMode);
+  });
+});
       if(mobileFilterCloseBtn) mobileFilterCloseBtn.addEventListener('click',function(e){e.stopPropagation();closeMobileFilterSheet();});
       if(mobileSeaCloseBtn) mobileSeaCloseBtn.addEventListener('click',function(e){e.stopPropagation();closeSea();});
       var seaAreaTabBtn=document.getElementById('seaAreaTabBtn'); if(seaAreaTabBtn) seaAreaTabBtn.addEventListener('click',function(e){e.stopPropagation();setSeaMode('area');});
@@ -2961,15 +3100,28 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       function clearAisMarkers(){if(aisLoadTimer){clearTimeout(aisLoadTimer);aisLoadTimer=null;}if(aisRefreshInterval){clearInterval(aisRefreshInterval);aisRefreshInterval=null;}aisPendingLoadAfterCurrent=false;aisLastFetchAt=0;aisMarkerMap.forEach(function(item){try{if(item&&item.marker) item.marker.remove(); else if(item&&item.remove) item.remove();}catch(e){}});aisMarkerMap.clear();if(aisVesselCache) aisVesselCache.clear();}
       function setAisMarkersVisible(visible){aisMarkerMap.forEach(function(item){try{if(item&&item.element) item.element.style.display=visible?'flex':'none';}catch(e){}});}
       function clearAisMarkersOnly(){aisMarkerMap.forEach(function(item){try{if(item&&item.marker) item.marker.remove(); else if(item&&item.remove) item.remove();}catch(e){}});aisMarkerMap.clear();if(aisVesselCache) aisVesselCache.clear();}
-      function onAisToggle(){
+function onAisToggle(){
   if(!aisControlsReady) return;
 
-  showAisObjects=!showAisObjects;
-  if(showAisObjects&&maptilerMap&&maptilerMap.getZoom) setAisZoomBlocked(maptilerMap.getZoom()<AIS_MIN_ZOOM);
-  else setAisZoomBlocked(false);
+ if(isMobileView() && mobileAppMode !== "navigation"){
+    showAisObjects = false;
+    stopAisAutoRefresh();
+    clearAisMarkers();
+    syncAisButtons();
+    return;
+  }
 
-  if(showAisObjects) startAisAutoRefresh();
-  else{
+  showAisObjects = !showAisObjects;
+
+  if(showAisObjects && maptilerMap && maptilerMap.getZoom){
+    setAisZoomBlocked(maptilerMap.getZoom() < AIS_MIN_ZOOM);
+  }else{
+    setAisZoomBlocked(false);
+  }
+
+  if(showAisObjects){
+    startAisAutoRefresh();
+  }else{
     stopAisAutoRefresh();
     clearAisMarkers();
   }
@@ -4010,7 +4162,33 @@ weatherGeolocateControl.on('geolocate',function(e){
             var isTimePlaying = false;
             function setDeskBtn(id,on){var b=document.getElementById(id);if(!b) return;b.textContent=on?'På':'Av';b.classList.toggle('is-on',on);b.classList.toggle('is-off',!on);}
             function setMobToggle(id,on){var b=document.getElementById(id);if(b) b.classList.toggle('is-on',on);}
-            function syncAllLayerButtons(){setDeskBtn('toggleWindLayerBtn',windLayerVisible);setDeskBtn('togglePrecipLayerBtn',precipitationLayerVisible);setDeskBtn('toggleSatelliteLayerBtn',satelliteLayerVisible);setDeskBtn('toggleRadarLayerBtn',radarLayerVisible);setDeskBtn('toggleTemperatureLayerBtn',temperatureLayerVisible);setDeskBtn('toggleWaveModeBtn',showWaveObjects);setDeskBtn('toggleLighthouseModeBtn',showLighthouseObjects);setMobToggle('mobileToggleWindBtn',windLayerVisible);setMobToggle('mobileTogglePrecipBtn',precipitationLayerVisible);setMobToggle('mobileToggleSatelliteBtn',satelliteLayerVisible);setMobToggle('mobileToggleRadarBtn',radarLayerVisible);setMobToggle('mobileToggleTemperatureBtn',temperatureLayerVisible);setMobToggle('mobileToggleWaveBtn',showWaveObjects);setMobToggle('mobileToggleLighthouseBtn',showLighthouseObjects);syncBaseMapButtons();syncAisButtons();updateActiveLayersBadge();refreshMobileNavState();}
+ function syncAllLayerButtons(){
+  setDeskBtn('toggleWindLayerBtn',windLayerVisible);
+  setDeskBtn('togglePrecipLayerBtn',precipitationLayerVisible);
+  setDeskBtn('toggleSatelliteLayerBtn',satelliteLayerVisible);
+  setDeskBtn('toggleRadarLayerBtn',radarLayerVisible);
+  setDeskBtn('toggleTemperatureLayerBtn',temperatureLayerVisible);
+  setDeskBtn('toggleWaveModeBtn',showWaveObjects);
+  setDeskBtn('toggleLighthouseModeBtn',showLighthouseObjects);
+
+  setMobToggle('mobileToggleWindBtn',windLayerVisible);
+  setMobToggle('mobileTogglePrecipBtn',precipitationLayerVisible);
+  setMobToggle('mobileToggleSatelliteBtn',satelliteLayerVisible);
+  setMobToggle('mobileToggleRadarBtn',radarLayerVisible);
+  setMobToggle('mobileToggleTemperatureBtn',temperatureLayerVisible);
+  setMobToggle('mobileToggleWaveBtn',showWaveObjects);
+  setMobToggle('mobileToggleLighthouseBtn',showLighthouseObjects);
+
+  syncBaseMapButtons();
+  syncAisButtons();
+  updateActiveLayersBadge();
+  refreshMobileNavState();
+
+  if(isMobileView()){
+    applyMobileAppModeUI();
+  }
+}
+
             function updateTimeSliderProgress(){if(!timeSlider) return;var min=Number(timeSlider.min),max=Number(timeSlider.max),value=Number(timeSlider.value);if(!isFinite(min)||!isFinite(max)||max<=min||!isFinite(value)){timeSlider.style.setProperty('--time-progress','0%');return;}var progress=((value-min)/(max-min))*100;progress=Math.max(0,Math.min(100,progress));timeSlider.style.setProperty('--time-progress',progress+'%');}
   
             function updateTimeLabel(){if(timeValueLabel) timeValueLabel.textContent=selectedForecastTime?formatForecastLabelGlobal(selectedForecastTime):'--';var nowLabel=document.getElementById('timeNowLabel');if(nowLabel) nowLabel.textContent='Nu '+formatClockDotGlobal(new Date());updateTimeSliderProgress();updateTimeStepButtons();}
