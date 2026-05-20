@@ -745,6 +745,48 @@
       font-size: 13px;
       line-height: 1.55;
     }
+    .search-results {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.search-result-btn {
+  width: 100%;
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.045);
+  color: var(--text);
+  border-radius: 16px;
+  padding: 12px 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result-btn:active {
+  transform: translateY(1px);
+}
+
+.search-result-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.search-result-subtitle {
+  margin-top: 4px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.search-status {
+  margin-top: 10px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
 
     .sea-overview-grid {
       display: grid;
@@ -977,38 +1019,39 @@
       </div>
     </section>
 
-    <section id="placeSheet" class="sheet" aria-label="Plats">
-      <div class="sheet-handle"></div>
-      <div class="sheet-header">
-        <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
-        <div class="sheet-title-wrap">
-          <div class="sheet-title">Plats</div>
-          <div class="sheet-subtitle">Sök, välj eller spara kustplatser</div>
+   <section id="placeSheet" class="sheet" aria-label="Plats">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
+    <div class="sheet-title-wrap">
+      <div class="sheet-title">Plats</div>
+      <div class="sheet-subtitle">Sök, välj eller spara kustplatser</div>
+    </div>
+    <button id="useLocationBtn" class="sheet-close" type="button">Min plats</button>
+  </div>
+
+  <div class="sheet-body">
+    <input id="placeSearchInput" class="search-box" type="text" placeholder="Sök plats..." />
+
+    <div id="placeSearchStatus" class="search-status">
+      Sök efter en plats, använd din position eller tryck direkt på kartan.
+    </div>
+
+    <div id="placeSearchResults" class="search-results"></div>
+
+    <div style="height:14px"></div>
+
+    <div class="section-title">Sparade platser</div>
+    <div id="savedPlacesList" class="list-card">
+      <div class="row-item">
+        <div class="row-main">
+          <div class="row-title">Inga sparade platser ännu</div>
+          <div class="row-subtitle">När du sparar en plats visas den här.</div>
         </div>
-        <button id="useLocationBtn" class="sheet-close" type="button">Min plats</button>
       </div>
-
-      <div class="sheet-body">
-        <input id="placeSearchInput" class="search-box" type="text" placeholder="Sök plats..." />
-
-        <div class="empty-state">
-          <strong>Välj en plats</strong><br />
-          Sök efter en plats, använd din position eller tryck direkt på kartan.
-        </div>
-
-        <div style="height:14px"></div>
-
-        <div class="section-title">Sparade platser</div>
-        <div id="savedPlacesList" class="list-card">
-          <div class="row-item">
-            <div class="row-main">
-              <div class="row-title">Inga sparade platser ännu</div>
-              <div class="row-subtitle">När du sparar en plats visas den här.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    </div>
+  </div>
+</section>
 
     <section id="layersSheet" class="sheet" aria-label="Lager">
       <div class="sheet-handle"></div>
@@ -1145,14 +1188,15 @@
 
  <script>
   const MAPTILER_API_KEY = "72WUquDNJCLDzyB9DSky";
-
   const appState = {
     mode: "weather",
     activePlace: null,
     cardMinimized: false,
     openSheet: null,
     map: null,
-    activePlaceMarker: null
+    activePlaceMarker: null,
+    searchTimer: null,
+    lastSearchRequestId: 0
   };
 
   const els = {
@@ -1189,6 +1233,11 @@
 
     weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
     seaDetailsBtn: document.getElementById("seaDetailsBtn"),
+
+    placeSearchInput: document.getElementById("placeSearchInput"),
+    placeSearchStatus: document.getElementById("placeSearchStatus"),
+    placeSearchResults: document.getElementById("placeSearchResults"),
+    useLocationBtn: document.getElementById("useLocationBtn"),
 
     navigationHud: document.getElementById("navigationHud"),
     timeControl: document.getElementById("timeControl")
@@ -1289,6 +1338,117 @@
       updateMainCardCopy(appState.mode);
     } catch (error) {
       console.warn("Kunde inte hämta platsnamn:", error);
+    }
+  }
+
+  async function searchPlaces(query) {
+    const trimmed = query.trim();
+
+    if (trimmed.length < 2) {
+      els.placeSearchStatus.textContent =
+        "Sök efter en plats, använd din position eller tryck direkt på kartan.";
+      els.placeSearchResults.innerHTML = "";
+      return;
+    }
+
+    const requestId = ++appState.lastSearchRequestId;
+    els.placeSearchStatus.textContent = "Söker platser...";
+    els.placeSearchResults.innerHTML = "";
+
+    try {
+      const params = new URLSearchParams({
+        key: MAPTILER_API_KEY,
+        language: "sv",
+        limit: "7",
+        country: "se,no,dk,fi"
+      });
+
+      const url =
+        "https://api.maptiler.com/geocoding/" +
+        encodeURIComponent(trimmed) +
+        ".json?" +
+        params.toString();
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (requestId !== appState.lastSearchRequestId) return;
+
+      const results = Array.isArray(data.features) ? data.features : [];
+
+      renderPlaceSearchResults(results, trimmed);
+    } catch (error) {
+      console.warn("Platssökning misslyckades:", error);
+      els.placeSearchStatus.textContent =
+        "Sökningen kunde inte genomföras just nu.";
+      els.placeSearchResults.innerHTML = "";
+    }
+  }
+
+  function renderPlaceSearchResults(results, query) {
+    if (!results.length) {
+      els.placeSearchStatus.textContent = `Inga platser hittades för “${query}”.`;
+      els.placeSearchResults.innerHTML = "";
+      return;
+    }
+
+    els.placeSearchStatus.textContent = `${results.length} förslag`;
+
+    els.placeSearchResults.innerHTML = results
+      .map((feature, index) => {
+        const title = escapeHtml(
+          feature.text ||
+          feature.place_name?.split(",")[0] ||
+          "Plats"
+        );
+
+        const subtitle = escapeHtml(
+          feature.place_name ||
+          "Välj plats"
+        );
+
+        return `
+          <button class="search-result-btn" type="button" data-place-index="${index}">
+            <div class="search-result-title">${title}</div>
+            <div class="search-result-subtitle">${subtitle}</div>
+          </button>
+        `;
+      })
+      .join("");
+
+    els.placeSearchResults
+      .querySelectorAll("[data-place-index]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const index = Number(button.dataset.placeIndex);
+          const feature = results[index];
+          selectSearchResult(feature);
+        });
+      });
+  }
+
+  function selectSearchResult(feature) {
+    if (!feature || !Array.isArray(feature.center)) return;
+
+    const lon = Number(feature.center[0]);
+    const lat = Number(feature.center[1]);
+
+    const name =
+      feature.text ||
+      feature.place_name?.split(",")[0] ||
+      "Vald plats";
+
+    setActivePlace({
+      name,
+      lat,
+      lon,
+      source: "search"
+    });
+
+    closeAllSheets();
+
+    if (appState.mode === "place") {
+      setMode("weather");
     }
   }
 
@@ -1408,6 +1568,10 @@
 
   function showPlaceMode() {
     openSheet("placeSheet");
+
+    setTimeout(() => {
+      els.placeSearchInput?.focus();
+    }, 240);
   }
 
   function updateMapStyleForMode(mode) {
@@ -1505,6 +1669,20 @@
     );
   }
 
+  function handleUseLocationClick() {
+    els.placeSearchStatus.textContent =
+      "GPS kopplas in i ett kommande block. Just nu kan du söka eller trycka på kartan.";
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   els.navButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       setMode(btn.dataset.mode);
@@ -1539,6 +1717,16 @@
       toggle.classList.toggle("is-on");
     });
   });
+
+  els.placeSearchInput.addEventListener("input", () => {
+    clearTimeout(appState.searchTimer);
+
+    appState.searchTimer = setTimeout(() => {
+      searchPlaces(els.placeSearchInput.value);
+    }, 260);
+  });
+
+  els.useLocationBtn.addEventListener("click", handleUseLocationClick);
 
   initMap();
   setMode("weather");
