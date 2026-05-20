@@ -859,7 +859,65 @@
       font-size: 11px;
       line-height: 1.35;
     }
+.sea-status-box {
+  margin-bottom: 12px;
+  padding: 12px 13px;
+  border-radius: 17px;
+  border: 1px solid rgba(123,199,255,0.16);
+  background: rgba(123,199,255,0.07);
+  color: var(--muted-soft);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 750;
+}
 
+.sea-status-box.is-loading {
+  border-color: rgba(232,215,168,0.24);
+  background: rgba(232,215,168,0.08);
+  color: var(--warning);
+}
+
+.sea-status-box.is-ready {
+  border-color: rgba(152,240,219,0.20);
+  background: rgba(152,240,219,0.07);
+  color: var(--text-soft);
+}
+
+.sea-status-box.is-error {
+  border-color: rgba(255,120,120,0.24);
+  background: rgba(255,120,120,0.08);
+  color: #ffc5c5;
+}
+
+.sea-detail-list {
+  display: grid;
+  gap: 9px;
+}
+
+.sea-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 13px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.045);
+}
+
+.sea-detail-label {
+  color: var(--muted-soft);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 750;
+}
+
+.sea-detail-value {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 950;
+  text-align: right;
+}
     .details-placeholder {
       margin-top: 14px;
       height: 160px;
@@ -1159,32 +1217,39 @@
       </div>
 
       <div class="sheet-body">
-        <div class="sea-overview-grid">
-          <div class="sea-card">
-            <div class="sea-label">Vattentemp.</div>
-            <div class="sea-value">--°</div>
-            <div class="sea-note">Närmaste mätning</div>
-          </div>
-          <div class="sea-card">
-            <div class="sea-label">Vågor</div>
-            <div class="sea-value">-- m</div>
-            <div class="sea-note">Närmaste punkt</div>
-          </div>
-          <div class="sea-card">
-            <div class="sea-label">Vattenstånd</div>
-            <div class="sea-value">-- cm</div>
-            <div class="sea-note">Mätstation</div>
-          </div>
-          <div class="sea-card">
-            <div class="sea-label">Station</div>
-            <div class="sea-value">--</div>
-            <div class="sea-note">I närheten</div>
-          </div>
-        </div>
+<div id="seaStatusBox" class="sea-status-box">
+  Välj en plats för att visa havsdata i närheten.
+</div>
 
-        <div class="details-placeholder">
-          Här kopplar vi in dina befintliga havsgrafer i ett senare block.
-        </div>
+<div class="sea-overview-grid">
+  <div class="sea-card">
+    <div class="sea-label">Vattentemp.</div>
+    <div id="seaWaterTempValue" class="sea-value">--°</div>
+    <div id="seaWaterTempNote" class="sea-note">Närmaste mätning</div>
+  </div>
+
+  <div class="sea-card">
+    <div class="sea-label">Vågor</div>
+    <div id="seaWaveValue" class="sea-value">-- m</div>
+    <div id="seaWaveNote" class="sea-note">Närmaste punkt</div>
+  </div>
+
+  <div class="sea-card">
+    <div class="sea-label">Vattenstånd</div>
+    <div id="seaWaterLevelValue" class="sea-value">-- cm</div>
+    <div id="seaWaterLevelNote" class="sea-note">Mätstation</div>
+  </div>
+
+  <div class="sea-card">
+    <div class="sea-label">Mätstation</div>
+    <div id="seaStationValue" class="sea-value">--</div>
+    <div id="seaStationNote" class="sea-note">I närheten</div>
+  </div>
+</div>
+
+<div id="seaGraphPlaceholder" class="details-placeholder">
+  Här kopplar vi in dina befintliga havsgrafer i nästa havsblock.
+</div>
       </div>
     </section>
 
@@ -1372,6 +1437,13 @@ const appState = {
   latestWeatherRequestId: 0,
   selectedWeatherIndex: 0,
   weatherLoading: false
+  seaRadiusKm: 30,
+seaAreaData: null,
+seaTimeseriesData: null,
+seaLoading: false,
+latestSeaAreaRequestId: 0,
+latestSeaTimeseriesRequestId: 0,
+latestSeaDetails: null
 };
 
   const els = {
@@ -1406,8 +1478,18 @@ timeSelectedLabel: document.getElementById("timeSelectedLabel"),
     seaLayers: document.getElementById("seaLayers"),
     chartLayers: document.getElementById("chartLayers"),
 
-    seaSheet: document.getElementById("seaSheet"),
-    seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
+seaSheet: document.getElementById("seaSheet"),
+seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
+seaStatusBox: document.getElementById("seaStatusBox"),
+seaWaterTempValue: document.getElementById("seaWaterTempValue"),
+seaWaterTempNote: document.getElementById("seaWaterTempNote"),
+seaWaveValue: document.getElementById("seaWaveValue"),
+seaWaveNote: document.getElementById("seaWaveNote"),
+seaWaterLevelValue: document.getElementById("seaWaterLevelValue"),
+seaWaterLevelNote: document.getElementById("seaWaterLevelNote"),
+seaStationValue: document.getElementById("seaStationValue"),
+seaStationNote: document.getElementById("seaStationNote"),
+seaGraphPlaceholder: document.getElementById("seaGraphPlaceholder"),
     placeSheet: document.getElementById("placeSheet"),
 detailsSheet: document.getElementById("detailsSheet"),
 detailsTitle: document.getElementById("detailsTitle"),
@@ -1649,10 +1731,12 @@ updateActivePlaceMarker();
 updateMainCardCopy(appState.mode);
 loadWeatherForActivePlace();
 
-    if (appState.mode === "sea") {
-      els.seaSheetSubtitle.textContent = `Hav runt ${appState.activePlace.name}`;
-    }
-    updateSavePlaceButton();
+if (appState.mode === "sea") {
+  els.seaSheetSubtitle.textContent = `Hav runt ${appState.activePlace.name}`;
+  loadSeaForActivePlace();
+}
+
+updateSavePlaceButton();
   }
 
   function updateActivePlaceMarker() {
@@ -1976,6 +2060,511 @@ function getWeatherText(symbol) {
 
   return "väderprognos";
 }
+
+function resetSeaView(message) {
+  appState.seaAreaData = null;
+  appState.seaTimeseriesData = null;
+  appState.latestSeaDetails = null;
+
+  els.seaStatusBox.className = "sea-status-box";
+  els.seaStatusBox.textContent =
+    message || "Välj en plats för att visa havsdata i närheten.";
+
+  els.seaWaterTempValue.textContent = "--°";
+  els.seaWaterTempNote.textContent = "Närmaste mätning";
+
+  els.seaWaveValue.textContent = "-- m";
+  els.seaWaveNote.textContent = "Närmaste punkt";
+
+  els.seaWaterLevelValue.textContent = "-- cm";
+  els.seaWaterLevelNote.textContent = "Mätstation";
+
+  els.seaStationValue.textContent = "--";
+  els.seaStationNote.textContent = "I närheten";
+}
+
+function setSeaLoadingState() {
+  appState.seaLoading = true;
+
+  els.seaStatusBox.className = "sea-status-box is-loading";
+  els.seaStatusBox.textContent = "Hämtar havsdata runt vald plats...";
+
+  els.seaWaterTempValue.textContent = "--°";
+  els.seaWaterTempNote.textContent = "Hämtar";
+
+  els.seaWaveValue.textContent = "-- m";
+  els.seaWaveNote.textContent = "Hämtar";
+
+  els.seaWaterLevelValue.textContent = "-- cm";
+  els.seaWaterLevelNote.textContent = "Hämtar";
+
+  els.seaStationValue.textContent = "--";
+  els.seaStationNote.textContent = "Söker stationer";
+}
+
+async function loadSeaForActivePlace() {
+  if (!appState.activePlace) {
+    resetSeaView("Välj en plats för att visa havsdata i närheten.");
+    return;
+  }
+
+  const { lat, lon, name } = appState.activePlace;
+  const radiusKm = appState.seaRadiusKm;
+
+  setSeaLoadingState();
+
+  const areaRequestId = ++appState.latestSeaAreaRequestId;
+  const timeseriesRequestId = ++appState.latestSeaTimeseriesRequestId;
+
+  try {
+    const [areaResult, timeseriesResult] = await Promise.allSettled([
+      fetchSeaArea(lat, lon, radiusKm, areaRequestId),
+      fetchSeaTimeseries(lat, lon, radiusKm, timeseriesRequestId)
+    ]);
+
+    if (areaRequestId !== appState.latestSeaAreaRequestId) return;
+
+    appState.seaLoading = false;
+
+    if (areaResult.status === "fulfilled") {
+      appState.seaAreaData = areaResult.value;
+    } else {
+      console.warn("Havsområde kunde inte hämtas:", areaResult.reason);
+      appState.seaAreaData = null;
+    }
+
+    if (timeseriesResult.status === "fulfilled") {
+      appState.seaTimeseriesData = timeseriesResult.value;
+    } else {
+      console.warn("Havsserier kunde inte hämtas:", timeseriesResult.reason);
+      appState.seaTimeseriesData = null;
+    }
+
+    renderSeaOverview();
+
+    if (!appState.seaAreaData && !appState.seaTimeseriesData) {
+      els.seaStatusBox.className = "sea-status-box is-error";
+      els.seaStatusBox.textContent =
+        "Havsdata kunde inte hämtas för den här platsen just nu.";
+    } else {
+      els.seaStatusBox.className = "sea-status-box is-ready";
+      els.seaStatusBox.textContent =
+        `Havsdata runt ${name || "vald plats"} · inom ${radiusKm} km`;
+    }
+  } catch (error) {
+    console.warn("Havsdata kunde inte hämtas:", error);
+
+    appState.seaLoading = false;
+    resetSeaView("Havsdata kunde inte hämtas för den här platsen just nu.");
+
+    els.seaStatusBox.className = "sea-status-box is-error";
+  }
+}
+
+async function fetchSeaArea(lat, lon, radiusKm, requestId) {
+  const url =
+    `/api/sea-area?lat=${encodeURIComponent(lat)}` +
+    `&lon=${encodeURIComponent(lon)}` +
+    `&radiusKm=${encodeURIComponent(radiusKm)}`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (requestId !== appState.latestSeaAreaRequestId) {
+    throw new Error("Föråldrad havsförfrågan ignorerades.");
+  }
+
+  if (!response.ok || data?.error) {
+    throw new Error(data?.message || data?.error || "Havsdata kunde inte hämtas.");
+  }
+
+  return data;
+}
+
+async function fetchSeaTimeseries(lat, lon, radiusKm, requestId) {
+  const url =
+    `/api/sea-timeseries?lat=${encodeURIComponent(lat)}` +
+    `&lon=${encodeURIComponent(lon)}` +
+    `&radiusKm=${encodeURIComponent(radiusKm)}`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (requestId !== appState.latestSeaTimeseriesRequestId) {
+    throw new Error("Föråldrad havsserie ignorerades.");
+  }
+
+  if (!response.ok || data?.error) {
+    throw new Error(data?.message || data?.error || "Havsserier kunde inte hämtas.");
+  }
+
+  return data;
+}
+
+function renderSeaOverview() {
+  const areaData = appState.seaAreaData || {};
+  const timeseriesData = appState.seaTimeseriesData || {};
+
+  const waterTemp = getSeaMetricValue("waterTemp", areaData, timeseriesData);
+  const waveHeight = getSeaMetricValue("waveHeight", areaData, timeseriesData);
+  const waterLevel = getSeaMetricValue("waterLevel", areaData, timeseriesData);
+
+  const station = getSeaStationLabel(areaData, timeseriesData);
+
+  els.seaWaterTempValue.textContent = waterTemp.value || "--°";
+  els.seaWaterTempNote.textContent = waterTemp.note || "Närmaste mätning";
+
+  els.seaWaveValue.textContent = waveHeight.value || "-- m";
+  els.seaWaveNote.textContent = waveHeight.note || "Närmaste punkt";
+
+  els.seaWaterLevelValue.textContent = waterLevel.value || "-- cm";
+  els.seaWaterLevelNote.textContent = waterLevel.note || "Mätstation";
+
+  els.seaStationValue.textContent = station.value || "--";
+  els.seaStationNote.textContent = station.note || "I närheten";
+
+  appState.latestSeaDetails = {
+    placeName: appState.activePlace?.name || "Vald plats",
+    radiusKm: appState.seaRadiusKm,
+    waterTemp,
+    waveHeight,
+    waterLevel,
+    station,
+    loadedAt: new Date().toISOString()
+  };
+
+  if (appState.openSheet === "detailsSheet") {
+    renderSeaDetails();
+  }
+}
+
+function getSeaMetricValue(metricKey, areaData, timeseriesData) {
+  const fromSeries = getSeaMetricFromTimeseries(metricKey, timeseriesData);
+
+  if (fromSeries.value) {
+    return fromSeries;
+  }
+
+  const fromArea = getSeaMetricFromArea(metricKey, areaData);
+
+  if (fromArea.value) {
+    return fromArea;
+  }
+
+  return {
+    value: "--",
+    note: "Data saknas"
+  };
+}
+
+function getSeaMetricFromTimeseries(metricKey, timeseriesData) {
+  const seriesRoot = timeseriesData?.series || {};
+  const metricData = seriesRoot[metricKey];
+
+  if (!metricData) {
+    return { value: "", note: "" };
+  }
+
+  const points = collectSeaPoints(metricData);
+  const closest = findClosestSeaPoint(points, Date.now());
+
+  if (!closest) {
+    return { value: "", note: "" };
+  }
+
+  const unit = metricData.unit || getSeaUnit(metricKey);
+  const label = formatSeaValue(closest.value, unit);
+
+  return {
+    value: label,
+    note: closest.time
+      ? `Närmaste tid ${formatShortTime(closest.time)}`
+      : "Närmaste tillgängliga värde"
+  };
+}
+
+function collectSeaPoints(metricData) {
+  const buckets = [
+    metricData.all,
+    metricData.history,
+    metricData.forecast,
+    metricData.points,
+    metricData.values,
+    metricData.data
+  ];
+
+  const points = [];
+
+  buckets.forEach((bucket) => {
+    if (!Array.isArray(bucket)) return;
+
+    bucket.forEach((item) => {
+      const time =
+        item.time ||
+        item.timestamp ||
+        item.validTime ||
+        item.date ||
+        item.t;
+
+      const value =
+        item.value ??
+        item.v ??
+        item.y ??
+        item[1];
+
+      if (value == null || !Number.isFinite(Number(value))) return;
+
+      points.push({
+        time,
+        value: Number(value)
+      });
+    });
+  });
+
+  return points;
+}
+
+function getSeaMetricFromArea(metricKey, areaData) {
+  const candidatesByMetric = {
+    waterTemp: [
+      "waterTemp",
+      "waterTemperature",
+      "water_temperature",
+      "temperature",
+      "seaTemperature"
+    ],
+    waveHeight: [
+      "waveHeight",
+      "significantWaveHeight",
+      "wave_height",
+      "waves",
+      "wave"
+    ],
+    waterLevel: [
+      "waterLevel",
+      "seaLevel",
+      "water_level",
+      "level"
+    ]
+  };
+
+  const candidates = candidatesByMetric[metricKey] || [];
+  const found = findFirstNumericValue(areaData, candidates);
+
+  if (found == null) {
+    return { value: "", note: "" };
+  }
+
+  return {
+    value: formatSeaValue(found, getSeaUnit(metricKey)),
+    note: "Närmaste observation"
+  };
+}
+
+function findFirstNumericValue(root, keys) {
+  if (!root || typeof root !== "object") return null;
+
+  const queue = [root];
+
+  while (queue.length) {
+    const current = queue.shift();
+
+    if (!current || typeof current !== "object") continue;
+
+    for (const key of keys) {
+      if (current[key] != null && Number.isFinite(Number(current[key]))) {
+        return Number(current[key]);
+      }
+    }
+
+    Object.values(current).forEach((value) => {
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    });
+  }
+
+  return null;
+}
+
+function findClosestSeaPoint(points, targetTime) {
+  if (!Array.isArray(points) || !points.length) return null;
+
+  const target = Number(targetTime) || Date.now();
+  let best = null;
+  let bestDiff = Infinity;
+
+  points.forEach((point) => {
+    const pointTime = point.time ? new Date(point.time).getTime() : target;
+    const diff = Math.abs(pointTime - target);
+
+    if (Number.isFinite(pointTime) && diff < bestDiff) {
+      best = point;
+      bestDiff = diff;
+    }
+  });
+
+  return best;
+}
+
+function getSeaUnit(metricKey) {
+  if (metricKey === "waterTemp") return "°C";
+  if (metricKey === "waveHeight") return "m";
+  if (metricKey === "waterLevel") return "cm";
+  return "";
+}
+
+function formatSeaValue(value, unit) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return "--";
+
+  if (unit === "°C") {
+    return `${number.toFixed(1).replace(".", ",")}°`;
+  }
+
+  if (unit === "m") {
+    return `${number.toFixed(1).replace(".", ",")} m`;
+  }
+
+  if (unit === "cm") {
+    return `${Math.round(number)} cm`;
+  }
+
+  return `${number}`;
+}
+
+function formatShortTime(value) {
+  const date = new Date(value);
+
+  if (!Number.isFinite(date.getTime())) return "";
+
+  return date.toLocaleTimeString("sv-SE", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getSeaStationLabel(areaData, timeseriesData) {
+  const station =
+    findFirstStation(areaData) ||
+    findFirstStation(timeseriesData);
+
+  if (!station) {
+    return {
+      value: "--",
+      note: "Ingen station hittad"
+    };
+  }
+
+  const name =
+    station.name ||
+    station.title ||
+    station.stationName ||
+    station.id ||
+    "Station";
+
+  const distance =
+    station.distanceKm ??
+    station.distance_km ??
+    station.distance;
+
+  return {
+    value: String(name),
+    note: Number.isFinite(Number(distance))
+      ? `${Number(distance).toFixed(1).replace(".", ",")} km bort`
+      : "Närmaste station"
+  };
+}
+
+function findFirstStation(root) {
+  if (!root || typeof root !== "object") return null;
+
+  const possibleLists = [
+    root.stations,
+    root.nearbyStations,
+    root.sources?.stations,
+    root.sources?.waterTemp,
+    root.sources?.waveHeight,
+    root.sources?.waterLevel
+  ];
+
+  for (const list of possibleLists) {
+    if (Array.isArray(list) && list.length) return list[0];
+
+    if (list && typeof list === "object") return list;
+  }
+
+  return null;
+}
+
+function renderSeaDetails() {
+  const details = appState.latestSeaDetails;
+
+  els.detailsTitle.textContent = "Havsdetaljer";
+
+  if (!details) {
+    els.detailsSubtitle.textContent = "Välj en plats för att visa havsdata.";
+    els.detailsBody.innerHTML = `
+      <div class="details-empty">
+        Gå till Hav och välj en plats. Då visas havsdata i närheten här.
+      </div>
+    `;
+    return;
+  }
+
+  els.detailsSubtitle.textContent =
+    `${details.placeName} · inom ${details.radiusKm} km`;
+
+  els.detailsBody.innerHTML = `
+    <div class="details-weather-card">
+      <section class="details-hero">
+        <div class="details-hero-top">
+          <div>
+            <div class="details-hero-title">Hav runt ${escapeHtml(details.placeName)}</div>
+            <div class="details-hero-subtitle">Närmaste tillgängliga havsdata</div>
+          </div>
+          <div class="details-hero-icon">🌊</div>
+        </div>
+
+        <div class="details-hero-temp">${escapeHtml(details.waterTemp.value || "--°")}</div>
+        <div class="details-hero-summary">
+          Vattentemperatur, vågor och vattenstånd hämtas från närliggande mätpunkter där data finns.
+        </div>
+      </section>
+
+      <section class="sea-detail-list">
+        <div class="sea-detail-row">
+          <div class="sea-detail-label">Vattentemperatur</div>
+          <div class="sea-detail-value">${escapeHtml(details.waterTemp.value || "--")}<br>${escapeHtml(details.waterTemp.note || "")}</div>
+        </div>
+
+        <div class="sea-detail-row">
+          <div class="sea-detail-label">Vågor</div>
+          <div class="sea-detail-value">${escapeHtml(details.waveHeight.value || "--")}<br>${escapeHtml(details.waveHeight.note || "")}</div>
+        </div>
+
+        <div class="sea-detail-row">
+          <div class="sea-detail-label">Vattenstånd</div>
+          <div class="sea-detail-value">${escapeHtml(details.waterLevel.value || "--")}<br>${escapeHtml(details.waterLevel.note || "")}</div>
+        </div>
+
+        <div class="sea-detail-row">
+          <div class="sea-detail-label">Mätstation</div>
+          <div class="sea-detail-value">${escapeHtml(details.station.value || "--")}<br>${escapeHtml(details.station.note || "")}</div>
+        </div>
+      </section>
+
+      <section class="details-chart-teaser">
+        <div class="details-chart-title">Havsgrafer kommer i nästa steg</div>
+        <div class="details-chart-text">
+          Då kopplar vi in dina befintliga grafer för vattentemperatur, våghöjd och vattenstånd.
+        </div>
+      </section>
+    </div>
+  `;
+}
+   
 function renderWeatherDetails() {
   const details = appState.latestWeatherDetails;
 
@@ -2135,15 +2724,21 @@ function capitalizeFirst(value) {
     updateMainCardCopy("weather");
   }
 
-  function showSeaMode() {
-    els.mainMapCard.classList.remove("is-hidden");
-    els.navigationHud.classList.remove("is-visible");
-    els.timeControl.classList.remove("is-hidden");
+function showSeaMode() {
+  els.mainMapCard.classList.remove("is-hidden");
+  els.navigationHud.classList.remove("is-visible");
+  els.timeControl.classList.remove("is-hidden");
 
-    updateMapStyleForMode("sea");
-    updateMainCardCopy("sea");
-    openSheet("seaSheet");
+  updateMapStyleForMode("sea");
+  updateMainCardCopy("sea");
+  openSheet("seaSheet");
+
+  if (appState.activePlace) {
+    loadSeaForActivePlace();
+  } else {
+    resetSeaView("Välj en plats för att visa havsdata i närheten.");
   }
+}
 
   function showChartMode() {
     els.mainMapCard.classList.remove("is-hidden");
@@ -2466,11 +3061,10 @@ els.weatherDetailsBtn.addEventListener("click", () => {
   openSheet("detailsSheet");
 });
 
-  els.seaDetailsBtn.addEventListener("click", () => {
-    els.detailsTitle.textContent = "Havsdetaljer";
-    els.detailsSubtitle.textContent = "Här kopplar vi in dina befintliga havsgrafer.";
-    openSheet("detailsSheet");
-  });
+els.seaDetailsBtn.addEventListener("click", () => {
+  renderSeaDetails();
+  openSheet("detailsSheet");
+});
 els.savePlaceBtn.addEventListener("click", saveActivePlace);
   document.querySelectorAll(".toggle").forEach((toggle) => {
     toggle.addEventListener("click", () => {
