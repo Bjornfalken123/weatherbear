@@ -983,10 +983,10 @@
           <div id="timeSelectedLabel" class="time-selected">Prognos</div>
           <div class="time-label-sub">Väder</div>
         </div>
-        <div class="time-actions">
-          <button class="time-btn" type="button">Nu</button>
-          <button class="time-btn" type="button">+1h</button>
-        </div>
+<div class="time-actions">
+  <button id="timeNowBtn" class="time-btn" type="button">Nu</button>
+  <button id="timePlusHourBtn" class="time-btn" type="button">+1h</button>
+</div>
       </div>
       <input id="timeSlider" type="range" min="0" max="100" value="0" />
     </section>
@@ -1232,7 +1232,12 @@ const appState = {
   map: null,
   activePlaceMarker: null,
   searchTimer: null,
-  lastSearchRequestId: 0
+  lastSearchRequestId: 0,
+
+  weatherTimeseries: [],
+  latestWeatherRequestId: 0,
+  selectedWeatherIndex: 0,
+  weatherLoading: false
 };
 
   const els = {
@@ -1247,10 +1252,17 @@ const appState = {
     activePlaceName: document.getElementById("activePlaceName"),
     activePlaceMeta: document.getElementById("activePlaceMeta"),
 
-    weatherTemp: document.getElementById("weatherTemp"),
-    weatherSummary: document.getElementById("weatherSummary"),
-    windValue: document.getElementById("windValue"),
-    rainValue: document.getElementById("rainValue"),
+weatherIcon: document.getElementById("weatherIcon"),
+weatherTemp: document.getElementById("weatherTemp"),
+weatherSummary: document.getElementById("weatherSummary"),
+windValue: document.getElementById("windValue"),
+rainValue: document.getElementById("rainValue"),
+
+timeSlider: document.getElementById("timeSlider"),
+timeNowBtn: document.getElementById("timeNowBtn"),
+timePlusHourBtn: document.getElementById("timePlusHourBtn"),
+timeNowLabel: document.getElementById("timeNowLabel"),
+timeSelectedLabel: document.getElementById("timeSelectedLabel"),
 
     layersBtn: document.getElementById("layersBtn"),
     layersSheet: document.getElementById("layersSheet"),
@@ -1498,9 +1510,9 @@ savedPlacesList: document.getElementById("savedPlacesList"),
       source: place.source || "unknown"
     };
 
-    updateActivePlaceMarker();
-    updateDemoWeatherForPlace();
-    updateMainCardCopy(appState.mode);
+updateActivePlaceMarker();
+updateMainCardCopy(appState.mode);
+loadWeatherForActivePlace();
 
     if (appState.mode === "sea") {
       els.seaSheetSubtitle.textContent = `Hav runt ${appState.activePlace.name}`;
@@ -1533,12 +1545,305 @@ savedPlacesList: document.getElementById("savedPlacesList"),
     });
   }
 
-  function updateDemoWeatherForPlace() {
-    els.weatherTemp.textContent = "14°";
-    els.weatherSummary.textContent = "Klart till växlande molnighet.";
-    els.windValue.textContent = "7 m/s";
-    els.rainValue.textContent = "Låg risk";
+function setWeatherLoadingState() {
+  appState.weatherLoading = true;
+
+  els.weatherIcon.textContent = "…";
+  els.weatherTemp.textContent = "--°";
+  els.weatherSummary.textContent = "Hämtar kustväder...";
+  els.windValue.textContent = "--";
+  els.rainValue.textContent = "--";
+  els.timeSelectedLabel.textContent = "Laddar";
+}
+
+async function loadWeatherForActivePlace() {
+  if (!appState.activePlace) return;
+
+  const requestId = ++appState.latestWeatherRequestId;
+  const { lat, lon } = appState.activePlace;
+
+  setWeatherLoadingState();
+
+  try {
+    const response = await fetch(
+      `/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+    );
+
+    const text = await response.text();
+
+    if (requestId !== appState.latestWeatherRequestId) return;
+
+    if (!response.ok) {
+      throw new Error(text || "Väderdata kunde inte hämtas.");
+    }
+
+    const data = JSON.parse(text);
+    const timeseries =
+      data &&
+      data.properties &&
+      Array.isArray(data.properties.timeseries)
+        ? data.properties.timeseries
+        : [];
+
+    if (!timeseries.length) {
+      throw new Error("Ingen väderprognos hittades för platsen.");
+    }
+
+    appState.weatherTimeseries = timeseries;
+    appState.selectedWeatherIndex = 0;
+    appState.weatherLoading = false;
+
+    setupWeatherTimeline();
+    renderWeatherAtIndex(0);
+  } catch (error) {
+    console.warn("Kunde inte hämta väder:", error);
+
+    if (requestId !== appState.latestWeatherRequestId) return;
+
+    appState.weatherLoading = false;
+    appState.weatherTimeseries = [];
+
+    els.weatherIcon.textContent = "!";
+    els.weatherTemp.textContent = "--°";
+    els.weatherSummary.textContent =
+      "Väderdata kunde inte hämtas just nu.";
+    els.windValue.textContent = "--";
+    els.rainValue.textContent = "--";
+    els.timeSelectedLabel.textContent = "Prognos";
   }
+}
+
+function setupWeatherTimeline() {
+  const maxIndex = Math.max(0, Math.min(appState.weatherTimeseries.length - 1, 72));
+
+  els.timeSlider.min = "0";
+  els.timeSlider.max = String(maxIndex);
+  els.timeSlider.step = "1";
+  els.timeSlider.value = "0";
+
+  updateTimeLabels();
+}
+
+function renderWeatherAtIndex(index) {
+  if (!appState.weatherTimeseries.length) return;
+
+  const safeIndex = Math.max(
+    0,
+    Math.min(Number(index) || 0, appState.weatherTimeseries.length - 1)
+  );
+
+  appState.selectedWeatherIndex = safeIndex;
+
+  const item = appState.weatherTimeseries[safeIndex];
+  const instant = item?.data?.instant?.details || {};
+  const nextHour = item?.data?.next_1_hours || {};
+  const nextSixHours = item?.data?.next_6_hours || {};
+
+  const temperature = instant.air_temperature;
+  const windSpeed = instant.wind_speed;
+  const windDirection = instant.wind_from_direction;
+  const pressure = instant.air_pressure_at_sea_level;
+  const humidity = instant.relative_humidity;
+
+  const precipitation =
+    nextHour?.details?.precipitation_amount ??
+    nextSixHours?.details?.precipitation_amount ??
+    0;
+
+  const symbol =
+    nextHour?.summary?.symbol_code ||
+    nextSixHours?.summary?.symbol_code ||
+    item?.data?.next_12_hours?.summary?.symbol_code ||
+    "";
+
+  els.weatherIcon.textContent = getWeatherEmoji(symbol);
+  els.weatherTemp.textContent = formatTemperature(temperature);
+  els.weatherSummary.textContent = buildWeatherSummary(symbol, temperature, windSpeed, precipitation);
+  els.windValue.textContent = formatWind(windSpeed, windDirection);
+  els.rainValue.textContent = formatPrecipitation(precipitation);
+
+  els.timeSlider.value = String(safeIndex);
+  updateTimeLabels();
+
+  appState.latestWeatherDetails = {
+    time: item.time,
+    temperature,
+    windSpeed,
+    windDirection,
+    pressure,
+    humidity,
+    precipitation,
+    symbol
+  };
+}
+
+function updateTimeLabels() {
+  const now = new Date();
+
+  els.timeNowLabel.textContent =
+    "Nu " +
+    now.toLocaleTimeString("sv-SE", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+  const item = appState.weatherTimeseries[appState.selectedWeatherIndex];
+
+  if (!item || !item.time) {
+    els.timeSelectedLabel.textContent = "Prognos";
+    return;
+  }
+
+  const selected = new Date(item.time);
+
+  const todayKey = new Date().toDateString();
+  const selectedKey = selected.toDateString();
+
+  const dayLabel =
+    selectedKey === todayKey
+      ? "Idag"
+      : selected.toLocaleDateString("sv-SE", {
+          weekday: "short"
+        });
+
+  const timeLabel = selected.toLocaleTimeString("sv-SE", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  els.timeSelectedLabel.textContent = `${dayLabel} ${timeLabel}`;
+}
+
+function goToCurrentWeatherTime() {
+  if (!appState.weatherTimeseries.length) return;
+
+  const now = Date.now();
+  let bestIndex = 0;
+  let bestDiff = Infinity;
+
+  appState.weatherTimeseries.forEach((item, index) => {
+    const itemTime = new Date(item.time).getTime();
+    const diff = Math.abs(itemTime - now);
+
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIndex = index;
+    }
+  });
+
+  renderWeatherAtIndex(bestIndex);
+}
+
+function goForwardOneHour() {
+  if (!appState.weatherTimeseries.length) return;
+
+  renderWeatherAtIndex(appState.selectedWeatherIndex + 1);
+}
+
+function formatTemperature(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--°";
+  return `${Math.round(Number(value))}°`;
+}
+
+function formatWind(speed, direction) {
+  if (speed == null || !Number.isFinite(Number(speed))) return "--";
+
+  const rounded = Math.round(Number(speed));
+  const dir = formatWindDirection(direction);
+
+  return dir ? `${rounded} m/s ${dir}` : `${rounded} m/s`;
+}
+
+function formatWindDirection(degrees) {
+  if (degrees == null || !Number.isFinite(Number(degrees))) return "";
+
+  const dirs = ["N", "NO", "O", "SO", "S", "SV", "V", "NV"];
+  const index = Math.round(Number(degrees) / 45) % 8;
+
+  return dirs[index];
+}
+
+function formatPrecipitation(value) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount <= 0.05) {
+    return "Ingen";
+  }
+
+  if (amount < 1) {
+    return `${amount.toFixed(1).replace(".", ",")} mm`;
+  }
+
+  return `${Math.round(amount)} mm`;
+}
+
+function getWeatherEmoji(symbol) {
+  const code = String(symbol || "").toLowerCase();
+
+  if (code.includes("clearsky")) return "☀️";
+  if (code.includes("fair")) return "🌤️";
+  if (code.includes("partlycloudy")) return "⛅";
+  if (code.includes("cloudy")) return "☁️";
+  if (code.includes("rain")) return "🌧️";
+  if (code.includes("heavyrain")) return "🌧️";
+  if (code.includes("snow")) return "❄️";
+  if (code.includes("sleet")) return "🌨️";
+  if (code.includes("fog")) return "🌫️";
+  if (code.includes("thunder")) return "⛈️";
+
+  return "🌤️";
+}
+
+function buildWeatherSummary(symbol, temperature, windSpeed, precipitation) {
+  const weatherText = getWeatherText(symbol);
+  const wind = Number(windSpeed);
+  const rain = Number(precipitation);
+
+  const parts = [];
+
+  if (weatherText) parts.push(weatherText);
+
+  if (Number.isFinite(wind)) {
+    if (wind >= 14) {
+      parts.push("kraftig vind");
+    } else if (wind >= 8) {
+      parts.push("frisk vind");
+    } else if (wind <= 3) {
+      parts.push("svag vind");
+    }
+  }
+
+  if (Number.isFinite(rain) && rain > 0.1) {
+    parts.push("regn väntas");
+  }
+
+  if (!parts.length) return "Prognos för vald plats.";
+
+  return capitalizeFirst(parts.join(", ")) + ".";
+}
+
+function getWeatherText(symbol) {
+  const code = String(symbol || "").toLowerCase();
+
+  if (code.includes("clearsky")) return "klart";
+  if (code.includes("fair")) return "mestadels klart";
+  if (code.includes("partlycloudy")) return "växlande molnighet";
+  if (code.includes("cloudy")) return "molnigt";
+  if (code.includes("heavyrain")) return "kraftigt regn";
+  if (code.includes("rain")) return "regn";
+  if (code.includes("snow")) return "snö";
+  if (code.includes("sleet")) return "blötsnö";
+  if (code.includes("fog")) return "dimma";
+  if (code.includes("thunder")) return "åska";
+
+  return "väderprognos";
+}
+
+function capitalizeFirst(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
   function formatCoords(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
@@ -1912,11 +2217,26 @@ function updateSavePlaceButton() {
 
   els.minimizeCardBtn.addEventListener("click", toggleMainCardMinimized);
 
-  els.weatherDetailsBtn.addEventListener("click", () => {
-    els.detailsTitle.textContent = "Väderdetaljer";
-    els.detailsSubtitle.textContent = "Grafer och mer väderdata kommer här.";
-    openSheet("detailsSheet");
-  });
+els.weatherDetailsBtn.addEventListener("click", () => {
+  els.detailsTitle.textContent = "Väderdetaljer";
+
+  const details = appState.latestWeatherDetails;
+
+  if (!details) {
+    els.detailsSubtitle.textContent = "Välj en plats för att visa mer väderdata.";
+  } else {
+    const time = new Date(details.time).toLocaleString("sv-SE", {
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+    els.detailsSubtitle.textContent =
+      `${time} · ${formatTemperature(details.temperature)} · ${formatWind(details.windSpeed, details.windDirection)}`;
+  }
+
+  openSheet("detailsSheet");
+});
 
   els.seaDetailsBtn.addEventListener("click", () => {
     els.detailsTitle.textContent = "Havsdetaljer";
@@ -1939,10 +2259,17 @@ els.savePlaceBtn.addEventListener("click", saveActivePlace);
   });
 
   els.useLocationBtn.addEventListener("click", handleUseLocationClick);
+els.timeSlider.addEventListener("input", () => {
+  renderWeatherAtIndex(Number(els.timeSlider.value));
+});
 
+els.timeNowBtn.addEventListener("click", goToCurrentWeatherTime);
+
+els.timePlusHourBtn.addEventListener("click", goForwardOneHour);
 loadSavedPlaces();
 initMap();
 setMode("weather");
+   updateTimeLabels();
 </script>
 </body>
 </html>
