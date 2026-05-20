@@ -1839,9 +1839,15 @@ timeControl: document.getElementById("timeControl")
       geolocateControl: false
     });
 
-    appState.map.on("load", () => {
-      appState.map.resize();
-    });
+ appState.map.on("load", () => {
+  appState.map.resize();
+
+  // Säkerställ att inga väderlager ligger på från start.
+  removeSingleWeatherLayer("wind");
+  removeSingleWeatherLayer("precipitation");
+  removeSingleWeatherLayer("temperature");
+  syncWeatherLayerUi();
+});
 
     appState.map.on("click", (event) => {
       const lat = event.lngLat.lat;
@@ -4357,6 +4363,13 @@ function ensureMaptilerWeatherLayer(type) {
 function setWeatherLayerVisible(type, isVisible) {
   if (!appState.map) return;
 
+  // När ett lager ska vara av tar vi bort det helt.
+  // Det hindrar MapTiler Weather från att ligga synligt vid appstart.
+  if (!isVisible) {
+    removeSingleWeatherLayer(type);
+    return;
+  }
+
   const layer = ensureMaptilerWeatherLayer(type);
 
   if (!layer) {
@@ -4364,37 +4377,63 @@ function setWeatherLayerVisible(type, isVisible) {
     return;
   }
 
-  const fallbackOpacity =
+  const visibleOpacity =
     type === "wind" ? 0.78 :
     type === "precipitation" ? 0.70 :
     type === "temperature" ? 0.62 :
     0.70;
 
-  const visibleOpacity = layer._kustvaderDefaultOpacity || fallbackOpacity;
-
   try {
     if (typeof layer.setOpacity === "function") {
-      layer.setOpacity(isVisible ? visibleOpacity : 0);
+      layer.setOpacity(visibleOpacity);
     }
 
     if (typeof layer.setVisibility === "function") {
-      layer.setVisibility(Boolean(isVisible));
+      layer.setVisibility(true);
     }
 
     if (typeof layer.setVisible === "function") {
-      layer.setVisible(Boolean(isVisible));
+      layer.setVisible(true);
     }
   } catch (error) {
-    console.warn(`Kunde inte ändra väderlager: ${type}`, error);
+    console.warn(`Kunde inte visa väderlager: ${type}`, error);
   }
 }
+function removeSingleWeatherLayer(type) {
+  const layer = appState.maptilerWeatherLayers[type];
 
+  if (!layer) {
+    return;
+  }
+
+  try {
+    if (typeof layer.remove === "function") {
+      layer.remove();
+    } else if (appState.map && typeof appState.map.removeLayer === "function") {
+      const layerId =
+        type === "wind" ? "weather-wind-layer" :
+        type === "precipitation" ? "weather-precipitation-layer" :
+        type === "temperature" ? "weather-temperature-layer" :
+        null;
+
+      if (layerId && appState.map.getLayer && appState.map.getLayer(layerId)) {
+        appState.map.removeLayer(layerId);
+      }
+    }
+  } catch (error) {
+    console.warn(`Kunde inte ta bort väderlager: ${type}`, error);
+  }
+
+  appState.maptilerWeatherLayers[type] = null;
+}
 function applyWeatherLayersToMap() {
   if (!appState.map) return;
 
-  setWeatherLayerVisible("wind", appState.mode === "weather" && appState.weatherLayers.wind);
-  setWeatherLayerVisible("precipitation", appState.mode === "weather" && appState.weatherLayers.precipitation);
-  setWeatherLayerVisible("temperature", appState.mode === "weather" && appState.weatherLayers.temperature);
+  const isWeatherMode = appState.mode === "weather";
+
+  setWeatherLayerVisible("wind", isWeatherMode && appState.weatherLayers.wind);
+  setWeatherLayerVisible("precipitation", isWeatherMode && appState.weatherLayers.precipitation);
+  setWeatherLayerVisible("temperature", isWeatherMode && appState.weatherLayers.temperature);
 
   syncWeatherLayerUi();
 }
