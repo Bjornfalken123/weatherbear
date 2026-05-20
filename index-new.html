@@ -555,12 +555,12 @@
   position: fixed;
   left: 50%;
   bottom: calc(var(--bottom-ui) + 18px);
-  z-index: 120;
+  z-index: 9999;
   max-width: calc(100vw - 32px);
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(5,11,22,0.92);
+  background: rgba(5,11,22,0.94);
   color: var(--text);
   box-shadow: 0 14px 36px rgba(0,0,0,0.38);
   backdrop-filter: blur(16px);
@@ -583,19 +583,16 @@
 .app-toast.is-success {
   border-color: rgba(152,240,219,0.28);
   color: var(--accent-2);
-  background: rgba(5,11,22,0.94);
 }
 
 .app-toast.is-warning {
   border-color: rgba(232,215,168,0.28);
   color: var(--warning);
-  background: rgba(5,11,22,0.94);
 }
 
 .app-toast.is-error {
   border-color: rgba(255,120,120,0.28);
   color: #ffc5c5;
-  background: rgba(5,11,22,0.94);
 }
 
 .maplibregl-ctrl-bottom-left,
@@ -3419,6 +3416,11 @@ function toggleFollowPosition() {
 
 function toggleAis() {
   appState.aisVisible = !appState.aisVisible;
+
+  if (els.aisToggle) {
+    els.aisToggle.classList.toggle("is-on", appState.aisVisible);
+  }
+
   syncChartUi();
 
   if (appState.aisVisible) {
@@ -3849,15 +3851,24 @@ function handleUseLocationClick() {
   );
 }
 function showToast(message, type = "success") {
-  if (!els.appToast) return;
+  let toast = document.getElementById("appToast");
 
-  els.appToast.textContent = message;
-  els.appToast.className = `app-toast is-visible is-${type}`;
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "appToast";
+    toast.className = "app-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+  toast.className = `app-toast is-visible is-${type}`;
 
   window.clearTimeout(showToast._timer);
   showToast._timer = window.setTimeout(() => {
-    els.appToast.className = "app-toast";
-  }, 2300);
+    toast.className = "app-toast";
+  }, 2600);
 }
   function escapeHtml(value) {
     return String(value || "")
@@ -3911,7 +3922,13 @@ document.querySelectorAll(".toggle").forEach((toggle) => {
 
 els.chartBaseToggle.addEventListener("click", toggleChartBase);
 els.followPositionToggle.addEventListener("click", toggleFollowPosition);
-els.aisToggle.addEventListener("click", toggleAis);
+if (els.aisToggle) {
+  els.aisToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleAis();
+  });
+}
 
   els.placeSearchInput.addEventListener("input", () => {
     clearTimeout(appState.searchTimer);
