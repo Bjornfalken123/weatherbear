@@ -670,6 +670,41 @@
     .row-main {
       min-width: 0;
     }
+    .saved-place-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.saved-place-main {
+  min-width: 0;
+  flex: 1;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-place-remove {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.055);
+  color: var(--text);
+  border-radius: 11px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.saved-place-remove:active,
+.saved-place-main:active {
+  transform: translateY(1px);
+}
 
     .row-title {
       color: var(--text);
@@ -1188,16 +1223,17 @@
 
  <script>
   const MAPTILER_API_KEY = "72WUquDNJCLDzyB9DSky";
-  const appState = {
-    mode: "weather",
-    activePlace: null,
-    cardMinimized: false,
-    openSheet: null,
-    map: null,
-    activePlaceMarker: null,
-    searchTimer: null,
-    lastSearchRequestId: 0
-  };
+const appState = {
+  mode: "weather",
+  activePlace: null,
+  savedPlaces: [],
+  cardMinimized: false,
+  openSheet: null,
+  map: null,
+  activePlaceMarker: null,
+  searchTimer: null,
+  lastSearchRequestId: 0
+};
 
   const els = {
     navButtons: document.querySelectorAll(".nav-btn"),
@@ -1231,8 +1267,10 @@
     detailsTitle: document.getElementById("detailsTitle"),
     detailsSubtitle: document.getElementById("detailsSubtitle"),
 
-    weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
-    seaDetailsBtn: document.getElementById("seaDetailsBtn"),
+weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
+seaDetailsBtn: document.getElementById("seaDetailsBtn"),
+savePlaceBtn: document.getElementById("savePlaceBtn"),
+savedPlacesList: document.getElementById("savedPlacesList"),
 
     placeSearchInput: document.getElementById("placeSearchInput"),
     placeSearchStatus: document.getElementById("placeSearchStatus"),
@@ -1467,6 +1505,7 @@
     if (appState.mode === "sea") {
       els.seaSheetSubtitle.textContent = `Hav runt ${appState.activePlace.name}`;
     }
+    updateSavePlaceButton();
   }
 
   function updateActivePlaceMarker() {
@@ -1668,7 +1707,180 @@
       appState.cardMinimized ? "Visa detaljer" : "Minimera kort"
     );
   }
+function loadSavedPlaces() {
+  try {
+    const raw = localStorage.getItem("kustvader:savedPlaces");
+    const parsed = raw ? JSON.parse(raw) : [];
 
+    appState.savedPlaces = Array.isArray(parsed)
+      ? parsed.filter(isValidSavedPlace)
+      : [];
+  } catch (error) {
+    console.warn("Kunde inte läsa sparade platser:", error);
+    appState.savedPlaces = [];
+  }
+
+  renderSavedPlaces();
+  updateSavePlaceButton();
+}
+
+function persistSavedPlaces() {
+  try {
+    localStorage.setItem(
+      "kustvader:savedPlaces",
+      JSON.stringify(appState.savedPlaces)
+    );
+  } catch (error) {
+    console.warn("Kunde inte spara platser:", error);
+  }
+}
+
+function isValidSavedPlace(place) {
+  return (
+    place &&
+    typeof place.name === "string" &&
+    Number.isFinite(Number(place.lat)) &&
+    Number.isFinite(Number(place.lon))
+  );
+}
+
+function getPlaceKey(place) {
+  if (!place) return "";
+  return `${Number(place.lat).toFixed(5)},${Number(place.lon).toFixed(5)}`;
+}
+
+function isActivePlaceSaved() {
+  if (!appState.activePlace) return false;
+
+  const activeKey = getPlaceKey(appState.activePlace);
+
+  return appState.savedPlaces.some((place) => {
+    return getPlaceKey(place) === activeKey;
+  });
+}
+
+function saveActivePlace() {
+  if (!appState.activePlace) {
+    els.weatherSummary.textContent = "Välj en plats först, sedan kan du spara den.";
+    return;
+  }
+
+  if (isActivePlaceSaved()) {
+    els.weatherSummary.textContent = "Platsen är redan sparad.";
+    updateSavePlaceButton();
+    return;
+  }
+
+  const newPlace = {
+    id: Date.now().toString(),
+    name: appState.activePlace.name || "Sparad plats",
+    lat: Number(appState.activePlace.lat),
+    lon: Number(appState.activePlace.lon),
+    savedAt: new Date().toISOString()
+  };
+
+  appState.savedPlaces.unshift(newPlace);
+
+  persistSavedPlaces();
+  renderSavedPlaces();
+  updateSavePlaceButton();
+
+  els.weatherSummary.textContent = `${newPlace.name} är sparad.`;
+}
+
+function renderSavedPlaces() {
+  if (!els.savedPlacesList) return;
+
+  if (!appState.savedPlaces.length) {
+    els.savedPlacesList.innerHTML = `
+      <div class="row-item">
+        <div class="row-main">
+          <div class="row-title">Inga sparade platser ännu</div>
+          <div class="row-subtitle">När du sparar en plats visas den här.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  els.savedPlacesList.innerHTML = appState.savedPlaces
+    .map((place) => {
+      return `
+        <div class="row-item">
+          <button class="saved-place-main" type="button" data-saved-place-id="${escapeHtml(place.id)}">
+            <div class="row-title">${escapeHtml(place.name)}</div>
+            <div class="row-subtitle">${escapeHtml(formatCoords(Number(place.lat), Number(place.lon)))}</div>
+          </button>
+
+          <div class="saved-place-actions">
+            <button class="saved-place-remove" type="button" data-remove-place-id="${escapeHtml(place.id)}">
+              Ta bort
+            </button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  els.savedPlacesList
+    .querySelectorAll("[data-saved-place-id]")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        selectSavedPlace(button.dataset.savedPlaceId);
+      });
+    });
+
+  els.savedPlacesList
+    .querySelectorAll("[data-remove-place-id]")
+    .forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removeSavedPlace(button.dataset.removePlaceId);
+      });
+    });
+}
+
+function selectSavedPlace(placeId) {
+  const place = appState.savedPlaces.find((item) => item.id === placeId);
+  if (!place) return;
+
+  setActivePlace({
+    name: place.name,
+    lat: Number(place.lat),
+    lon: Number(place.lon),
+    source: "saved"
+  });
+
+  closeAllSheets();
+
+  if (appState.mode === "place") {
+    setMode("weather");
+  }
+}
+
+function removeSavedPlace(placeId) {
+  appState.savedPlaces = appState.savedPlaces.filter((place) => {
+    return place.id !== placeId;
+  });
+
+  persistSavedPlaces();
+  renderSavedPlaces();
+  updateSavePlaceButton();
+}
+
+function updateSavePlaceButton() {
+  if (!els.savePlaceBtn) return;
+
+  if (!appState.activePlace) {
+    els.savePlaceBtn.textContent = "Spara plats";
+    els.savePlaceBtn.disabled = false;
+    return;
+  }
+
+  els.savePlaceBtn.textContent = isActivePlaceSaved()
+    ? "Sparad"
+    : "Spara plats";
+}
   function handleUseLocationClick() {
     els.placeSearchStatus.textContent =
       "GPS kopplas in i ett kommande block. Just nu kan du söka eller trycka på kartan.";
@@ -1711,7 +1923,7 @@
     els.detailsSubtitle.textContent = "Här kopplar vi in dina befintliga havsgrafer.";
     openSheet("detailsSheet");
   });
-
+els.savePlaceBtn.addEventListener("click", saveActivePlace);
   document.querySelectorAll(".toggle").forEach((toggle) => {
     toggle.addEventListener("click", () => {
       toggle.classList.toggle("is-on");
@@ -1728,8 +1940,9 @@
 
   els.useLocationBtn.addEventListener("click", handleUseLocationClick);
 
-  initMap();
-  setMode("weather");
+loadSavedPlaces();
+initMap();
+setMode("weather");
 </script>
 </body>
 </html>
