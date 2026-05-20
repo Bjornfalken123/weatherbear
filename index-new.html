@@ -465,6 +465,72 @@
     0 8px 18px rgba(0, 0, 0, 0.42),
     0 0 0 2px rgba(5, 11, 22, 0.55);
 }
+.user-location-marker {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.user-location-marker::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(152, 240, 219, 0.14);
+  border: 1px solid rgba(152, 240, 219, 0.36);
+  box-shadow: 0 0 28px rgba(152, 240, 219, 0.26);
+}
+
+.user-location-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: #5fb6ff;
+  border: 3px solid rgba(255,255,255,0.98);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.42),
+    0 0 0 2px rgba(5,11,22,0.55);
+}
+
+.chart-status-pill {
+  position: fixed;
+  left: 14px;
+  bottom: calc(var(--bottom-ui) + 92px);
+  z-index: 45;
+  max-width: calc(100vw - 112px);
+  padding: 8px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background: rgba(5,11,22,0.82);
+  color: var(--muted-soft);
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 850;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-status-pill.is-visible {
+  display: block;
+}
+
+.chart-status-pill.is-active {
+  color: var(--accent-2);
+  border-color: rgba(152,240,219,0.24);
+  background: rgba(152,240,219,0.08);
+}
 
 .maplibregl-ctrl-bottom-left,
 .maplibregl-ctrl-bottom-right {
@@ -1250,10 +1316,14 @@
       </div>
     </div>
 
-    <div id="navigationHud" class="navigation-hud">
-      <div class="compass-face">N</div>
-      <div class="speed-pill">-- kn</div>
-    </div>
+<div id="navigationHud" class="navigation-hud">
+  <div id="compassFace" class="compass-face">N</div>
+  <div id="speedPill" class="speed-pill">-- kn</div>
+</div>
+
+<div id="chartStatusPill" class="chart-status-pill">
+  Sjökort aktivt · AIS av
+</div>
 
     <section id="timeControl" class="time-control" aria-label="Tidslinje">
       <div class="time-top">
@@ -1469,7 +1539,7 @@
               <div class="row-title">Sjökort</div>
               <div class="row-subtitle">Visa sjökort som kartgrund.</div>
             </div>
-            <button class="toggle is-on" type="button"></button>
+            <button id="chartBaseToggle" class="toggle is-on" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1477,7 +1547,7 @@
               <div class="row-title">Följ min position</div>
               <div class="row-subtitle">Centrera kartan på din position.</div>
             </div>
-            <button class="toggle" type="button"></button>
+            <button id="followPositionToggle" class="toggle" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1485,7 +1555,7 @@
               <div class="row-title">AIS-fartyg</div>
               <div class="row-subtitle">Visa fartyg när du behöver det.</div>
             </div>
-            <button class="toggle" type="button"></button>
+            <button id="aisToggle" class="toggle" type="button"></button>
           </div>
         </div>
       </div>
@@ -1534,7 +1604,14 @@ seaTimeseriesData: null,
 seaLoading: false,
 latestSeaAreaRequestId: 0,
 latestSeaTimeseriesRequestId: 0,
-latestSeaDetails: null
+latestSeaDetails: null,
+chartBaseVisible: true,
+followPosition: false,
+aisVisible: false,
+userLocationMarker: null,
+geoWatchId: null,
+lastUserPosition: null,
+nauticalLayersAdded: false
 };
 
   const els = {
@@ -1597,8 +1674,14 @@ savedPlacesList: document.getElementById("savedPlacesList"),
     placeSearchResults: document.getElementById("placeSearchResults"),
     useLocationBtn: document.getElementById("useLocationBtn"),
 
-    navigationHud: document.getElementById("navigationHud"),
-    timeControl: document.getElementById("timeControl")
+navigationHud: document.getElementById("navigationHud"),
+compassFace: document.getElementById("compassFace"),
+speedPill: document.getElementById("speedPill"),
+chartStatusPill: document.getElementById("chartStatusPill"),
+chartBaseToggle: document.getElementById("chartBaseToggle"),
+followPositionToggle: document.getElementById("followPositionToggle"),
+aisToggle: document.getElementById("aisToggle"),
+timeControl: document.getElementById("timeControl")
   };
 
   function initMap() {
@@ -3001,7 +3084,277 @@ function capitalizeFirst(value) {
   if (!text) return "";
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+const NAUTICAL_LIGHT_BASE_TILE_URL = "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
+const NAUTICAL_SEAMARK_TILE_URL = "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
 
+const NAUTICAL_BASE_SOURCE_ID = "nautical-light-base-source";
+const NAUTICAL_BASE_LAYER_ID = "nautical-light-base-layer";
+const NAUTICAL_SEAMARK_SOURCE_ID = "nautical-seamark-source";
+const NAUTICAL_SEAMARK_LAYER_ID = "nautical-seamark-layer";
+
+function ensureNauticalLayers() {
+  if (!appState.map || appState.nauticalLayersAdded) return;
+
+  try {
+    if (!appState.map.getSource(NAUTICAL_BASE_SOURCE_ID)) {
+      appState.map.addSource(NAUTICAL_BASE_SOURCE_ID, {
+        type: "raster",
+        tiles: [NAUTICAL_LIGHT_BASE_TILE_URL],
+        tileSize: 256,
+        attribution: "© OpenStreetMap contributors © CARTO"
+      });
+    }
+
+    if (!appState.map.getLayer(NAUTICAL_BASE_LAYER_ID)) {
+      appState.map.addLayer({
+        id: NAUTICAL_BASE_LAYER_ID,
+        type: "raster",
+        source: NAUTICAL_BASE_SOURCE_ID,
+        layout: {
+          visibility: "none"
+        },
+        paint: {
+          "raster-opacity": 1
+        }
+      });
+    }
+
+    if (!appState.map.getSource(NAUTICAL_SEAMARK_SOURCE_ID)) {
+      appState.map.addSource(NAUTICAL_SEAMARK_SOURCE_ID, {
+        type: "raster",
+        tiles: [NAUTICAL_SEAMARK_TILE_URL],
+        tileSize: 256,
+        attribution: "© OpenSeaMap contributors"
+      });
+    }
+
+    if (!appState.map.getLayer(NAUTICAL_SEAMARK_LAYER_ID)) {
+      appState.map.addLayer({
+        id: NAUTICAL_SEAMARK_LAYER_ID,
+        type: "raster",
+        source: NAUTICAL_SEAMARK_SOURCE_ID,
+        layout: {
+          visibility: "none"
+        },
+        paint: {
+          "raster-opacity": 1
+        }
+      });
+    }
+
+    appState.nauticalLayersAdded = true;
+  } catch (error) {
+    console.warn("Sjökortslagret kunde inte läggas till:", error);
+  }
+}
+
+function setNauticalLayersVisible(isVisible) {
+  if (!appState.map) return;
+
+  ensureNauticalLayers();
+
+  const visibility = isVisible ? "visible" : "none";
+
+  try {
+    if (appState.map.getLayer(NAUTICAL_BASE_LAYER_ID)) {
+      appState.map.setLayoutProperty(NAUTICAL_BASE_LAYER_ID, "visibility", visibility);
+    }
+
+    if (appState.map.getLayer(NAUTICAL_SEAMARK_LAYER_ID)) {
+      appState.map.setLayoutProperty(NAUTICAL_SEAMARK_LAYER_ID, "visibility", visibility);
+    }
+  } catch (error) {
+    console.warn("Kunde inte visa/dölja sjökort:", error);
+  }
+}
+
+function syncChartUi() {
+  if (els.chartBaseToggle) {
+    els.chartBaseToggle.classList.toggle("is-on", appState.chartBaseVisible);
+  }
+
+  if (els.followPositionToggle) {
+    els.followPositionToggle.classList.toggle("is-on", appState.followPosition);
+  }
+
+  if (els.aisToggle) {
+    els.aisToggle.classList.toggle("is-on", appState.aisVisible);
+  }
+
+  if (els.chartStatusPill) {
+    els.chartStatusPill.classList.toggle("is-visible", appState.mode === "chart");
+    els.chartStatusPill.classList.toggle("is-active", appState.followPosition || appState.aisVisible);
+
+    const followText = appState.followPosition ? "Följer position" : "Position av";
+    const aisText = appState.aisVisible ? "AIS på" : "AIS av";
+
+    els.chartStatusPill.textContent = `Sjökort aktivt · ${followText} · ${aisText}`;
+  }
+
+  updateMainCardCopy(appState.mode);
+}
+
+function startFollowPosition() {
+  if (!navigator.geolocation) {
+    showChartStatusMessage("GPS stöds inte i den här webbläsaren.");
+    appState.followPosition = false;
+    syncChartUi();
+    return;
+  }
+
+  if (appState.geoWatchId != null) {
+    appState.followPosition = true;
+    syncChartUi();
+    return;
+  }
+
+  appState.followPosition = true;
+  syncChartUi();
+  showChartStatusMessage("Söker din position...");
+
+  appState.geoWatchId = navigator.geolocation.watchPosition(
+    handleUserPosition,
+    handleUserPositionError,
+    {
+      enableHighAccuracy: true,
+      maximumAge: 3000,
+      timeout: 12000
+    }
+  );
+}
+
+function stopFollowPosition() {
+  appState.followPosition = false;
+
+  if (appState.geoWatchId != null) {
+    try {
+      navigator.geolocation.clearWatch(appState.geoWatchId);
+    } catch (error) {
+      console.warn("Kunde inte stoppa GPS:", error);
+    }
+  }
+
+  appState.geoWatchId = null;
+  syncChartUi();
+}
+
+function handleUserPosition(position) {
+  if (!position || !position.coords) return;
+
+  const coords = position.coords;
+
+  const userPosition = {
+    lat: Number(coords.latitude),
+    lon: Number(coords.longitude),
+    accuracy: coords.accuracy,
+    speed: coords.speed,
+    heading: coords.heading,
+    updatedAt: Date.now()
+  };
+
+  appState.lastUserPosition = userPosition;
+
+  updateUserLocationMarker(userPosition);
+  updateNavigationHud(userPosition);
+
+  if (appState.followPosition && appState.map) {
+    appState.map.easeTo({
+      center: [userPosition.lon, userPosition.lat],
+      zoom: Math.max(appState.map.getZoom(), 12),
+      duration: 700,
+      essential: true
+    });
+  }
+
+  showChartStatusMessage("Följer din position.");
+}
+
+function handleUserPositionError(error) {
+  console.warn("GPS kunde inte hämtas:", error);
+
+  appState.followPosition = false;
+  syncChartUi();
+
+  showChartStatusMessage("Kunde inte hämta din position.");
+}
+
+function updateUserLocationMarker(position) {
+  if (!appState.map || !position) return;
+
+  const el = document.createElement("div");
+  el.className = "user-location-marker";
+
+  if (appState.userLocationMarker) {
+    appState.userLocationMarker.remove();
+  }
+
+  appState.userLocationMarker = new maptilersdk.Marker({
+    element: el,
+    anchor: "center"
+  })
+    .setLngLat([position.lon, position.lat])
+    .addTo(appState.map);
+}
+
+function updateNavigationHud(position) {
+  if (!position) return;
+
+  const speedKnots =
+    Number.isFinite(Number(position.speed)) && Number(position.speed) >= 0
+      ? Number(position.speed) * 1.94384
+      : null;
+
+  els.speedPill.textContent =
+    speedKnots == null
+      ? "-- kn"
+      : `${Math.round(speedKnots)} kn`;
+
+  const heading =
+    Number.isFinite(Number(position.heading))
+      ? Math.round(Number(position.heading))
+      : null;
+
+  els.compassFace.textContent =
+    heading == null
+      ? "N"
+      : `${heading}°`;
+}
+
+function showChartStatusMessage(message) {
+  if (!els.chartStatusPill || appState.mode !== "chart") return;
+
+  els.chartStatusPill.textContent = message;
+
+  window.clearTimeout(showChartStatusMessage._timer);
+  showChartStatusMessage._timer = window.setTimeout(() => {
+    syncChartUi();
+  }, 1800);
+}
+
+function toggleChartBase() {
+  appState.chartBaseVisible = !appState.chartBaseVisible;
+  setNauticalLayersVisible(appState.mode === "chart" && appState.chartBaseVisible);
+  syncChartUi();
+}
+
+function toggleFollowPosition() {
+  if (appState.followPosition) {
+    stopFollowPosition();
+  } else {
+    startFollowPosition();
+  }
+}
+
+function toggleAis() {
+  appState.aisVisible = !appState.aisVisible;
+  syncChartUi();
+
+  if (appState.aisVisible) {
+    showChartStatusMessage("AIS kopplas in i nästa block.");
+  } else {
+    showChartStatusMessage("AIS är av.");
+  }
+}
   function formatCoords(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
     return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
@@ -3045,6 +3398,8 @@ function capitalizeFirst(value) {
     els.timeControl.classList.remove("is-hidden");
 
     updateMapStyleForMode("weather");
+    setNauticalLayersVisible(false);
+syncChartUi();
     updateMainCardCopy("weather");
   }
 
@@ -3054,6 +3409,8 @@ function showSeaMode() {
   els.timeControl.classList.remove("is-hidden");
 
   updateMapStyleForMode("sea");
+  setNauticalLayersVisible(false);
+syncChartUi();
   updateMainCardCopy("sea");
   openSheet("seaSheet");
 
@@ -3064,14 +3421,16 @@ function showSeaMode() {
   }
 }
 
-  function showChartMode() {
-    els.mainMapCard.classList.remove("is-hidden");
-    els.navigationHud.classList.add("is-visible");
-    els.timeControl.classList.add("is-hidden");
+function showChartMode() {
+  els.mainMapCard.classList.remove("is-hidden");
+  els.navigationHud.classList.add("is-visible");
+  els.timeControl.classList.add("is-hidden");
 
-    updateMapStyleForMode("chart");
-    updateMainCardCopy("chart");
-  }
+  updateMapStyleForMode("chart");
+  setNauticalLayersVisible(appState.chartBaseVisible);
+  updateMainCardCopy("chart");
+  syncChartUi();
+}
 
   function showPlaceMode() {
     openSheet("placeSheet");
@@ -3085,16 +3444,29 @@ function showSeaMode() {
     if (!appState.map) return;
 
     try {
-      if (mode === "chart") {
-        appState.map.setStyle(maptilersdk.MapStyle.STREETS.DARK);
-      } else {
-        appState.map.setStyle(maptilersdk.MapStyle.DATAVIZ.DARK);
-      }
+if (mode === "chart") {
+  appState.map.setStyle(maptilersdk.MapStyle.STREETS.DARK);
+} else {
+  appState.map.setStyle(maptilersdk.MapStyle.DATAVIZ.DARK);
+}
 
-      setTimeout(() => {
-        if (appState.map) appState.map.resize();
-        if (appState.activePlace) updateActivePlaceMarker();
-      }, 500);
+appState.nauticalLayersAdded = false;
+
+setTimeout(() => {
+  if (appState.map) appState.map.resize();
+
+  if (appState.mode === "chart") {
+    setNauticalLayersVisible(appState.chartBaseVisible);
+  } else {
+    setNauticalLayersVisible(false);
+  }
+
+  if (appState.activePlace) updateActivePlaceMarker();
+
+  if (appState.lastUserPosition) {
+    updateUserLocationMarker(appState.lastUserPosition);
+  }
+}, 500);
     } catch (error) {
       console.warn("Kunde inte byta kartstil:", error);
     }
@@ -3349,10 +3721,44 @@ function updateSavePlaceButton() {
     ? "Sparad"
     : "Spara plats";
 }
-  function handleUseLocationClick() {
+function handleUseLocationClick() {
+  if (!navigator.geolocation) {
     els.placeSearchStatus.textContent =
-      "GPS kopplas in i ett kommande block. Just nu kan du söka eller trycka på kartan.";
+      "GPS stöds inte i den här webbläsaren.";
+    return;
   }
+
+  els.placeSearchStatus.textContent = "Hämtar din position...";
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = Number(position.coords.latitude);
+      const lon = Number(position.coords.longitude);
+
+      setActivePlace({
+        name: "Min plats",
+        lat,
+        lon,
+        source: "gps"
+      });
+
+      closeAllSheets();
+
+      if (appState.mode === "place") {
+        setMode("weather");
+      }
+    },
+    () => {
+      els.placeSearchStatus.textContent =
+        "Kunde inte hämta din position. Kontrollera att platsåtkomst är tillåten.";
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 3000,
+      timeout: 12000
+    }
+  );
+}
 
   function escapeHtml(value) {
     return String(value || "")
@@ -3390,11 +3796,23 @@ els.seaDetailsBtn.addEventListener("click", () => {
   openSheet("detailsSheet");
 });
 els.savePlaceBtn.addEventListener("click", saveActivePlace);
-  document.querySelectorAll(".toggle").forEach((toggle) => {
-    toggle.addEventListener("click", () => {
-      toggle.classList.toggle("is-on");
-    });
+document.querySelectorAll(".toggle").forEach((toggle) => {
+  toggle.addEventListener("click", () => {
+    if (
+      toggle.id === "chartBaseToggle" ||
+      toggle.id === "followPositionToggle" ||
+      toggle.id === "aisToggle"
+    ) {
+      return;
+    }
+
+    toggle.classList.toggle("is-on");
   });
+});
+
+els.chartBaseToggle.addEventListener("click", toggleChartBase);
+els.followPositionToggle.addEventListener("click", toggleFollowPosition);
+els.aisToggle.addEventListener("click", toggleAis);
 
   els.placeSearchInput.addEventListener("input", () => {
     clearTimeout(appState.searchTimer);
