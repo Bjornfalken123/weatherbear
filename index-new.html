@@ -874,7 +874,141 @@
       font-size: 13px;
       line-height: 1.45;
     }
+.details-weather-card {
+  display: grid;
+  gap: 12px;
+}
 
+.details-hero {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(123,199,255,0.18);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(123,199,255,0.16), transparent 42%),
+    rgba(255,255,255,0.045);
+}
+
+.details-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.details-hero-title {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 950;
+}
+
+.details-hero-subtitle {
+  margin-top: 4px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.details-hero-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.075);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 30px;
+}
+
+.details-hero-temp {
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.055em;
+}
+
+.details-hero-summary {
+  margin-top: 7px;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 750;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.details-metric {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.045);
+}
+
+.details-metric-label {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.details-metric-value {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+
+.details-metric-note {
+  margin-top: 4px;
+  color: var(--muted-soft);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.details-chart-teaser {
+  margin-top: 2px;
+  padding: 15px;
+  border-radius: 20px;
+  border: 1px dashed rgba(123,199,255,0.22);
+  background: rgba(123,199,255,0.055);
+}
+
+.details-chart-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.details-chart-text {
+  margin-top: 5px;
+  color: var(--muted-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.details-empty {
+  padding: 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
     .is-hidden {
       display: none !important;
     }
@@ -1202,23 +1336,23 @@
       </div>
     </section>
 
-    <section id="detailsSheet" class="sheet" aria-label="Detaljer">
-      <div class="sheet-handle"></div>
-      <div class="sheet-header">
-        <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
-        <div class="sheet-title-wrap">
-          <div id="detailsTitle" class="sheet-title">Detaljer</div>
-          <div id="detailsSubtitle" class="sheet-subtitle">Mer information när du vill gå djupare</div>
-        </div>
-        <span style="width:58px"></span>
-      </div>
+<section id="detailsSheet" class="sheet" aria-label="Detaljer">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
+    <div class="sheet-title-wrap">
+      <div id="detailsTitle" class="sheet-title">Detaljer</div>
+      <div id="detailsSubtitle" class="sheet-subtitle">Mer information när du vill gå djupare</div>
+    </div>
+    <span style="width:58px"></span>
+  </div>
 
-      <div class="sheet-body">
-        <div class="details-placeholder">
-          Här lägger vi senare in detaljer och grafer för väder eller hav.
-        </div>
-      </div>
-    </section>
+  <div id="detailsBody" class="sheet-body">
+    <div class="details-placeholder">
+      Här lägger vi senare in detaljer och grafer för väder eller hav.
+    </div>
+  </div>
+</section>
   </main>
 
  <script>
@@ -1275,9 +1409,10 @@ timeSelectedLabel: document.getElementById("timeSelectedLabel"),
     seaSheet: document.getElementById("seaSheet"),
     seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
     placeSheet: document.getElementById("placeSheet"),
-    detailsSheet: document.getElementById("detailsSheet"),
-    detailsTitle: document.getElementById("detailsTitle"),
-    detailsSubtitle: document.getElementById("detailsSubtitle"),
+detailsSheet: document.getElementById("detailsSheet"),
+detailsTitle: document.getElementById("detailsTitle"),
+detailsSubtitle: document.getElementById("detailsSubtitle"),
+detailsBody: document.getElementById("detailsBody"),
 
 weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
 seaDetailsBtn: document.getElementById("seaDetailsBtn"),
@@ -1675,6 +1810,9 @@ function renderWeatherAtIndex(index) {
     precipitation,
     symbol
   };
+  if (appState.openSheet === "detailsSheet") {
+  renderWeatherDetails();
+}
 }
 
 function updateTimeLabels() {
@@ -1838,7 +1976,113 @@ function getWeatherText(symbol) {
 
   return "väderprognos";
 }
+function renderWeatherDetails() {
+  const details = appState.latestWeatherDetails;
 
+  els.detailsTitle.textContent = "Väderdetaljer";
+
+  if (!details) {
+    els.detailsSubtitle.textContent = "Välj en plats för att visa mer väderdata.";
+    els.detailsBody.innerHTML = `
+      <div class="details-empty">
+        Välj en plats på kartan eller sök efter en kustplats. När vädret har laddats visas mer information här.
+      </div>
+    `;
+    return;
+  }
+
+  const placeName = appState.activePlace?.name || "Vald plats";
+
+  const time = new Date(details.time);
+  const timeLabel = time.toLocaleString("sv-SE", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  const summary = buildWeatherSummary(
+    details.symbol,
+    details.temperature,
+    details.windSpeed,
+    details.precipitation
+  );
+
+  els.detailsSubtitle.textContent =
+    `${placeName} · ${timeLabel}`;
+
+  els.detailsBody.innerHTML = `
+    <div class="details-weather-card">
+      <section class="details-hero">
+        <div class="details-hero-top">
+          <div>
+            <div class="details-hero-title">${escapeHtml(placeName)}</div>
+            <div class="details-hero-subtitle">${escapeHtml(timeLabel)}</div>
+          </div>
+          <div class="details-hero-icon">${escapeHtml(getWeatherEmoji(details.symbol))}</div>
+        </div>
+
+        <div class="details-hero-temp">${escapeHtml(formatTemperature(details.temperature))}</div>
+        <div class="details-hero-summary">${escapeHtml(summary)}</div>
+      </section>
+
+      <section class="details-grid">
+        <div class="details-metric">
+          <div class="details-metric-label">Vind</div>
+          <div class="details-metric-value">${escapeHtml(formatWind(details.windSpeed, details.windDirection))}</div>
+          <div class="details-metric-note">${escapeHtml(getWindNote(details.windSpeed))}</div>
+        </div>
+
+        <div class="details-metric">
+          <div class="details-metric-label">Regn</div>
+          <div class="details-metric-value">${escapeHtml(formatPrecipitation(details.precipitation))}</div>
+          <div class="details-metric-note">Kommande timme där data finns.</div>
+        </div>
+
+        <div class="details-metric">
+          <div class="details-metric-label">Lufttryck</div>
+          <div class="details-metric-value">${escapeHtml(formatPressure(details.pressure))}</div>
+          <div class="details-metric-note">Vid havsnivå.</div>
+        </div>
+
+        <div class="details-metric">
+          <div class="details-metric-label">Luftfuktighet</div>
+          <div class="details-metric-value">${escapeHtml(formatHumidity(details.humidity))}</div>
+          <div class="details-metric-note">Relativ luftfuktighet.</div>
+        </div>
+      </section>
+
+      <section class="details-chart-teaser">
+        <div class="details-chart-title">Graf kommer här</div>
+        <div class="details-chart-text">
+          Nästa steg kan vara att visa temperatur, vind och regn över tid som valfri fördjupning.
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function formatPressure(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  return `${Math.round(Number(value))} hPa`;
+}
+
+function formatHumidity(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  return `${Math.round(Number(value))}%`;
+}
+
+function getWindNote(speed) {
+  const value = Number(speed);
+
+  if (!Number.isFinite(value)) return "Vinddata saknas.";
+  if (value < 3) return "Svag vind.";
+  if (value < 8) return "Måttlig vind.";
+  if (value < 14) return "Frisk vind vid kusten.";
+  if (value < 20) return "Kraftig vind. Var uppmärksam vid vatten.";
+  return "Mycket kraftig vind. Kontrollera prognosen noga.";
+}
 function capitalizeFirst(value) {
   const text = String(value || "");
   if (!text) return "";
@@ -2218,23 +2462,7 @@ function updateSavePlaceButton() {
   els.minimizeCardBtn.addEventListener("click", toggleMainCardMinimized);
 
 els.weatherDetailsBtn.addEventListener("click", () => {
-  els.detailsTitle.textContent = "Väderdetaljer";
-
-  const details = appState.latestWeatherDetails;
-
-  if (!details) {
-    els.detailsSubtitle.textContent = "Välj en plats för att visa mer väderdata.";
-  } else {
-    const time = new Date(details.time).toLocaleString("sv-SE", {
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-
-    els.detailsSubtitle.textContent =
-      `${time} · ${formatTemperature(details.temperature)} · ${formatWind(details.windSpeed, details.windDirection)}`;
-  }
-
+  renderWeatherDetails();
   openSheet("detailsSheet");
 });
 
