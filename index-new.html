@@ -1592,7 +1592,7 @@
               <div class="row-title">Moln & satellit</div>
               <div class="row-subtitle">Visa moln och satellitbild.</div>
             </div>
-            <button id="weatherCloudToggle" class="toggle is-on" type="button"></button>
+            <button id="weatherCloudToggle" class="toggle" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1725,7 +1725,7 @@ weatherLayers: {
   wind: false,
   precipitation: false,
   radar: false,
-  cloud: true,
+  cloud: false,
   temperature: false
 },
 
@@ -4295,32 +4295,56 @@ function ensureMaptilerWeatherLayer(type) {
 
   try {
     let layer = null;
+    let defaultOpacity = 0;
 
     if (type === "wind") {
       layer = new maptilerweather.WindLayer({
         id: "weather-wind-layer",
-        opacity: 0.78
+        opacity: 0
       });
+      defaultOpacity = 0.78;
     }
 
     if (type === "precipitation") {
       layer = new maptilerweather.PrecipitationLayer({
         id: "weather-precipitation-layer",
-        opacity: 0.70
+        opacity: 0
       });
+      defaultOpacity = 0.70;
     }
 
     if (type === "temperature") {
       layer = new maptilerweather.TemperatureLayer({
         id: "weather-temperature-layer",
-        opacity: 0.62
+        opacity: 0
       });
+      defaultOpacity = 0.62;
     }
 
     if (!layer) return null;
 
     appState.map.addLayer(layer);
     appState.maptilerWeatherLayers[type] = layer;
+
+    // Viktigt: MapTiler-lager kan bli synliga direkt när de läggs till.
+    // Därför stänger vi alltid av dem direkt efter addLayer.
+    try {
+      if (typeof layer.setOpacity === "function") {
+        layer.setOpacity(0);
+      }
+
+      if (typeof layer.setVisibility === "function") {
+        layer.setVisibility(false);
+      }
+
+      if (typeof layer.setVisible === "function") {
+        layer.setVisible(false);
+      }
+    } catch (visibilityError) {
+      console.warn(`Kunde inte initiera väderlager som dolt: ${type}`, visibilityError);
+    }
+
+    layer._kustvaderDefaultOpacity = defaultOpacity;
 
     return layer;
   } catch (error) {
@@ -4340,23 +4364,25 @@ function setWeatherLayerVisible(type, isVisible) {
     return;
   }
 
+  const fallbackOpacity =
+    type === "wind" ? 0.78 :
+    type === "precipitation" ? 0.70 :
+    type === "temperature" ? 0.62 :
+    0.70;
+
+  const visibleOpacity = layer._kustvaderDefaultOpacity || fallbackOpacity;
+
   try {
     if (typeof layer.setOpacity === "function") {
-      if (type === "wind") {
-        layer.setOpacity(isVisible ? 0.78 : 0);
-      } else if (type === "precipitation") {
-        layer.setOpacity(isVisible ? 0.70 : 0);
-      } else if (type === "temperature") {
-        layer.setOpacity(isVisible ? 0.62 : 0);
-      }
+      layer.setOpacity(isVisible ? visibleOpacity : 0);
     }
 
     if (typeof layer.setVisibility === "function") {
-      layer.setVisibility(isVisible);
+      layer.setVisibility(Boolean(isVisible));
     }
 
     if (typeof layer.setVisible === "function") {
-      layer.setVisible(isVisible);
+      layer.setVisible(Boolean(isVisible));
     }
   } catch (error) {
     console.warn(`Kunde inte ändra väderlager: ${type}`, error);
