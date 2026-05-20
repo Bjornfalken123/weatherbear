@@ -1,1 +1,1347 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="Kustväder" />
+  <meta name="theme-color" content="#040913" />
+
+  <link rel="icon" type="image/png" href="/icon.png" />
+  <link rel="apple-touch-icon" href="/icon.png" />
+
+  <title>Kustväder</title>
+
+  <link
+    rel="stylesheet"
+    href="https://cdn.maptiler.com/maptiler-sdk-js/v3.10.2/maptiler-sdk.css"
+  />
+  <script src="https://cdn.maptiler.com/maptiler-sdk-js/v3.10.2/maptiler-sdk.umd.min.js"></script>
+  <script src="https://cdn.maptiler.com/maptiler-weather/v3.1.1/maptiler-weather.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #040913;
+      --bg-soft: rgba(5, 11, 22, 0.82);
+      --bg-strong: rgba(5, 11, 22, 0.96);
+      --panel: rgba(8, 16, 29, 0.86);
+      --panel-soft: rgba(255, 255, 255, 0.055);
+      --border: rgba(255, 255, 255, 0.11);
+
+      --text: #f3f7ff;
+      --text-soft: #dfe8f7;
+      --muted: #95a5bf;
+      --muted-soft: #b7c5d9;
+
+      --accent: #7bc7ff;
+      --accent-2: #98f0db;
+      --warning: #e8d7a8;
+
+      --radius-lg: 18px;
+      --radius-xl: 24px;
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --tab-height: 74px;
+      --bottom-ui: calc(var(--tab-height) + var(--safe-bottom));
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Arial, Helvetica, sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(123,199,255,0.16), transparent 26%),
+        radial-gradient(circle at 88% 8%, rgba(152,240,219,0.10), transparent 22%),
+        linear-gradient(180deg, #040913 0%, #08101d 48%, #0c1727 100%);
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background:
+        linear-gradient(180deg, rgba(7, 19, 34, 0.95), rgba(4, 9, 19, 0.95));
+    }
+
+    .map-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: rgba(243,247,255,0.32);
+      text-align: center;
+      padding: 32px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .map-placeholder strong {
+      display: block;
+      color: rgba(243,247,255,0.52);
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .top-actions {
+      position: fixed;
+      top: calc(var(--safe-top) + 12px);
+      left: 12px;
+      right: 12px;
+      z-index: 40;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .map-card {
+      pointer-events: auto;
+      width: min(342px, calc(100vw - 86px));
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      background: rgba(5, 11, 22, 0.84);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .map-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent-2);
+      flex-shrink: 0;
+    }
+
+    .map-card-title {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .place-name {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.2;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .place-meta {
+      margin-top: 3px;
+      color: var(--muted-soft);
+      font-size: 11px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .plain-icon-btn,
+    .small-btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.055);
+      color: var(--text);
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .plain-icon-btn {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .small-btn {
+      min-height: 34px;
+      padding: 7px 10px;
+      font-size: 11px;
+    }
+
+    .map-card-body {
+      padding: 12px 14px 14px;
+    }
+
+    .weather-main-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .weather-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.075);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .weather-main-text {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .weather-temp {
+      color: var(--text);
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 950;
+      letter-spacing: -0.04em;
+    }
+
+    .weather-summary {
+      margin-top: 5px;
+      color: var(--muted-soft);
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .metric-pill {
+      min-width: 0;
+      padding: 9px 10px;
+      border-radius: 15px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .metric-value {
+      margin-top: 3px;
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .card-actions .small-btn {
+      flex: 1;
+    }
+
+    .floating-actions {
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .floating-btn {
+      appearance: none;
+      min-height: 42px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(5, 11, 22, 0.82);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 900;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      cursor: pointer;
+    }
+
+    .floating-btn.is-active {
+      border-color: rgba(123,199,255,0.32);
+      color: var(--accent);
+      background: rgba(123,199,255,0.12);
+    }
+
+    .navigation-hud {
+      position: fixed;
+      right: 14px;
+      bottom: calc(var(--bottom-ui) + 92px);
+      z-index: 45;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .navigation-hud.is-visible {
+      display: flex;
+    }
+
+    .compass-face {
+      width: 56px;
+      height: 56px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,0.24);
+      background:
+        radial-gradient(circle, rgba(255,255,255,0.20), rgba(255,255,255,0.08) 58%, rgba(255,255,255,0.04)),
+        rgba(5,11,22,0.88);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.38);
+      font-weight: 950;
+      color: var(--accent);
+    }
+
+    .speed-pill {
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: rgba(5, 11, 22, 0.78);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 950;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.25);
+    }
+
+    .time-control {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: var(--bottom-ui);
+      z-index: 35;
+      padding: 9px 12px 10px;
+      border-top: 1px solid rgba(255,255,255,0.09);
+      border-radius: 16px 16px 0 0;
+      background: rgba(5, 11, 22, 0.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 -10px 32px rgba(0,0,0,0.28);
+    }
+
+    .time-top {
+      display: grid;
+      grid-template-columns: 0.9fr 1.2fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+
+    .time-label-main {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.15;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .time-label-sub {
+      margin-top: 2px;
+      color: var(--muted-soft);
+      font-size: 9px;
+      line-height: 1.1;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .time-selected {
+      color: var(--accent);
+      font-size: 15px;
+      line-height: 1.1;
+      font-weight: 950;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .time-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .time-btn {
+      appearance: none;
+      height: 32px;
+      min-width: 38px;
+      padding: 0 9px;
+      border: 1px solid rgba(255,255,255,0.11);
+      background: rgba(255,255,255,0.065);
+      color: var(--text);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    #timeSlider {
+      width: 100%;
+      margin: 0;
+      appearance: none;
+      -webkit-appearance: none;
+      height: 7px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(123,199,255,0.88), rgba(255,255,255,0.16));
+      border: 1px solid rgba(255,255,255,0.065);
+    }
+
+    #timeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 21px;
+      height: 21px;
+      border-radius: 999px;
+      background: #4098ff;
+      border: 3px solid rgba(255,255,255,0.92);
+      box-shadow: 0 0 0 7px rgba(64,152,255,0.16), 0 3px 10px rgba(0,0,0,0.35);
+    }
+
+    .bottom-nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 60;
+      height: calc(var(--tab-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: rgba(5,11,22,0.96);
+      border-top: 1px solid rgba(255,255,255,0.09);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .nav-btn {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 850;
+      text-transform: uppercase;
+      position: relative;
+    }
+
+    .nav-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .nav-btn.is-active {
+      color: var(--accent);
+    }
+
+    .nav-btn.is-active::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 34px;
+      height: 2px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: var(--accent);
+    }
+
+    .sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 80;
+      max-height: 82vh;
+      display: none;
+      flex-direction: column;
+      padding-bottom: calc(var(--bottom-ui) + 8px);
+      border-radius: 24px 24px 0 0;
+      border-top: 1px solid rgba(255,255,255,0.11);
+      background: rgba(5, 11, 22, 0.97);
+      box-shadow: 0 -16px 52px rgba(0,0,0,0.52);
+      overflow: hidden;
+    }
+
+    .sheet.is-open {
+      display: flex;
+      animation: sheetIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    @keyframes sheetIn {
+      from {
+        transform: translateY(100%);
+        opacity: 0.65;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .sheet-handle {
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.22);
+      margin: 10px auto 4px;
+      flex-shrink: 0;
+    }
+
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 18px 13px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-shrink: 0;
+    }
+
+    .sheet-title-wrap {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+    }
+
+    .sheet-title {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .sheet-subtitle {
+      margin-top: 3px;
+      color: var(--muted-soft);
+      font-size: 11px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .sheet-close {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.055);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 8px 11px;
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .sheet-body {
+      padding: 14px 18px 18px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .section-title {
+      margin: 2px 0 10px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .list-card {
+      display: grid;
+      gap: 8px;
+    }
+
+    .row-item {
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 13px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.045);
+    }
+
+    .row-main {
+      min-width: 0;
+    }
+
+    .row-title {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.25;
+      font-weight: 850;
+    }
+
+    .row-subtitle {
+      margin-top: 3px;
+      color: var(--muted-soft);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .toggle {
+      appearance: none;
+      width: 50px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.11);
+      position: relative;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.72);
+      transition: transform 180ms ease, background 180ms ease;
+    }
+
+    .toggle.is-on {
+      background: rgba(43,108,255,0.84);
+      border-color: rgba(123,199,255,0.35);
+    }
+
+    .toggle.is-on::after {
+      transform: translateX(20px);
+      background: #fff;
+    }
+
+    .search-box {
+      width: 100%;
+      min-height: 48px;
+      padding: 0 14px;
+      border-radius: 15px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.065);
+      color: var(--text);
+      outline: none;
+      font-size: 16px;
+    }
+
+    .search-box::placeholder {
+      color: rgba(255,255,255,0.45);
+    }
+
+    .empty-state {
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.075);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted-soft);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .sea-overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .sea-card {
+      padding: 13px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.075);
+      background: rgba(255,255,255,0.045);
+    }
+
+    .sea-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .sea-value {
+      margin-top: 6px;
+      color: var(--text);
+      font-size: 20px;
+      line-height: 1.1;
+      font-weight: 950;
+      letter-spacing: -0.03em;
+    }
+
+    .sea-note {
+      margin-top: 5px;
+      color: var(--muted-soft);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .details-placeholder {
+      margin-top: 14px;
+      height: 160px;
+      border-radius: 18px;
+      border: 1px dashed rgba(123,199,255,0.22);
+      background: rgba(123,199,255,0.055);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 18px;
+      color: var(--muted-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .is-hidden {
+      display: none !important;
+    }
+
+    @media (min-width: 760px) {
+      .time-control {
+        left: 50%;
+        right: auto;
+        width: min(760px, calc(100% - 32px));
+        transform: translateX(-50%);
+        border-radius: 20px;
+        bottom: 18px;
+      }
+
+      .bottom-nav {
+        left: 50%;
+        right: auto;
+        bottom: 18px;
+        width: min(520px, calc(100% - 32px));
+        height: 70px;
+        padding-bottom: 0;
+        border-radius: 22px;
+        border: 1px solid rgba(255,255,255,0.09);
+      }
+
+      .sheet {
+        left: 50%;
+        right: auto;
+        bottom: 104px;
+        width: min(460px, calc(100% - 32px));
+        transform: translateX(-50%);
+        border-radius: 24px;
+        padding-bottom: 0;
+      }
+
+      .sheet.is-open {
+        display: flex;
+      }
+
+      .navigation-hud {
+        bottom: 118px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main id="app">
+    <div id="map">
+      <div class="map-placeholder">
+        <div>
+          <strong>Kartan laddas i nästa block</strong>
+          Här bygger vi först rätt struktur för appens UI.
+        </div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <section id="mainMapCard" class="map-card" aria-label="Väder för vald plats">
+        <div class="map-card-header">
+          <span class="status-dot"></span>
+          <div class="map-card-title">
+            <div id="activePlaceName" class="place-name">Välj en plats</div>
+            <div id="activePlaceMeta" class="place-meta">Tryck på kartan eller sök efter en kustplats</div>
+          </div>
+          <button id="minimizeCardBtn" class="plain-icon-btn" type="button" aria-label="Minimera kort">–</button>
+        </div>
+
+        <div id="mainMapCardBody" class="map-card-body">
+          <div class="weather-main-row">
+            <div class="weather-icon" id="weatherIcon">☀️</div>
+            <div class="weather-main-text">
+              <div id="weatherTemp" class="weather-temp">--°</div>
+              <div id="weatherSummary" class="weather-summary">Välj en plats för att visa kustväder.</div>
+            </div>
+          </div>
+
+          <div class="metric-row">
+            <div class="metric-pill">
+              <div class="metric-label">Vind</div>
+              <div id="windValue" class="metric-value">--</div>
+            </div>
+            <div class="metric-pill">
+              <div class="metric-label">Regn</div>
+              <div id="rainValue" class="metric-value">--</div>
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <button id="weatherDetailsBtn" class="small-btn" type="button">Detaljer</button>
+            <button id="savePlaceBtn" class="small-btn" type="button">Spara plats</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="floating-actions">
+        <button id="layersBtn" class="floating-btn" type="button">Lager</button>
+      </div>
+    </div>
+
+    <div id="navigationHud" class="navigation-hud">
+      <div class="compass-face">N</div>
+      <div class="speed-pill">-- kn</div>
+    </div>
+
+    <section id="timeControl" class="time-control" aria-label="Tidslinje">
+      <div class="time-top">
+        <div>
+          <div id="timeNowLabel" class="time-label-main">Nu</div>
+          <div class="time-label-sub">Aktuell tid</div>
+        </div>
+        <div>
+          <div id="timeSelectedLabel" class="time-selected">Prognos</div>
+          <div class="time-label-sub">Väder</div>
+        </div>
+        <div class="time-actions">
+          <button class="time-btn" type="button">Nu</button>
+          <button class="time-btn" type="button">+1h</button>
+        </div>
+      </div>
+      <input id="timeSlider" type="range" min="0" max="100" value="0" />
+    </section>
+
+    <nav class="bottom-nav" aria-label="Huvudnavigation">
+      <button id="navWeather" class="nav-btn is-active" type="button" data-mode="weather">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>
+        Väder
+      </button>
+
+      <button id="navSea" class="nav-btn" type="button" data-mode="sea">
+        <svg viewBox="0 0 24 24"><path d="M2 12c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"></path><path d="M2 17c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"></path></svg>
+        Hav
+      </button>
+
+      <button id="navChart" class="nav-btn" type="button" data-mode="chart">
+        <svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"></path><path d="M9 4v13M15 7v13"></path></svg>
+        Sjökort
+      </button>
+
+      <button id="navPlace" class="nav-btn" type="button" data-mode="place">
+        <svg viewBox="0 0 24 24"><path d="M12 21s7-5.4 7-12a7 7 0 1 0-14 0c0 6.6 7 12 7 12z"></path><circle cx="12" cy="9" r="2.5"></circle></svg>
+        Plats
+      </button>
+    </nav>
+
+    <section id="seaSheet" class="sheet" aria-label="Hav">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
+        <div class="sheet-title-wrap">
+          <div class="sheet-title">Hav</div>
+          <div id="seaSheetSubtitle" class="sheet-subtitle">Hav runt vald plats</div>
+        </div>
+        <button id="seaDetailsBtn" class="sheet-close" type="button">Detaljer</button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="sea-overview-grid">
+          <div class="sea-card">
+            <div class="sea-label">Vattentemp.</div>
+            <div class="sea-value">--°</div>
+            <div class="sea-note">Närmaste mätning</div>
+          </div>
+          <div class="sea-card">
+            <div class="sea-label">Vågor</div>
+            <div class="sea-value">-- m</div>
+            <div class="sea-note">Närmaste punkt</div>
+          </div>
+          <div class="sea-card">
+            <div class="sea-label">Vattenstånd</div>
+            <div class="sea-value">-- cm</div>
+            <div class="sea-note">Mätstation</div>
+          </div>
+          <div class="sea-card">
+            <div class="sea-label">Station</div>
+            <div class="sea-value">--</div>
+            <div class="sea-note">I närheten</div>
+          </div>
+        </div>
+
+        <div class="details-placeholder">
+          Här kopplar vi in dina befintliga havsgrafer i ett senare block.
+        </div>
+      </div>
+    </section>
+
+    <section id="placeSheet" class="sheet" aria-label="Plats">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
+        <div class="sheet-title-wrap">
+          <div class="sheet-title">Plats</div>
+          <div class="sheet-subtitle">Sök, välj eller spara kustplatser</div>
+        </div>
+        <button id="useLocationBtn" class="sheet-close" type="button">Min plats</button>
+      </div>
+
+      <div class="sheet-body">
+        <input id="placeSearchInput" class="search-box" type="text" placeholder="Sök plats..." />
+
+        <div class="empty-state">
+          <strong>Välj en plats</strong><br />
+          Sök efter en plats, använd din position eller tryck direkt på kartan.
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="section-title">Sparade platser</div>
+        <div id="savedPlacesList" class="list-card">
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Inga sparade platser ännu</div>
+              <div class="row-subtitle">När du sparar en plats visas den här.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="layersSheet" class="sheet" aria-label="Lager">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
+        <div class="sheet-title-wrap">
+          <div class="sheet-title">Visa på kartan</div>
+          <div id="layersSubtitle" class="sheet-subtitle">Väderlager</div>
+        </div>
+        <span style="width:58px"></span>
+      </div>
+
+      <div class="sheet-body">
+        <div id="weatherLayers" class="list-card">
+          <div class="section-title">Väder</div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Vind</div>
+              <div class="row-subtitle">Visa vind över kartan.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Regn</div>
+              <div class="row-subtitle">Visa nederbörd och regnområden.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Radar</div>
+              <div class="row-subtitle">Visa aktuellt regn där det finns data.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Moln & satellit</div>
+              <div class="row-subtitle">Visa moln och satellitbild.</div>
+            </div>
+            <button class="toggle is-on" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Temperatur</div>
+              <div class="row-subtitle">Visa temperatur över kartan.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+        </div>
+
+        <div id="seaLayers" class="list-card is-hidden">
+          <div class="section-title">Hav</div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Hav runt platsen</div>
+              <div class="row-subtitle">Visa området där havsdata hämtas.</div>
+            </div>
+            <button class="toggle is-on" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Vågor & bojar</div>
+              <div class="row-subtitle">Visa bojar och vågdata nära platsen.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Fyrar & mätstationer</div>
+              <div class="row-subtitle">Visa stationer i närheten.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+        </div>
+
+        <div id="chartLayers" class="list-card is-hidden">
+          <div class="section-title">Sjökort</div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Sjökort</div>
+              <div class="row-subtitle">Visa sjökort som kartgrund.</div>
+            </div>
+            <button class="toggle is-on" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">Följ min position</div>
+              <div class="row-subtitle">Centrera kartan på din position.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+
+          <div class="row-item">
+            <div class="row-main">
+              <div class="row-title">AIS-fartyg</div>
+              <div class="row-subtitle">Visa fartyg när du behöver det.</div>
+            </div>
+            <button class="toggle" type="button"></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="detailsSheet" class="sheet" aria-label="Detaljer">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <button class="sheet-close" type="button" data-close-sheet>Stäng</button>
+        <div class="sheet-title-wrap">
+          <div id="detailsTitle" class="sheet-title">Detaljer</div>
+          <div id="detailsSubtitle" class="sheet-subtitle">Mer information när du vill gå djupare</div>
+        </div>
+        <span style="width:58px"></span>
+      </div>
+
+      <div class="sheet-body">
+        <div class="details-placeholder">
+          Här lägger vi senare in detaljer och grafer för väder eller hav.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const appState = {
+      mode: "weather",
+      activePlace: null,
+      cardMinimized: false,
+      openSheet: null
+    };
+
+    const els = {
+      navButtons: document.querySelectorAll(".nav-btn"),
+      sheets: document.querySelectorAll(".sheet"),
+      closeSheetButtons: document.querySelectorAll("[data-close-sheet]"),
+
+      mainMapCard: document.getElementById("mainMapCard"),
+      mainMapCardBody: document.getElementById("mainMapCardBody"),
+      minimizeCardBtn: document.getElementById("minimizeCardBtn"),
+
+      activePlaceName: document.getElementById("activePlaceName"),
+      activePlaceMeta: document.getElementById("activePlaceMeta"),
+
+      weatherTemp: document.getElementById("weatherTemp"),
+      weatherSummary: document.getElementById("weatherSummary"),
+      windValue: document.getElementById("windValue"),
+      rainValue: document.getElementById("rainValue"),
+
+      layersBtn: document.getElementById("layersBtn"),
+      layersSheet: document.getElementById("layersSheet"),
+      layersSubtitle: document.getElementById("layersSubtitle"),
+
+      weatherLayers: document.getElementById("weatherLayers"),
+      seaLayers: document.getElementById("seaLayers"),
+      chartLayers: document.getElementById("chartLayers"),
+
+      seaSheet: document.getElementById("seaSheet"),
+      seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
+      placeSheet: document.getElementById("placeSheet"),
+      detailsSheet: document.getElementById("detailsSheet"),
+      detailsTitle: document.getElementById("detailsTitle"),
+      detailsSubtitle: document.getElementById("detailsSubtitle"),
+
+      weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
+      seaDetailsBtn: document.getElementById("seaDetailsBtn"),
+
+      navigationHud: document.getElementById("navigationHud"),
+      timeControl: document.getElementById("timeControl")
+    };
+
+    function setMode(nextMode) {
+      appState.mode = nextMode;
+
+      els.navButtons.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.mode === nextMode);
+      });
+
+      closeAllSheets();
+
+      if (nextMode === "weather") {
+        showWeatherMode();
+      }
+
+      if (nextMode === "sea") {
+        showSeaMode();
+      }
+
+      if (nextMode === "chart") {
+        showChartMode();
+      }
+
+      if (nextMode === "place") {
+        showPlaceMode();
+      }
+
+      updateLayersForMode();
+    }
+
+    function showWeatherMode() {
+      els.mainMapCard.classList.remove("is-hidden");
+      els.navigationHud.classList.remove("is-visible");
+      els.timeControl.classList.remove("is-hidden");
+
+      updateMainCardCopy("weather");
+    }
+
+    function showSeaMode() {
+      els.mainMapCard.classList.remove("is-hidden");
+      els.navigationHud.classList.remove("is-visible");
+      els.timeControl.classList.remove("is-hidden");
+
+      updateMainCardCopy("sea");
+      openSheet("seaSheet");
+    }
+
+    function showChartMode() {
+      els.mainMapCard.classList.remove("is-hidden");
+      els.navigationHud.classList.add("is-visible");
+      els.timeControl.classList.add("is-hidden");
+
+      updateMainCardCopy("chart");
+    }
+
+    function showPlaceMode() {
+      openSheet("placeSheet");
+    }
+
+    function updateMainCardCopy(context) {
+      const placeName = appState.activePlace?.name || "Välj en plats";
+
+      if (context === "weather") {
+        els.activePlaceName.textContent = placeName;
+        els.activePlaceMeta.textContent = appState.activePlace
+          ? "Kustväder för vald plats"
+          : "Tryck på kartan eller sök efter en kustplats";
+      }
+
+      if (context === "sea") {
+        els.activePlaceName.textContent = placeName;
+        els.activePlaceMeta.textContent = appState.activePlace
+          ? "Hav runt vald plats"
+          : "Välj en plats för att visa havsdata";
+        els.seaSheetSubtitle.textContent = appState.activePlace
+          ? `Hav runt ${placeName}`
+          : "Hav runt vald plats";
+      }
+
+      if (context === "chart") {
+        els.activePlaceName.textContent = "Sjökort";
+        els.activePlaceMeta.textContent = appState.activePlace
+          ? `${placeName} · AIS av`
+          : "Välj plats eller följ din position";
+      }
+    }
+
+    function openSheet(sheetId) {
+      closeAllSheets();
+
+      const sheet = document.getElementById(sheetId);
+      if (!sheet) return;
+
+      sheet.classList.add("is-open");
+      appState.openSheet = sheetId;
+    }
+
+    function closeAllSheets() {
+      els.sheets.forEach((sheet) => sheet.classList.remove("is-open"));
+      appState.openSheet = null;
+    }
+
+    function updateLayersForMode() {
+      els.weatherLayers.classList.toggle("is-hidden", appState.mode !== "weather");
+      els.seaLayers.classList.toggle("is-hidden", appState.mode !== "sea");
+      els.chartLayers.classList.toggle("is-hidden", appState.mode !== "chart");
+
+      if (appState.mode === "weather") {
+        els.layersSubtitle.textContent = "Väderlager";
+      } else if (appState.mode === "sea") {
+        els.layersSubtitle.textContent = "Havslager";
+      } else if (appState.mode === "chart") {
+        els.layersSubtitle.textContent = "Sjökort och navigation";
+      } else {
+        els.layersSubtitle.textContent = "Visa på kartan";
+      }
+    }
+
+    function toggleMainCardMinimized() {
+      appState.cardMinimized = !appState.cardMinimized;
+      els.mainMapCardBody.classList.toggle("is-hidden", appState.cardMinimized);
+      els.minimizeCardBtn.textContent = appState.cardMinimized ? "+" : "–";
+      els.minimizeCardBtn.setAttribute(
+        "aria-label",
+        appState.cardMinimized ? "Visa detaljer" : "Minimera kort"
+      );
+    }
+
+    function setDemoPlace() {
+      appState.activePlace = {
+        name: "Marstrand",
+        lat: 57.887,
+        lon: 11.583,
+        source: "demo"
+      };
+
+      els.weatherTemp.textContent = "14°";
+      els.weatherSummary.textContent = "Klart till växlande molnighet.";
+      els.windValue.textContent = "7 m/s";
+      els.rainValue.textContent = "Låg risk";
+
+      updateMainCardCopy(appState.mode);
+    }
+
+    els.navButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setMode(btn.dataset.mode);
+      });
+    });
+
+    els.closeSheetButtons.forEach((btn) => {
+      btn.addEventListener("click", closeAllSheets);
+    });
+
+    els.layersBtn.addEventListener("click", () => {
+      updateLayersForMode();
+      openSheet("layersSheet");
+    });
+
+    els.minimizeCardBtn.addEventListener("click", toggleMainCardMinimized);
+
+    els.weatherDetailsBtn.addEventListener("click", () => {
+      els.detailsTitle.textContent = "Väderdetaljer";
+      els.detailsSubtitle.textContent = "Grafer och mer väderdata kommer här.";
+      openSheet("detailsSheet");
+    });
+
+    els.seaDetailsBtn.addEventListener("click", () => {
+      els.detailsTitle.textContent = "Havsdetaljer";
+      els.detailsSubtitle.textContent = "Här kopplar vi in dina befintliga havsgrafer.";
+      openSheet("detailsSheet");
+    });
+
+    document.querySelectorAll(".toggle").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        toggle.classList.toggle("is-on");
+      });
+    });
+
+    document.getElementById("map").addEventListener("click", () => {
+      setDemoPlace();
+    });
+
+    setMode("weather");
+  </script>
+</body>
+</html>
