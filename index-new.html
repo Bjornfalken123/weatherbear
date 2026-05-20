@@ -1067,6 +1067,96 @@
   font-size: 13px;
   line-height: 1.55;
 }
+    .sea-chart-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.sea-chart-card {
+  padding: 13px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.045);
+}
+
+.sea-chart-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sea-chart-card-title {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 950;
+}
+
+.sea-chart-card-subtitle {
+  margin-top: 3px;
+  color: var(--muted-soft);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sea-chart-current {
+  color: var(--accent-2);
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.sea-chart-svg {
+  width: 100%;
+  height: 132px;
+  display: block;
+  overflow: visible;
+}
+
+.sea-chart-axis {
+  stroke: rgba(255,255,255,0.12);
+  stroke-width: 1;
+}
+
+.sea-chart-line {
+  fill: none;
+  stroke: rgba(123,199,255,0.95);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sea-chart-area {
+  fill: rgba(123,199,255,0.10);
+}
+
+.sea-chart-dot {
+  fill: rgba(152,240,219,0.98);
+  stroke: rgba(5,11,22,0.9);
+  stroke-width: 2;
+}
+
+.sea-chart-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--muted-soft);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.sea-chart-empty-small {
+  padding: 13px;
+  border-radius: 16px;
+  border: 1px dashed rgba(255,255,255,0.14);
+  color: var(--muted-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
     .is-hidden {
       display: none !important;
     }
@@ -2233,7 +2323,7 @@ function renderSeaOverview() {
     station,
     loadedAt: new Date().toISOString()
   };
-
+renderSeaGraphPreview();
   if (appState.openSheet === "detailsSheet") {
     renderSeaDetails();
   }
@@ -2498,7 +2588,245 @@ function findFirstStation(root) {
 
   return null;
 }
+function renderSeaGraphPreview() {
+  if (!els.seaGraphPlaceholder) return;
 
+  const charts = buildSeaCharts();
+
+  if (!charts.length) {
+    els.seaGraphPlaceholder.innerHTML =
+      "Havsgrafer visas här när tidsserier finns för vald plats.";
+    return;
+  }
+
+  els.seaGraphPlaceholder.innerHTML = `
+    <div>
+      <strong style="display:block;color:var(--text);margin-bottom:6px;">
+        Grafer finns
+      </strong>
+      ${charts.length} havsgraf${charts.length === 1 ? "" : "er"} finns för vald plats.
+      Tryck på Detaljer för att visa dem.
+    </div>
+  `;
+}
+
+function buildSeaCharts() {
+  const configs = [
+    {
+      key: "waterTemp",
+      title: "Vattentemperatur",
+      subtitle: "Temperatur över tid",
+      unit: "°C",
+      displayUnit: "°"
+    },
+    {
+      key: "waveHeight",
+      title: "Vågor",
+      subtitle: "Våghöjd över tid",
+      unit: "m",
+      displayUnit: "m"
+    },
+    {
+      key: "waterLevel",
+      title: "Vattenstånd",
+      subtitle: "Vattenstånd över tid",
+      unit: "cm",
+      displayUnit: "cm"
+    }
+  ];
+
+  return configs
+    .map((config) => {
+      const metricData = getSeaMetricSeriesData(config.key);
+      const points = collectSeaPoints(metricData)
+        .filter((point) => {
+          const time = point.time ? new Date(point.time).getTime() : NaN;
+          return Number.isFinite(time) && Number.isFinite(Number(point.value));
+        })
+        .map((point) => ({
+          time: new Date(point.time).getTime(),
+          value: Number(point.value)
+        }))
+        .sort((a, b) => a.time - b.time);
+
+      if (points.length < 2) return null;
+
+      return {
+        ...config,
+        points: limitSeaChartPoints(points, 80)
+      };
+    })
+    .filter(Boolean);
+}
+
+function getSeaMetricSeriesData(metricKey) {
+  const root = appState.seaTimeseriesData || {};
+  const series = root.series || root.data || root.timeseries || root;
+
+  const aliases = {
+    waterTemp: [
+      "waterTemp",
+      "waterTemperature",
+      "water_temperature",
+      "seaTemperature",
+      "temperature"
+    ],
+    waveHeight: [
+      "waveHeight",
+      "significantWaveHeight",
+      "wave_height",
+      "waves",
+      "wave"
+    ],
+    waterLevel: [
+      "waterLevel",
+      "seaLevel",
+      "water_level",
+      "level"
+    ]
+  };
+
+  const keys = aliases[metricKey] || [metricKey];
+
+  for (const key of keys) {
+    if (series && series[key]) return series[key];
+    if (root && root[key]) return root[key];
+  }
+
+  return null;
+}
+
+function limitSeaChartPoints(points, maxPoints) {
+  if (!Array.isArray(points) || points.length <= maxPoints) return points;
+
+  const step = Math.ceil(points.length / maxPoints);
+  return points.filter((_, index) => index % step === 0);
+}
+
+function renderSeaChartsHtml() {
+  const charts = buildSeaCharts();
+
+  if (!charts.length) {
+    return `
+      <section class="sea-chart-empty-small">
+        Det finns inga havsgrafer för den här platsen just nu.
+      </section>
+    `;
+  }
+
+  return `
+    <section class="sea-chart-stack">
+      ${charts.map(renderSingleSeaChartHtml).join("")}
+    </section>
+  `;
+}
+
+function renderSingleSeaChartHtml(chart) {
+  const width = 320;
+  const height = 132;
+  const paddingX = 10;
+  const paddingTop = 12;
+  const paddingBottom = 24;
+
+  const values = chart.points.map((point) => point.value);
+  const times = chart.points.map((point) => point.time);
+
+  let minValue = Math.min(...values);
+  let maxValue = Math.max(...values);
+
+  if (minValue === maxValue) {
+    minValue -= 1;
+    maxValue += 1;
+  }
+
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+
+  const plotWidth = width - paddingX * 2;
+  const plotHeight = height - paddingTop - paddingBottom;
+
+  function xFor(time) {
+    if (maxTime === minTime) return paddingX;
+    return paddingX + ((time - minTime) / (maxTime - minTime)) * plotWidth;
+  }
+
+  function yFor(value) {
+    return paddingTop + (1 - ((value - minValue) / (maxValue - minValue))) * plotHeight;
+  }
+
+  const linePoints = chart.points
+    .map((point) => `${xFor(point.time).toFixed(1)},${yFor(point.value).toFixed(1)}`)
+    .join(" ");
+
+  const areaPoints =
+    `${paddingX},${height - paddingBottom} ` +
+    linePoints +
+    ` ${width - paddingX},${height - paddingBottom}`;
+
+  const latest = chart.points[chart.points.length - 1];
+  const latestX = xFor(latest.time);
+  const latestY = yFor(latest.value);
+
+  const startLabel = formatChartDate(minTime);
+  const endLabel = formatChartDate(maxTime);
+  const latestValue = formatSeaChartValue(latest.value, chart.displayUnit);
+
+  return `
+    <article class="sea-chart-card">
+      <div class="sea-chart-card-header">
+        <div>
+          <div class="sea-chart-card-title">${escapeHtml(chart.title)}</div>
+          <div class="sea-chart-card-subtitle">${escapeHtml(chart.subtitle)}</div>
+        </div>
+        <div class="sea-chart-current">${escapeHtml(latestValue)}</div>
+      </div>
+
+      <svg class="sea-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <line class="sea-chart-axis" x1="${paddingX}" y1="${height - paddingBottom}" x2="${width - paddingX}" y2="${height - paddingBottom}"></line>
+        <polygon class="sea-chart-area" points="${areaPoints}"></polygon>
+        <polyline class="sea-chart-line" points="${linePoints}"></polyline>
+        <circle class="sea-chart-dot" cx="${latestX.toFixed(1)}" cy="${latestY.toFixed(1)}" r="4"></circle>
+      </svg>
+
+      <div class="sea-chart-footer">
+        <span>${escapeHtml(startLabel)}</span>
+        <span>${escapeHtml(endLabel)}</span>
+      </div>
+    </article>
+  `;
+}
+
+function formatSeaChartValue(value, unit) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return "--";
+
+  if (unit === "°") {
+    return `${number.toFixed(1).replace(".", ",")}°`;
+  }
+
+  if (unit === "m") {
+    return `${number.toFixed(1).replace(".", ",")} m`;
+  }
+
+  if (unit === "cm") {
+    return `${Math.round(number)} cm`;
+  }
+
+  return String(number);
+}
+
+function formatChartDate(timeValue) {
+  const date = new Date(timeValue);
+
+  if (!Number.isFinite(date.getTime())) return "";
+
+  return date.toLocaleString("sv-SE", {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 function renderSeaDetails() {
   const details = appState.latestSeaDetails;
 
@@ -2556,12 +2884,7 @@ function renderSeaDetails() {
         </div>
       </section>
 
-      <section class="details-chart-teaser">
-        <div class="details-chart-title">Havsgrafer kommer i nästa steg</div>
-        <div class="details-chart-text">
-          Då kopplar vi in dina befintliga grafer för vattentemperatur, våghöjd och vattenstånd.
-        </div>
-      </section>
+ ${renderSeaChartsHtml()}
     </div>
   `;
 }
