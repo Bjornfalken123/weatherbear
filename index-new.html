@@ -432,7 +432,44 @@
       font-weight: 950;
       cursor: pointer;
     }
+.active-place-marker {
+  width: 38px;
+  height: 38px;
+  position: relative;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 
+.active-place-marker::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(123, 199, 255, 0.18);
+  border: 1px solid rgba(123, 199, 255, 0.34);
+  box-shadow: 0 0 26px rgba(123, 199, 255, 0.30);
+}
+
+.active-place-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: #48a8ff;
+  border: 3px solid rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.42),
+    0 0 0 2px rgba(5, 11, 22, 0.55);
+}
+
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right {
+  display: none;
+}
     #timeSlider {
       width: 100%;
       margin: 0;
@@ -809,14 +846,7 @@
 
 <body>
   <main id="app">
-    <div id="map">
-      <div class="map-placeholder">
-        <div>
-          <strong>Kartan laddas i nästa block</strong>
-          Här bygger vi först rätt struktur för appens UI.
-        </div>
-      </div>
-    </div>
+ <div id="map"></div>
 
     <div class="top-actions">
       <section id="mainMapCard" class="map-card" aria-label="Väder för vald plats">
@@ -1113,235 +1143,405 @@
     </section>
   </main>
 
-  <script>
-    const appState = {
-      mode: "weather",
-      activePlace: null,
-      cardMinimized: false,
-      openSheet: null
-    };
+ <script>
+  const MAPTILER_API_KEY = "72WUquDNJCLDzyB9DSky";
 
-    const els = {
-      navButtons: document.querySelectorAll(".nav-btn"),
-      sheets: document.querySelectorAll(".sheet"),
-      closeSheetButtons: document.querySelectorAll("[data-close-sheet]"),
+  const appState = {
+    mode: "weather",
+    activePlace: null,
+    cardMinimized: false,
+    openSheet: null,
+    map: null,
+    activePlaceMarker: null
+  };
 
-      mainMapCard: document.getElementById("mainMapCard"),
-      mainMapCardBody: document.getElementById("mainMapCardBody"),
-      minimizeCardBtn: document.getElementById("minimizeCardBtn"),
+  const els = {
+    navButtons: document.querySelectorAll(".nav-btn"),
+    sheets: document.querySelectorAll(".sheet"),
+    closeSheetButtons: document.querySelectorAll("[data-close-sheet]"),
 
-      activePlaceName: document.getElementById("activePlaceName"),
-      activePlaceMeta: document.getElementById("activePlaceMeta"),
+    mainMapCard: document.getElementById("mainMapCard"),
+    mainMapCardBody: document.getElementById("mainMapCardBody"),
+    minimizeCardBtn: document.getElementById("minimizeCardBtn"),
 
-      weatherTemp: document.getElementById("weatherTemp"),
-      weatherSummary: document.getElementById("weatherSummary"),
-      windValue: document.getElementById("windValue"),
-      rainValue: document.getElementById("rainValue"),
+    activePlaceName: document.getElementById("activePlaceName"),
+    activePlaceMeta: document.getElementById("activePlaceMeta"),
 
-      layersBtn: document.getElementById("layersBtn"),
-      layersSheet: document.getElementById("layersSheet"),
-      layersSubtitle: document.getElementById("layersSubtitle"),
+    weatherTemp: document.getElementById("weatherTemp"),
+    weatherSummary: document.getElementById("weatherSummary"),
+    windValue: document.getElementById("windValue"),
+    rainValue: document.getElementById("rainValue"),
 
-      weatherLayers: document.getElementById("weatherLayers"),
-      seaLayers: document.getElementById("seaLayers"),
-      chartLayers: document.getElementById("chartLayers"),
+    layersBtn: document.getElementById("layersBtn"),
+    layersSheet: document.getElementById("layersSheet"),
+    layersSubtitle: document.getElementById("layersSubtitle"),
 
-      seaSheet: document.getElementById("seaSheet"),
-      seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
-      placeSheet: document.getElementById("placeSheet"),
-      detailsSheet: document.getElementById("detailsSheet"),
-      detailsTitle: document.getElementById("detailsTitle"),
-      detailsSubtitle: document.getElementById("detailsSubtitle"),
+    weatherLayers: document.getElementById("weatherLayers"),
+    seaLayers: document.getElementById("seaLayers"),
+    chartLayers: document.getElementById("chartLayers"),
 
-      weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
-      seaDetailsBtn: document.getElementById("seaDetailsBtn"),
+    seaSheet: document.getElementById("seaSheet"),
+    seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
+    placeSheet: document.getElementById("placeSheet"),
+    detailsSheet: document.getElementById("detailsSheet"),
+    detailsTitle: document.getElementById("detailsTitle"),
+    detailsSubtitle: document.getElementById("detailsSubtitle"),
 
-      navigationHud: document.getElementById("navigationHud"),
-      timeControl: document.getElementById("timeControl")
-    };
+    weatherDetailsBtn: document.getElementById("weatherDetailsBtn"),
+    seaDetailsBtn: document.getElementById("seaDetailsBtn"),
 
-    function setMode(nextMode) {
-      appState.mode = nextMode;
+    navigationHud: document.getElementById("navigationHud"),
+    timeControl: document.getElementById("timeControl")
+  };
 
-      els.navButtons.forEach((btn) => {
-        btn.classList.toggle("is-active", btn.dataset.mode === nextMode);
+  function initMap() {
+    if (!window.maptilersdk) {
+      showMapError("MapTiler kunde inte laddas.");
+      return;
+    }
+
+    if (!MAPTILER_API_KEY || MAPTILER_API_KEY === "DIN_MAPTILER_NYCKEL_HÄR") {
+      showMapError("Lägg in din MapTiler-nyckel i MAPTILER_API_KEY.");
+      return;
+    }
+
+    maptilersdk.config.apiKey = MAPTILER_API_KEY;
+
+    appState.map = new maptilersdk.Map({
+      container: "map",
+      style: maptilersdk.MapStyle.DATAVIZ.DARK,
+      center: [15.2, 58.7],
+      zoom: 4.7,
+      pitch: 0,
+      bearing: 0,
+      attributionControl: false,
+      navigationControl: false,
+      geolocateControl: false
+    });
+
+    appState.map.on("load", () => {
+      appState.map.resize();
+    });
+
+    appState.map.on("click", (event) => {
+      const lat = event.lngLat.lat;
+      const lon = event.lngLat.lng;
+
+      setActivePlace({
+        name: "Vald plats",
+        lat,
+        lon,
+        source: "map"
       });
 
-      closeAllSheets();
+      reverseGeocodePlace(lat, lon);
+    });
 
-      if (nextMode === "weather") {
-        showWeatherMode();
-      }
+    window.addEventListener("resize", () => {
+      if (appState.map) appState.map.resize();
+    });
+  }
 
-      if (nextMode === "sea") {
-        showSeaMode();
-      }
+  function showMapError(message) {
+    const mapEl = document.getElementById("map");
+    mapEl.innerHTML = `
+      <div style="
+        position:absolute;
+        inset:0;
+        display:grid;
+        place-items:center;
+        padding:28px;
+        text-align:center;
+        color:rgba(243,247,255,0.72);
+        background:#040913;
+        font-size:14px;
+        line-height:1.5;
+      ">
+        <div>
+          <strong style="display:block;color:#f3f7ff;margin-bottom:6px;">Kartan kunde inte visas</strong>
+          ${message}
+        </div>
+      </div>
+    `;
+  }
 
-      if (nextMode === "chart") {
-        showChartMode();
-      }
+  async function reverseGeocodePlace(lat, lon) {
+    try {
+      const url =
+        "https://api.maptiler.com/geocoding/" +
+        encodeURIComponent(lon + "," + lat) +
+        ".json?key=" +
+        encodeURIComponent(MAPTILER_API_KEY) +
+        "&language=sv";
 
-      if (nextMode === "place") {
-        showPlaceMode();
-      }
+      const response = await fetch(url);
+      const data = await response.json();
 
-      updateLayersForMode();
-    }
+      const feature = data.features && data.features[0];
+      const name =
+        feature?.text ||
+        feature?.place_name?.split(",")[0] ||
+        "Vald plats";
 
-    function showWeatherMode() {
-      els.mainMapCard.classList.remove("is-hidden");
-      els.navigationHud.classList.remove("is-visible");
-      els.timeControl.classList.remove("is-hidden");
+      if (!appState.activePlace) return;
 
-      updateMainCardCopy("weather");
-    }
-
-    function showSeaMode() {
-      els.mainMapCard.classList.remove("is-hidden");
-      els.navigationHud.classList.remove("is-visible");
-      els.timeControl.classList.remove("is-hidden");
-
-      updateMainCardCopy("sea");
-      openSheet("seaSheet");
-    }
-
-    function showChartMode() {
-      els.mainMapCard.classList.remove("is-hidden");
-      els.navigationHud.classList.add("is-visible");
-      els.timeControl.classList.add("is-hidden");
-
-      updateMainCardCopy("chart");
-    }
-
-    function showPlaceMode() {
-      openSheet("placeSheet");
-    }
-
-    function updateMainCardCopy(context) {
-      const placeName = appState.activePlace?.name || "Välj en plats";
-
-      if (context === "weather") {
-        els.activePlaceName.textContent = placeName;
-        els.activePlaceMeta.textContent = appState.activePlace
-          ? "Kustväder för vald plats"
-          : "Tryck på kartan eller sök efter en kustplats";
-      }
-
-      if (context === "sea") {
-        els.activePlaceName.textContent = placeName;
-        els.activePlaceMeta.textContent = appState.activePlace
-          ? "Hav runt vald plats"
-          : "Välj en plats för att visa havsdata";
-        els.seaSheetSubtitle.textContent = appState.activePlace
-          ? `Hav runt ${placeName}`
-          : "Hav runt vald plats";
-      }
-
-      if (context === "chart") {
-        els.activePlaceName.textContent = "Sjökort";
-        els.activePlaceMeta.textContent = appState.activePlace
-          ? `${placeName} · AIS av`
-          : "Välj plats eller följ din position";
-      }
-    }
-
-    function openSheet(sheetId) {
-      closeAllSheets();
-
-      const sheet = document.getElementById(sheetId);
-      if (!sheet) return;
-
-      sheet.classList.add("is-open");
-      appState.openSheet = sheetId;
-    }
-
-    function closeAllSheets() {
-      els.sheets.forEach((sheet) => sheet.classList.remove("is-open"));
-      appState.openSheet = null;
-    }
-
-    function updateLayersForMode() {
-      els.weatherLayers.classList.toggle("is-hidden", appState.mode !== "weather");
-      els.seaLayers.classList.toggle("is-hidden", appState.mode !== "sea");
-      els.chartLayers.classList.toggle("is-hidden", appState.mode !== "chart");
-
-      if (appState.mode === "weather") {
-        els.layersSubtitle.textContent = "Väderlager";
-      } else if (appState.mode === "sea") {
-        els.layersSubtitle.textContent = "Havslager";
-      } else if (appState.mode === "chart") {
-        els.layersSubtitle.textContent = "Sjökort och navigation";
-      } else {
-        els.layersSubtitle.textContent = "Visa på kartan";
-      }
-    }
-
-    function toggleMainCardMinimized() {
-      appState.cardMinimized = !appState.cardMinimized;
-      els.mainMapCardBody.classList.toggle("is-hidden", appState.cardMinimized);
-      els.minimizeCardBtn.textContent = appState.cardMinimized ? "+" : "–";
-      els.minimizeCardBtn.setAttribute(
-        "aria-label",
-        appState.cardMinimized ? "Visa detaljer" : "Minimera kort"
-      );
-    }
-
-    function setDemoPlace() {
-      appState.activePlace = {
-        name: "Marstrand",
-        lat: 57.887,
-        lon: 11.583,
-        source: "demo"
-      };
-
-      els.weatherTemp.textContent = "14°";
-      els.weatherSummary.textContent = "Klart till växlande molnighet.";
-      els.windValue.textContent = "7 m/s";
-      els.rainValue.textContent = "Låg risk";
-
+      appState.activePlace.name = name;
       updateMainCardCopy(appState.mode);
+    } catch (error) {
+      console.warn("Kunde inte hämta platsnamn:", error);
     }
+  }
+
+  function setActivePlace(place) {
+    appState.activePlace = {
+      name: place.name || "Vald plats",
+      lat: Number(place.lat),
+      lon: Number(place.lon),
+      source: place.source || "unknown"
+    };
+
+    updateActivePlaceMarker();
+    updateDemoWeatherForPlace();
+    updateMainCardCopy(appState.mode);
+
+    if (appState.mode === "sea") {
+      els.seaSheetSubtitle.textContent = `Hav runt ${appState.activePlace.name}`;
+    }
+  }
+
+  function updateActivePlaceMarker() {
+    if (!appState.map || !appState.activePlace) return;
+
+    const el = document.createElement("div");
+    el.className = "active-place-marker";
+
+    if (appState.activePlaceMarker) {
+      appState.activePlaceMarker.remove();
+    }
+
+    appState.activePlaceMarker = new maptilersdk.Marker({
+      element: el,
+      anchor: "center"
+    })
+      .setLngLat([appState.activePlace.lon, appState.activePlace.lat])
+      .addTo(appState.map);
+
+    appState.map.flyTo({
+      center: [appState.activePlace.lon, appState.activePlace.lat],
+      zoom: Math.max(appState.map.getZoom(), 8.6),
+      duration: 650,
+      essential: true
+    });
+  }
+
+  function updateDemoWeatherForPlace() {
+    els.weatherTemp.textContent = "14°";
+    els.weatherSummary.textContent = "Klart till växlande molnighet.";
+    els.windValue.textContent = "7 m/s";
+    els.rainValue.textContent = "Låg risk";
+  }
+
+  function formatCoords(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  }
+
+  function setMode(nextMode) {
+    appState.mode = nextMode;
 
     els.navButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        setMode(btn.dataset.mode);
-      });
+      btn.classList.toggle("is-active", btn.dataset.mode === nextMode);
     });
 
-    els.closeSheetButtons.forEach((btn) => {
-      btn.addEventListener("click", closeAllSheets);
+    closeAllSheets();
+
+    if (nextMode === "weather") {
+      showWeatherMode();
+    }
+
+    if (nextMode === "sea") {
+      showSeaMode();
+    }
+
+    if (nextMode === "chart") {
+      showChartMode();
+    }
+
+    if (nextMode === "place") {
+      showPlaceMode();
+    }
+
+    updateLayersForMode();
+
+    setTimeout(() => {
+      if (appState.map) appState.map.resize();
+    }, 80);
+  }
+
+  function showWeatherMode() {
+    els.mainMapCard.classList.remove("is-hidden");
+    els.navigationHud.classList.remove("is-visible");
+    els.timeControl.classList.remove("is-hidden");
+
+    updateMapStyleForMode("weather");
+    updateMainCardCopy("weather");
+  }
+
+  function showSeaMode() {
+    els.mainMapCard.classList.remove("is-hidden");
+    els.navigationHud.classList.remove("is-visible");
+    els.timeControl.classList.remove("is-hidden");
+
+    updateMapStyleForMode("sea");
+    updateMainCardCopy("sea");
+    openSheet("seaSheet");
+  }
+
+  function showChartMode() {
+    els.mainMapCard.classList.remove("is-hidden");
+    els.navigationHud.classList.add("is-visible");
+    els.timeControl.classList.add("is-hidden");
+
+    updateMapStyleForMode("chart");
+    updateMainCardCopy("chart");
+  }
+
+  function showPlaceMode() {
+    openSheet("placeSheet");
+  }
+
+  function updateMapStyleForMode(mode) {
+    if (!appState.map) return;
+
+    try {
+      if (mode === "chart") {
+        appState.map.setStyle(maptilersdk.MapStyle.STREETS.DARK);
+      } else {
+        appState.map.setStyle(maptilersdk.MapStyle.DATAVIZ.DARK);
+      }
+
+      setTimeout(() => {
+        if (appState.map) appState.map.resize();
+        if (appState.activePlace) updateActivePlaceMarker();
+      }, 500);
+    } catch (error) {
+      console.warn("Kunde inte byta kartstil:", error);
+    }
+  }
+
+  function updateMainCardCopy(context) {
+    const placeName = appState.activePlace?.name || "Välj en plats";
+    const coords = appState.activePlace
+      ? formatCoords(appState.activePlace.lat, appState.activePlace.lon)
+      : "";
+
+    if (context === "weather") {
+      els.activePlaceName.textContent = placeName;
+      els.activePlaceMeta.textContent = appState.activePlace
+        ? `Kustväder · ${coords}`
+        : "Tryck på kartan eller sök efter en kustplats";
+    }
+
+    if (context === "sea") {
+      els.activePlaceName.textContent = placeName;
+      els.activePlaceMeta.textContent = appState.activePlace
+        ? "Hav runt vald plats"
+        : "Välj en plats för att visa havsdata";
+      els.seaSheetSubtitle.textContent = appState.activePlace
+        ? `Hav runt ${placeName}`
+        : "Hav runt vald plats";
+    }
+
+    if (context === "chart") {
+      els.activePlaceName.textContent = "Sjökort";
+      els.activePlaceMeta.textContent = appState.activePlace
+        ? `${placeName} · AIS av`
+        : "Välj plats eller följ din position";
+    }
+  }
+
+  function openSheet(sheetId) {
+    closeAllSheets();
+
+    const sheet = document.getElementById(sheetId);
+    if (!sheet) return;
+
+    sheet.classList.add("is-open");
+    appState.openSheet = sheetId;
+
+    setTimeout(() => {
+      if (appState.map) appState.map.resize();
+    }, 120);
+  }
+
+  function closeAllSheets() {
+    els.sheets.forEach((sheet) => sheet.classList.remove("is-open"));
+    appState.openSheet = null;
+  }
+
+  function updateLayersForMode() {
+    els.weatherLayers.classList.toggle("is-hidden", appState.mode !== "weather");
+    els.seaLayers.classList.toggle("is-hidden", appState.mode !== "sea");
+    els.chartLayers.classList.toggle("is-hidden", appState.mode !== "chart");
+
+    if (appState.mode === "weather") {
+      els.layersSubtitle.textContent = "Väderlager";
+    } else if (appState.mode === "sea") {
+      els.layersSubtitle.textContent = "Havslager";
+    } else if (appState.mode === "chart") {
+      els.layersSubtitle.textContent = "Sjökort och navigation";
+    } else {
+      els.layersSubtitle.textContent = "Visa på kartan";
+    }
+  }
+
+  function toggleMainCardMinimized() {
+    appState.cardMinimized = !appState.cardMinimized;
+    els.mainMapCardBody.classList.toggle("is-hidden", appState.cardMinimized);
+    els.minimizeCardBtn.textContent = appState.cardMinimized ? "+" : "–";
+    els.minimizeCardBtn.setAttribute(
+      "aria-label",
+      appState.cardMinimized ? "Visa detaljer" : "Minimera kort"
+    );
+  }
+
+  els.navButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setMode(btn.dataset.mode);
     });
+  });
 
-    els.layersBtn.addEventListener("click", () => {
-      updateLayersForMode();
-      openSheet("layersSheet");
+  els.closeSheetButtons.forEach((btn) => {
+    btn.addEventListener("click", closeAllSheets);
+  });
+
+  els.layersBtn.addEventListener("click", () => {
+    updateLayersForMode();
+    openSheet("layersSheet");
+  });
+
+  els.minimizeCardBtn.addEventListener("click", toggleMainCardMinimized);
+
+  els.weatherDetailsBtn.addEventListener("click", () => {
+    els.detailsTitle.textContent = "Väderdetaljer";
+    els.detailsSubtitle.textContent = "Grafer och mer väderdata kommer här.";
+    openSheet("detailsSheet");
+  });
+
+  els.seaDetailsBtn.addEventListener("click", () => {
+    els.detailsTitle.textContent = "Havsdetaljer";
+    els.detailsSubtitle.textContent = "Här kopplar vi in dina befintliga havsgrafer.";
+    openSheet("detailsSheet");
+  });
+
+  document.querySelectorAll(".toggle").forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      toggle.classList.toggle("is-on");
     });
+  });
 
-    els.minimizeCardBtn.addEventListener("click", toggleMainCardMinimized);
-
-    els.weatherDetailsBtn.addEventListener("click", () => {
-      els.detailsTitle.textContent = "Väderdetaljer";
-      els.detailsSubtitle.textContent = "Grafer och mer väderdata kommer här.";
-      openSheet("detailsSheet");
-    });
-
-    els.seaDetailsBtn.addEventListener("click", () => {
-      els.detailsTitle.textContent = "Havsdetaljer";
-      els.detailsSubtitle.textContent = "Här kopplar vi in dina befintliga havsgrafer.";
-      openSheet("detailsSheet");
-    });
-
-    document.querySelectorAll(".toggle").forEach((toggle) => {
-      toggle.addEventListener("click", () => {
-        toggle.classList.toggle("is-on");
-      });
-    });
-
-    document.getElementById("map").addEventListener("click", () => {
-      setDemoPlace();
-    });
-
-    setMode("weather");
-  </script>
+  initMap();
+  setMode("weather");
+</script>
 </body>
 </html>
