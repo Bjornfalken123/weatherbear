@@ -531,6 +531,72 @@
   border-color: rgba(152,240,219,0.24);
   background: rgba(152,240,219,0.08);
 }
+    .card-collapse-btn {
+  appearance: none;
+  min-width: 74px;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.055);
+  color: var(--text);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.card-collapse-btn:active {
+  transform: translateY(1px);
+}
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--bottom-ui) + 18px);
+  z-index: 120;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(5,11,22,0.92);
+  color: var(--text);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.38);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 850;
+  text-align: center;
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.app-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.app-toast.is-success {
+  border-color: rgba(152,240,219,0.28);
+  color: var(--accent-2);
+  background: rgba(5,11,22,0.94);
+}
+
+.app-toast.is-warning {
+  border-color: rgba(232,215,168,0.28);
+  color: var(--warning);
+  background: rgba(5,11,22,0.94);
+}
+
+.app-toast.is-error {
+  border-color: rgba(255,120,120,0.28);
+  color: #ffc5c5;
+  background: rgba(5,11,22,0.94);
+}
 
 .maplibregl-ctrl-bottom-left,
 .maplibregl-ctrl-bottom-right {
@@ -1281,7 +1347,9 @@
             <div id="activePlaceName" class="place-name">Välj en plats</div>
             <div id="activePlaceMeta" class="place-meta">Tryck på kartan eller sök efter en kustplats</div>
           </div>
-          <button id="minimizeCardBtn" class="plain-icon-btn" type="button" aria-label="Minimera kort">–</button>
+          <button id="minimizeCardBtn" class="card-collapse-btn" type="button" aria-label="Minimera kort">
+  <span id="minimizeCardText">Minimera</span>
+</button>
         </div>
 
         <div id="mainMapCardBody" class="map-card-body">
@@ -1322,6 +1390,7 @@
 </div>
 
 <div id="chartStatusPill" class="chart-status-pill">
+  <div id="appToast" class="app-toast" role="status" aria-live="polite"></div>
   Sjökort aktivt · AIS av
 </div>
 
@@ -1621,7 +1690,9 @@ nauticalLayersAdded: false
 
     mainMapCard: document.getElementById("mainMapCard"),
     mainMapCardBody: document.getElementById("mainMapCardBody"),
-    minimizeCardBtn: document.getElementById("minimizeCardBtn"),
+   minimizeCardBtn: document.getElementById("minimizeCardBtn"),
+minimizeCardText: document.getElementById("minimizeCardText"),
+appToast: document.getElementById("appToast"),
 
     activePlaceName: document.getElementById("activePlaceName"),
     activePlaceMeta: document.getElementById("activePlaceMeta"),
@@ -2677,8 +2748,8 @@ function renderSeaGraphPreview() {
   const charts = buildSeaCharts();
 
   if (!charts.length) {
-    els.seaGraphPlaceholder.innerHTML =
-      "Havsgrafer visas här när tidsserier finns för vald plats.";
+ els.seaGraphPlaceholder.innerHTML =
+  "Grafer visas här när havsdata över tid finns för vald plats.";
     return;
   }
 
@@ -3276,6 +3347,7 @@ function handleUserPositionError(error) {
   syncChartUi();
 
   showChartStatusMessage("Kunde inte hämta din position.");
+showToast("Kunde inte hämta din position. Kontrollera platsåtkomst.", "error");
 }
 
 function updateUserLocationMarker(position) {
@@ -3350,9 +3422,11 @@ function toggleAis() {
   syncChartUi();
 
   if (appState.aisVisible) {
-    showChartStatusMessage("AIS kopplas in i nästa block.");
+    showChartStatusMessage("AIS-fartyg visas när fartygsdata är inkopplad.");
+    showToast("AIS är valt. Fartygsdata kopplas in i nästa steg.", "warning");
   } else {
     showChartStatusMessage("AIS är av.");
+    showToast("AIS är av.", "success");
   }
 }
   function formatCoords(lat, lon) {
@@ -3538,15 +3612,22 @@ setTimeout(() => {
     }
   }
 
-  function toggleMainCardMinimized() {
-    appState.cardMinimized = !appState.cardMinimized;
-    els.mainMapCardBody.classList.toggle("is-hidden", appState.cardMinimized);
-    els.minimizeCardBtn.textContent = appState.cardMinimized ? "+" : "–";
-    els.minimizeCardBtn.setAttribute(
-      "aria-label",
-      appState.cardMinimized ? "Visa detaljer" : "Minimera kort"
-    );
+function toggleMainCardMinimized() {
+  appState.cardMinimized = !appState.cardMinimized;
+
+  els.mainMapCardBody.classList.toggle("is-hidden", appState.cardMinimized);
+
+  if (els.minimizeCardText) {
+    els.minimizeCardText.textContent = appState.cardMinimized
+      ? "Detaljer"
+      : "Minimera";
   }
+
+  els.minimizeCardBtn.setAttribute(
+    "aria-label",
+    appState.cardMinimized ? "Visa detaljer" : "Minimera kort"
+  );
+}
 function loadSavedPlaces() {
   try {
     const raw = localStorage.getItem("kustvader:savedPlaces");
@@ -3600,16 +3681,16 @@ function isActivePlaceSaved() {
 }
 
 function saveActivePlace() {
-  if (!appState.activePlace) {
-    els.weatherSummary.textContent = "Välj en plats först, sedan kan du spara den.";
-    return;
-  }
+ if (!appState.activePlace) {
+  showToast("Välj en plats först.", "warning");
+  return;
+}
 
-  if (isActivePlaceSaved()) {
-    els.weatherSummary.textContent = "Platsen är redan sparad.";
-    updateSavePlaceButton();
-    return;
-  }
+if (isActivePlaceSaved()) {
+  showToast("Platsen är redan sparad.", "success");
+  updateSavePlaceButton();
+  return;
+}
 
   const newPlace = {
     id: Date.now().toString(),
@@ -3625,7 +3706,7 @@ function saveActivePlace() {
   renderSavedPlaces();
   updateSavePlaceButton();
 
-  els.weatherSummary.textContent = `${newPlace.name} är sparad.`;
+ showToast(`${newPlace.name} är sparad.`, "success");
 }
 
 function renderSavedPlaces() {
@@ -3699,6 +3780,8 @@ function selectSavedPlace(placeId) {
 }
 
 function removeSavedPlace(placeId) {
+  const removedPlace = appState.savedPlaces.find((place) => place.id === placeId);
+
   appState.savedPlaces = appState.savedPlaces.filter((place) => {
     return place.id !== placeId;
   });
@@ -3706,6 +3789,10 @@ function removeSavedPlace(placeId) {
   persistSavedPlaces();
   renderSavedPlaces();
   updateSavePlaceButton();
+
+  if (removedPlace) {
+    showToast(`${removedPlace.name} togs bort.`, "success");
+  }
 }
 
 function updateSavePlaceButton() {
@@ -3729,6 +3816,7 @@ function handleUseLocationClick() {
   }
 
   els.placeSearchStatus.textContent = "Hämtar din position...";
+  showToast("Hämtar din position...", "success");
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
@@ -3741,6 +3829,7 @@ function handleUseLocationClick() {
         lon,
         source: "gps"
       });
+      showToast("Min plats vald.", "success");
 
       closeAllSheets();
 
@@ -3759,7 +3848,17 @@ function handleUseLocationClick() {
     }
   );
 }
+function showToast(message, type = "success") {
+  if (!els.appToast) return;
 
+  els.appToast.textContent = message;
+  els.appToast.className = `app-toast is-visible is-${type}`;
+
+  window.clearTimeout(showToast._timer);
+  showToast._timer = window.setTimeout(() => {
+    els.appToast.className = "app-toast";
+  }, 2300);
+}
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
