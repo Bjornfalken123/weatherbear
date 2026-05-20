@@ -498,6 +498,41 @@
     0 8px 18px rgba(0,0,0,0.42),
     0 0 0 2px rgba(5,11,22,0.55);
 }
+  .ais-ship-marker {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.ais-ship-inner {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 0 7px rgba(123,199,255,0.75));
+}
+
+.ais-ship-inner svg {
+  display: block;
+}
+
+.ais-empty-note {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(232,215,168,0.22);
+  background: rgba(232,215,168,0.08);
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 800;
+}  
 
 .chart-status-pill {
   position: fixed;
@@ -1677,7 +1712,15 @@ aisVisible: false,
 userLocationMarker: null,
 geoWatchId: null,
 lastUserPosition: null,
-nauticalLayersAdded: false
+nauticalLayersAdded: false,
+aisMarkers: new Map(),
+aisVesselCache: new Map(),
+aisRefreshTimer: null,
+aisFetchInFlight: false,
+aisLatestRequestId: 0,
+aisLastFetchAt: 0,
+aisZoomBlocked: false,
+aisLastCount: 0
 };
 
   const els = {
@@ -1794,7 +1837,17 @@ timeControl: document.getElementById("timeControl")
 
       reverseGeocodePlace(lat, lon);
     });
+appState.map.on("moveend", () => {
+  if (appState.aisVisible && appState.mode === "chart") {
+    scheduleAisLoad(false);
+  }
+});
 
+appState.map.on("zoomend", () => {
+  if (appState.aisVisible && appState.mode === "chart") {
+    scheduleAisLoad(false);
+  }
+});
     window.addEventListener("resize", () => {
       if (appState.map) appState.map.resize();
     });
@@ -3152,6 +3205,11 @@ function capitalizeFirst(value) {
   if (!text) return "";
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+const AIS_MIN_ZOOM = 8;
+const AIS_LISTEN_MS = 3000;
+const AIS_REFRESH_INTERVAL_MS = 45000;
+const AIS_FETCH_THROTTLE_MS = 8000;
+const AIS_MAX_MARKERS = 120;
 const NAUTICAL_LIGHT_BASE_TILE_URL = "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
 const NAUTICAL_SEAMARK_TILE_URL = "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
 
@@ -3253,10 +3311,19 @@ function syncChartUi() {
     els.chartStatusPill.classList.toggle("is-visible", appState.mode === "chart");
     els.chartStatusPill.classList.toggle("is-active", appState.followPosition || appState.aisVisible);
 
-    const followText = appState.followPosition ? "Följer position" : "Position av";
-    const aisText = appState.aisVisible ? "AIS på" : "AIS av";
+const followText = appState.followPosition ? "Följer position" : "Position av";
 
-    els.chartStatusPill.textContent = `Sjökort aktivt · ${followText} · ${aisText}`;
+let aisText = "AIS av";
+
+if (appState.aisVisible && appState.aisZoomBlocked) {
+  aisText = "Zooma in för AIS";
+} else if (appState.aisVisible) {
+  aisText = appState.aisLastCount > 0
+    ? `${appState.aisLastCount} fartyg`
+    : "AIS på";
+}
+
+els.chartStatusPill.textContent = `Sjökort aktivt · ${followText} · ${aisText}`;
   }
 
   updateMainCardCopy(appState.mode);
@@ -3399,7 +3466,570 @@ function showChartStatusMessage(message) {
     syncChartUi();
   }, 1800);
 }
+function startAis() {
+  if (!appState.map) return;
 
+  appState.aisVisible = true;
+  appState.aisLastFetchAt = 0;
+
+  syncChartUi();
+
+  loadAisData(true);
+
+  if (appState.aisRefreshTimer) {
+    clearInterval(appState.aisRefreshTimer);
+  }
+
+  appState.aisRefreshTimer = setInterval(() => {
+    if (appState.aisVisible && appState.mode === "chart") {
+      loadAisData(false);
+    }
+  }, AIS_REFRESH_INTERVAL_MS);
+}
+
+function stopAis() {
+  appState.aisVisible = false;
+  appState.aisZoomBlocked = false;
+  appState.aisLastCount = 0;
+  appState.aisLatestRequestId++;
+
+  if (appState.aisRefreshTimer) {
+    clearInterval(appState.aisRefreshTimer);
+    appState.aisRefreshTimer = null;
+  }
+
+  clearAisMarkers();
+  syncChartUi();
+}
+
+function clearAisMarkers() {
+  appState.aisMarkers.forEach((item) => {
+    try {
+      if (item && item.marker) item.marker.remove();
+    } catch (error) {
+      console.warn("Kunde inte ta bort AIS-markör:", error);
+    }
+  });
+
+  appState.aisMarkers.clear();
+  appState.aisVesselCache.clear();
+}
+
+function scheduleAisLoad(force = false) {
+  if (!appState.aisVisible || appState.mode !== "chart") return;
+
+  window.clearTimeout(scheduleAisLoad._timer);
+  scheduleAisLoad._timer = window.setTimeout(() => {
+    loadAisData(force);
+  }, 600);
+}
+
+async function loadAisData(force = false) {
+  if (!appState.map || !appState.aisVisible || appState.mode !== "chart") return;
+
+  const zoom = appState.map.getZoom ? appState.map.getZoom() : 0;
+
+  if (zoom < AIS_MIN_ZOOM) {
+    appState.aisZoomBlocked = true;
+    setAisMarkersVisible(false);
+    syncChartUi();
+    showChartStatusMessage("Zooma in för att visa AIS-fartyg.");
+    return;
+  }
+
+  appState.aisZoomBlocked = false;
+  setAisMarkersVisible(true);
+  syncChartUi();
+
+  if (appState.aisFetchInFlight) return;
+
+  const now = Date.now();
+  const sinceLast = now - appState.aisLastFetchAt;
+
+  if (!force && sinceLast < AIS_FETCH_THROTTLE_MS) {
+    return;
+  }
+
+  appState.aisFetchInFlight = true;
+  appState.aisLastFetchAt = now;
+
+  const requestId = ++appState.aisLatestRequestId;
+  const bbox = getAisBbox();
+
+  try {
+    showChartStatusMessage("Hämtar AIS-fartyg...");
+
+    const url =
+      `/api/ais?bbox=${encodeURIComponent(bbox.query)}` +
+      `&listenMs=${encodeURIComponent(String(AIS_LISTEN_MS))}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (requestId !== appState.aisLatestRequestId) return;
+
+    if (!response.ok || data?.error) {
+      throw new Error(data?.error || "AIS kunde inte hämtas.");
+    }
+
+    const vessels = Array.isArray(data.vessels)
+      ? data.vessels
+      : Array.isArray(data.items)
+        ? data.items
+        : Array.isArray(data)
+          ? data
+          : [];
+
+    const vesselsWithPosition = vessels.filter((vessel) => {
+      const lat = Number(getAisLat(vessel));
+      const lon = Number(getAisLon(vessel));
+      return Number.isFinite(lat) && Number.isFinite(lon);
+    });
+
+    updateAisMarkers(vesselsWithPosition, bbox);
+
+    appState.aisLastCount = vesselsWithPosition.length;
+    syncChartUi();
+
+    if (vesselsWithPosition.length) {
+      showChartStatusMessage(`${vesselsWithPosition.length} AIS-fartyg visas.`);
+    } else {
+      showChartStatusMessage("Inga AIS-fartyg hittades i kartområdet.");
+    }
+  } catch (error) {
+    console.warn("AIS kunde inte hämtas:", error);
+    showChartStatusMessage("AIS kunde inte hämtas just nu.");
+    showToast("AIS kunde inte hämtas just nu.", "error");
+  } finally {
+    appState.aisFetchInFlight = false;
+  }
+}
+
+function getAisBbox() {
+  const bounds = appState.map.getBounds();
+
+  let west = bounds.getWest();
+  let south = bounds.getSouth();
+  let east = bounds.getEast();
+  let north = bounds.getNorth();
+
+  const lonSpan = Math.abs(east - west);
+  const latSpan = Math.abs(north - south);
+
+  const lonPad = Math.max(lonSpan * 0.2, 0.06);
+  const latPad = Math.max(latSpan * 0.2, 0.05);
+
+  west = Math.max(-180, west - lonPad);
+  east = Math.min(180, east + lonPad);
+  south = Math.max(-85, south - latPad);
+  north = Math.min(85, north + latPad);
+
+  return {
+    west,
+    south,
+    east,
+    north,
+    query: [west, south, east, north].join(",")
+  };
+}
+
+function setAisMarkersVisible(visible) {
+  appState.aisMarkers.forEach((item) => {
+    if (item && item.element) {
+      item.element.style.display = visible ? "flex" : "none";
+    }
+  });
+}
+
+function updateAisMarkers(vessels, bbox) {
+  if (!appState.map || !Array.isArray(vessels)) return;
+
+  const now = Date.now();
+  const activeKeys = new Set();
+
+  vessels.forEach((vessel) => {
+    const lat = Number(getAisLat(vessel));
+    const lon = Number(getAisLon(vessel));
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    if (!isAisInsideBbox(lat, lon, bbox)) return;
+
+    const key = getAisKey(vessel, lat, lon);
+    if (!key) return;
+
+    activeKeys.add(key);
+
+    const cog = normalizeAisCourse(getAisCog(vessel));
+    const sog = getAisSog(vessel);
+    const observedAt = getAisObservedAt(vessel, now);
+
+    const cached = appState.aisVesselCache.get(key) || {};
+    const merged = {
+      ...cached,
+      ...vessel,
+      lat,
+      lon,
+      cog,
+      sog: sog == null ? cached.sog : sog,
+      lastSeenAt: observedAt
+    };
+
+    appState.aisVesselCache.set(key, merged);
+
+    const existing = appState.aisMarkers.get(key);
+
+    if (existing && existing.marker) {
+      existing.marker.setLngLat([lon, lat]);
+      existing.element.innerHTML = getAisShipHtml(cog);
+      existing.marker.setPopup(createAisPopup(merged));
+      existing.lastSeenAt = observedAt;
+      return;
+    }
+
+    const element = document.createElement("div");
+    element.className = "ais-ship-marker";
+    element.innerHTML = getAisShipHtml(cog);
+
+    const marker = new maptilersdk.Marker({
+      element,
+      anchor: "center"
+    })
+      .setLngLat([lon, lat])
+      .setPopup(createAisPopup(merged))
+      .addTo(appState.map);
+
+    element.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      try {
+        marker.togglePopup();
+      } catch (error) {
+        console.warn("AIS-popup kunde inte öppnas:", error);
+      }
+    });
+
+    appState.aisMarkers.set(key, {
+      marker,
+      element,
+      lastSeenAt: observedAt
+    });
+  });
+
+  pruneAisMarkers(activeKeys);
+  limitAisMarkers();
+}
+
+function pruneAisMarkers(activeKeys) {
+  appState.aisMarkers.forEach((item, key) => {
+    const age = Date.now() - Number(item.lastSeenAt || 0);
+    const tooOld = age > 20 * 60 * 1000;
+
+    if (!activeKeys.has(key) && tooOld) {
+      try {
+        item.marker.remove();
+      } catch (error) {
+        console.warn("AIS-markör kunde inte tas bort:", error);
+      }
+
+      appState.aisMarkers.delete(key);
+      appState.aisVesselCache.delete(key);
+    }
+  });
+}
+
+function limitAisMarkers() {
+  if (appState.aisMarkers.size <= AIS_MAX_MARKERS) return;
+
+  const entries = Array.from(appState.aisMarkers.entries())
+    .sort((a, b) => Number(a[1].lastSeenAt || 0) - Number(b[1].lastSeenAt || 0));
+
+  while (appState.aisMarkers.size > AIS_MAX_MARKERS && entries.length) {
+    const [key, item] = entries.shift();
+
+    try {
+      item.marker.remove();
+    } catch (error) {
+      console.warn("AIS-markör kunde inte tas bort:", error);
+    }
+
+    appState.aisMarkers.delete(key);
+    appState.aisVesselCache.delete(key);
+  }
+}
+
+function isAisInsideBbox(lat, lon, bbox) {
+  if (!bbox) return true;
+
+  return (
+    lon >= bbox.west &&
+    lon <= bbox.east &&
+    lat >= bbox.south &&
+    lat <= bbox.north
+  );
+}
+
+function createAisPopup(vessel) {
+  return new maptilersdk.Popup({
+    offset: 18,
+    closeButton: true,
+    closeOnClick: false
+  }).setText(getAisPopupText(vessel));
+}
+
+function getAisShipHtml(rotation) {
+  const safeRotation = normalizeAisCourse(rotation);
+
+  return `
+    <div class="ais-ship-inner" style="transform:rotate(${safeRotation}deg);">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2 L16 9 L15 17 L12 22 L9 17 L8 9 Z" fill="#7bc7ff" stroke="#ffffff" stroke-width="1.4"></path>
+        <circle cx="12" cy="10" r="2" fill="rgba(4,9,19,0.72)"></circle>
+      </svg>
+    </div>
+  `;
+}
+
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+
+  return null;
+}
+
+function getAisLat(vessel) {
+  return firstDefined(
+    vessel.lat,
+    vessel.latitude,
+    vessel.Latitude,
+    vessel.position?.lat,
+    vessel.position?.latitude,
+    vessel.location?.lat,
+    vessel.location?.latitude,
+    vessel.Message?.PositionReport?.Latitude,
+    vessel.Message?.StandardClassBPositionReport?.Latitude,
+    vessel.Message?.ExtendedClassBPositionReport?.Latitude
+  );
+}
+
+function getAisLon(vessel) {
+  return firstDefined(
+    vessel.lon,
+    vessel.lng,
+    vessel.longitude,
+    vessel.Longitude,
+    vessel.position?.lon,
+    vessel.position?.lng,
+    vessel.position?.longitude,
+    vessel.location?.lon,
+    vessel.location?.lng,
+    vessel.location?.longitude,
+    vessel.Message?.PositionReport?.Longitude,
+    vessel.Message?.StandardClassBPositionReport?.Longitude,
+    vessel.Message?.ExtendedClassBPositionReport?.Longitude
+  );
+}
+
+function getAisMmsi(vessel) {
+  return firstDefined(
+    vessel.mmsi,
+    vessel.MMSI,
+    vessel.Mmsi,
+    vessel.userId,
+    vessel.UserID,
+    vessel.MetaData?.MMSI,
+    vessel.metadata?.mmsi
+  );
+}
+
+function getAisName(vessel) {
+  return firstDefined(
+    vessel.name,
+    vessel.shipName,
+    vessel.ShipName,
+    vessel.vesselName,
+    vessel.VesselName,
+    vessel.callsign,
+    vessel.callSign,
+    vessel.CallSign,
+    vessel.static?.name,
+    vessel.static?.shipName,
+    vessel.static?.ShipName,
+    vessel.MetaData?.ShipName,
+    vessel.metadata?.shipName
+  ) || "Fartyg";
+}
+
+function getAisCog(vessel) {
+  return firstDefined(
+    vessel.cog,
+    vessel.course,
+    vessel.Course,
+    vessel.courseOverGround,
+    vessel.CourseOverGround,
+    vessel.COG,
+    vessel.Message?.PositionReport?.Cog,
+    vessel.Message?.PositionReport?.COG,
+    vessel.Message?.StandardClassBPositionReport?.Cog,
+    vessel.Message?.StandardClassBPositionReport?.COG,
+    vessel.Message?.ExtendedClassBPositionReport?.Cog,
+    vessel.Message?.ExtendedClassBPositionReport?.COG
+  );
+}
+
+function getAisSog(vessel) {
+  return firstDefined(
+    vessel.sog,
+    vessel.speed,
+    vessel.Speed,
+    vessel.speedOverGround,
+    vessel.SpeedOverGround,
+    vessel.SOG,
+    vessel.Message?.PositionReport?.Sog,
+    vessel.Message?.PositionReport?.SOG,
+    vessel.Message?.StandardClassBPositionReport?.Sog,
+    vessel.Message?.StandardClassBPositionReport?.SOG,
+    vessel.Message?.ExtendedClassBPositionReport?.Sog,
+    vessel.Message?.ExtendedClassBPositionReport?.SOG
+  );
+}
+
+function getAisShipTypeValue(vessel) {
+  return firstDefined(
+    vessel.shipType,
+    vessel.ShipType,
+    vessel.type,
+    vessel.Type,
+    vessel.static?.shipType,
+    vessel.static?.ShipType,
+    vessel.static?.Type,
+    vessel.static?.ShipAndCargoType
+  );
+}
+
+function getAisKey(vessel, lat, lon) {
+  const mmsi = getAisMmsi(vessel);
+
+  if (mmsi != null && mmsi !== "") {
+    return `mmsi:${String(mmsi)}`;
+  }
+
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    return `pos:${lat.toFixed(4)}:${lon.toFixed(4)}`;
+  }
+
+  return "";
+}
+
+function normalizeAisCourse(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return ((number % 360) + 360) % 360;
+}
+
+function getAisObservedAt(vessel, fallback) {
+  const raw = firstDefined(
+    vessel.receivedAt,
+    vessel.lastSeenAt,
+    vessel.timestamp,
+    vessel.time,
+    vessel.Time,
+    vessel.createdAt,
+    vessel.cachedAt
+  );
+
+  const value = Number(raw);
+  if (Number.isFinite(value)) return value;
+
+  const dateValue = new Date(raw).getTime();
+  if (Number.isFinite(dateValue)) return dateValue;
+
+  return fallback;
+}
+
+function getAisTypeLabel(value) {
+  if (value == null || value === "") return "Okänd typ";
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return String(value).trim() || "Okänd typ";
+  }
+
+  if (number === 30) return "Fiskefartyg";
+  if (number === 31 || number === 32) return "Bogsering";
+  if (number === 33) return "Muddring / undervattensarbete";
+  if (number === 34) return "Dykfartyg";
+  if (number === 35) return "Militärt fartyg";
+  if (number === 36) return "Segelfartyg";
+  if (number === 37) return "Fritidsfartyg";
+  if (number >= 40 && number <= 49) return "Höghastighetsfartyg";
+  if (number >= 50 && number <= 59) return "Service / specialfartyg";
+  if (number >= 60 && number <= 69) return "Passagerarfartyg";
+  if (number >= 70 && number <= 79) return "Lastfartyg";
+  if (number >= 80 && number <= 89) return "Tanker";
+  if (number >= 90 && number <= 99) return "Annat fartyg";
+
+  return "Okänd typ";
+}
+
+function formatAisAge(value) {
+  const time = Number(value);
+  if (!Number.isFinite(time)) return "";
+
+  let diffMs = Date.now() - time;
+  if (diffMs < 0) diffMs = 0;
+
+  const seconds = Math.round(diffMs / 1000);
+
+  if (seconds < 60) return `${seconds} sek sedan`;
+
+  const minutes = Math.round(seconds / 60);
+
+  if (minutes < 60) return `${minutes} min sedan`;
+
+  return "";
+}
+
+function getAisPopupText(vessel) {
+  const lines = [];
+
+  lines.push(getAisName(vessel));
+
+  const mmsi = getAisMmsi(vessel);
+  if (mmsi) lines.push(`MMSI: ${mmsi}`);
+
+  const typeValue = getAisShipTypeValue(vessel);
+  lines.push(`Typ: ${getAisTypeLabel(typeValue)}`);
+
+  const sog = getAisSog(vessel);
+  if (sog != null && sog !== "") {
+    lines.push(`Fart: ${Number(sog).toFixed(1)} kn`);
+  }
+
+  const cog = getAisCog(vessel);
+  if (cog != null && cog !== "") {
+    lines.push(`Kurs: ${Math.round(Number(cog))}°`);
+  }
+
+  const destination = firstDefined(
+    vessel.destination,
+    vessel.Destination,
+    vessel.dest,
+    vessel.static?.destination,
+    vessel.static?.Destination
+  );
+
+  if (destination) {
+    lines.push(`Destination: ${destination}`);
+  }
+
+  const age = formatAisAge(vessel.lastSeenAt || vessel.receivedAt || vessel.timestamp || vessel.time || vessel.cachedAt);
+  if (age) lines.push(`Senast sedd: ${age}`);
+
+  return lines.join("\n");
+}
 function toggleChartBase() {
   appState.chartBaseVisible = !appState.chartBaseVisible;
   setNauticalLayersVisible(appState.mode === "chart" && appState.chartBaseVisible);
@@ -3417,19 +4047,18 @@ function toggleFollowPosition() {
 function toggleAis() {
   appState.aisVisible = !appState.aisVisible;
 
-  if (els.aisToggle) {
-    els.aisToggle.classList.toggle("is-on", appState.aisVisible);
+  if (appState.aisVisible) {
+    if (appState.mode !== "chart") {
+      setMode("chart");
+    }
+
+    startAis();
+  } else {
+    stopAis();
+    showToast("AIS är av.", "success");
   }
 
   syncChartUi();
-
-  if (appState.aisVisible) {
-    showChartStatusMessage("AIS-fartyg visas när fartygsdata är inkopplad.");
-    showToast("AIS är valt. Fartygsdata kopplas in i nästa steg.", "warning");
-  } else {
-    showChartStatusMessage("AIS är av.");
-    showToast("AIS är av.", "success");
-  }
 }
   function formatCoords(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
@@ -3472,6 +4101,9 @@ function toggleAis() {
     els.mainMapCard.classList.remove("is-hidden");
     els.navigationHud.classList.remove("is-visible");
     els.timeControl.classList.remove("is-hidden");
+    if (appState.aisVisible) {
+  stopAis();
+}
 
     updateMapStyleForMode("weather");
     setNauticalLayersVisible(false);
@@ -3483,6 +4115,9 @@ function showSeaMode() {
   els.mainMapCard.classList.remove("is-hidden");
   els.navigationHud.classList.remove("is-visible");
   els.timeControl.classList.remove("is-hidden");
+  if (appState.aisVisible) {
+  stopAis();
+}
 
   updateMapStyleForMode("sea");
   setNauticalLayersVisible(false);
@@ -3506,6 +4141,9 @@ function showChartMode() {
   setNauticalLayersVisible(appState.chartBaseVisible);
   updateMainCardCopy("chart");
   syncChartUi();
+  if (appState.aisVisible) {
+  scheduleAisLoad(true);
+}
 }
 
   function showPlaceMode() {
@@ -3946,6 +4584,13 @@ els.timeSlider.addEventListener("input", () => {
 els.timeNowBtn.addEventListener("click", goToCurrentWeatherTime);
 
 els.timePlusHourBtn.addEventListener("click", goForwardOneHour);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (appState.aisVisible) {
+      stopAis();
+    }
+  }
+});
 loadSavedPlaces();
 initMap();
 setMode("weather");
