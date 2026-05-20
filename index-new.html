@@ -1568,7 +1568,7 @@
               <div class="row-title">Vind</div>
               <div class="row-subtitle">Visa vind över kartan.</div>
             </div>
-            <button class="toggle" type="button"></button>
+            <button id="weatherWindToggle" class="toggle" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1576,7 +1576,7 @@
               <div class="row-title">Regn</div>
               <div class="row-subtitle">Visa nederbörd och regnområden.</div>
             </div>
-            <button class="toggle" type="button"></button>
+            <button id="weatherPrecipToggle" class="toggle" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1584,7 +1584,7 @@
               <div class="row-title">Radar</div>
               <div class="row-subtitle">Visa aktuellt regn där det finns data.</div>
             </div>
-            <button class="toggle" type="button"></button>
+           <button id="weatherRadarToggle" class="toggle" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1592,7 +1592,7 @@
               <div class="row-title">Moln & satellit</div>
               <div class="row-subtitle">Visa moln och satellitbild.</div>
             </div>
-            <button class="toggle is-on" type="button"></button>
+            <button id="weatherCloudToggle" class="toggle is-on" type="button"></button>
           </div>
 
           <div class="row-item">
@@ -1600,7 +1600,7 @@
               <div class="row-title">Temperatur</div>
               <div class="row-subtitle">Visa temperatur över kartan.</div>
             </div>
-            <button class="toggle" type="button"></button>
+           <button id="weatherTemperatureToggle" class="toggle" type="button"></button>
           </div>
         </div>
 
@@ -1720,7 +1720,20 @@ aisFetchInFlight: false,
 aisLatestRequestId: 0,
 aisLastFetchAt: 0,
 aisZoomBlocked: false,
-aisLastCount: 0
+aisLastCount: 0,
+weatherLayers: {
+  wind: false,
+  precipitation: false,
+  radar: false,
+  cloud: true,
+  temperature: false
+},
+
+maptilerWeatherLayers: {
+  wind: null,
+  precipitation: null,
+  temperature: null
+}
 };
 
   const els = {
@@ -1753,9 +1766,15 @@ timeSelectedLabel: document.getElementById("timeSelectedLabel"),
     layersSheet: document.getElementById("layersSheet"),
     layersSubtitle: document.getElementById("layersSubtitle"),
 
-    weatherLayers: document.getElementById("weatherLayers"),
-    seaLayers: document.getElementById("seaLayers"),
-    chartLayers: document.getElementById("chartLayers"),
+weatherLayers: document.getElementById("weatherLayers"),
+seaLayers: document.getElementById("seaLayers"),
+chartLayers: document.getElementById("chartLayers"),
+
+weatherWindToggle: document.getElementById("weatherWindToggle"),
+weatherPrecipToggle: document.getElementById("weatherPrecipToggle"),
+weatherRadarToggle: document.getElementById("weatherRadarToggle"),
+weatherCloudToggle: document.getElementById("weatherCloudToggle"),
+weatherTemperatureToggle: document.getElementById("weatherTemperatureToggle"),
 
 seaSheet: document.getElementById("seaSheet"),
 seaSheetSubtitle: document.getElementById("seaSheetSubtitle"),
@@ -4109,6 +4128,7 @@ function toggleAis() {
     setNauticalLayersVisible(false);
 syncChartUi();
     updateMainCardCopy("weather");
+    applyWeatherLayersToMap();
   }
 
 function showSeaMode() {
@@ -4121,6 +4141,9 @@ function showSeaMode() {
 
   updateMapStyleForMode("sea");
   setNauticalLayersVisible(false);
+  setWeatherLayerVisible("wind", false);
+setWeatherLayerVisible("precipitation", false);
+setWeatherLayerVisible("temperature", false);
 syncChartUi();
   updateMainCardCopy("sea");
   openSheet("seaSheet");
@@ -4139,6 +4162,9 @@ function showChartMode() {
 
   updateMapStyleForMode("chart");
   setNauticalLayersVisible(appState.chartBaseVisible);
+  setWeatherLayerVisible("wind", false);
+setWeatherLayerVisible("precipitation", false);
+setWeatherLayerVisible("temperature", false);
   updateMainCardCopy("chart");
   syncChartUi();
   if (appState.aisVisible) {
@@ -4165,6 +4191,7 @@ if (mode === "chart") {
 }
 
 appState.nauticalLayersAdded = false;
+      removeWeatherLayersFromMapStyle();
 
 setTimeout(() => {
   if (appState.map) appState.map.resize();
@@ -4174,7 +4201,9 @@ setTimeout(() => {
   } else {
     setNauticalLayersVisible(false);
   }
-
+if (appState.mode === "weather") {
+  applyWeatherLayersToMap();
+}
   if (appState.activePlace) updateActivePlaceMarker();
 
   if (appState.lastUserPosition) {
@@ -4235,7 +4264,151 @@ setTimeout(() => {
     els.sheets.forEach((sheet) => sheet.classList.remove("is-open"));
     appState.openSheet = null;
   }
+function syncWeatherLayerUi() {
+  if (els.weatherWindToggle) {
+    els.weatherWindToggle.classList.toggle("is-on", appState.weatherLayers.wind);
+  }
 
+  if (els.weatherPrecipToggle) {
+    els.weatherPrecipToggle.classList.toggle("is-on", appState.weatherLayers.precipitation);
+  }
+
+  if (els.weatherRadarToggle) {
+    els.weatherRadarToggle.classList.toggle("is-on", appState.weatherLayers.radar);
+  }
+
+  if (els.weatherCloudToggle) {
+    els.weatherCloudToggle.classList.toggle("is-on", appState.weatherLayers.cloud);
+  }
+
+  if (els.weatherTemperatureToggle) {
+    els.weatherTemperatureToggle.classList.toggle("is-on", appState.weatherLayers.temperature);
+  }
+}
+
+function ensureMaptilerWeatherLayer(type) {
+  if (!appState.map || !window.maptilerweather) return null;
+
+  if (appState.maptilerWeatherLayers[type]) {
+    return appState.maptilerWeatherLayers[type];
+  }
+
+  try {
+    let layer = null;
+
+    if (type === "wind") {
+      layer = new maptilerweather.WindLayer({
+        id: "weather-wind-layer",
+        opacity: 0.78
+      });
+    }
+
+    if (type === "precipitation") {
+      layer = new maptilerweather.PrecipitationLayer({
+        id: "weather-precipitation-layer",
+        opacity: 0.70
+      });
+    }
+
+    if (type === "temperature") {
+      layer = new maptilerweather.TemperatureLayer({
+        id: "weather-temperature-layer",
+        opacity: 0.62
+      });
+    }
+
+    if (!layer) return null;
+
+    appState.map.addLayer(layer);
+    appState.maptilerWeatherLayers[type] = layer;
+
+    return layer;
+  } catch (error) {
+    console.warn(`Kunde inte skapa väderlager: ${type}`, error);
+    showToast("Väderlagret kunde inte visas just nu.", "error");
+    return null;
+  }
+}
+
+function setWeatherLayerVisible(type, isVisible) {
+  if (!appState.map) return;
+
+  const layer = ensureMaptilerWeatherLayer(type);
+
+  if (!layer) {
+    showToast("Väderlagret kunde inte visas just nu.", "error");
+    return;
+  }
+
+  try {
+    if (typeof layer.setOpacity === "function") {
+      if (type === "wind") {
+        layer.setOpacity(isVisible ? 0.78 : 0);
+      } else if (type === "precipitation") {
+        layer.setOpacity(isVisible ? 0.70 : 0);
+      } else if (type === "temperature") {
+        layer.setOpacity(isVisible ? 0.62 : 0);
+      }
+    }
+
+    if (typeof layer.setVisibility === "function") {
+      layer.setVisibility(isVisible);
+    }
+
+    if (typeof layer.setVisible === "function") {
+      layer.setVisible(isVisible);
+    }
+  } catch (error) {
+    console.warn(`Kunde inte ändra väderlager: ${type}`, error);
+  }
+}
+
+function applyWeatherLayersToMap() {
+  if (!appState.map) return;
+
+  setWeatherLayerVisible("wind", appState.mode === "weather" && appState.weatherLayers.wind);
+  setWeatherLayerVisible("precipitation", appState.mode === "weather" && appState.weatherLayers.precipitation);
+  setWeatherLayerVisible("temperature", appState.mode === "weather" && appState.weatherLayers.temperature);
+
+  syncWeatherLayerUi();
+}
+
+function toggleWeatherLayer(type) {
+  if (!appState.weatherLayers || !(type in appState.weatherLayers)) return;
+
+  appState.weatherLayers[type] = !appState.weatherLayers[type];
+
+  if (type === "radar") {
+    syncWeatherLayerUi();
+    showToast("Radar kopplas in i nästa lagersteg.", "warning");
+    return;
+  }
+
+  if (type === "cloud") {
+    syncWeatherLayerUi();
+    showToast("Moln & satellit kopplas in i nästa lagersteg.", "warning");
+    return;
+  }
+
+  applyWeatherLayersToMap();
+
+  const labels = {
+    wind: "Vind",
+    precipitation: "Regn",
+    temperature: "Temperatur"
+  };
+
+  showToast(
+    `${labels[type] || "Lager"} ${appState.weatherLayers[type] ? "visas" : "är av"}.`,
+    "success"
+  );
+}
+
+function removeWeatherLayersFromMapStyle() {
+  appState.maptilerWeatherLayers.wind = null;
+  appState.maptilerWeatherLayers.precipitation = null;
+  appState.maptilerWeatherLayers.temperature = null;
+}
   function updateLayersForMode() {
     els.weatherLayers.classList.toggle("is-hidden", appState.mode !== "weather");
     els.seaLayers.classList.toggle("is-hidden", appState.mode !== "sea");
@@ -4549,7 +4722,12 @@ document.querySelectorAll(".toggle").forEach((toggle) => {
     if (
       toggle.id === "chartBaseToggle" ||
       toggle.id === "followPositionToggle" ||
-      toggle.id === "aisToggle"
+      toggle.id === "aisToggle" ||
+      toggle.id === "weatherWindToggle" ||
+      toggle.id === "weatherPrecipToggle" ||
+      toggle.id === "weatherRadarToggle" ||
+      toggle.id === "weatherCloudToggle" ||
+      toggle.id === "weatherTemperatureToggle"
     ) {
       return;
     }
@@ -4557,6 +4735,26 @@ document.querySelectorAll(".toggle").forEach((toggle) => {
     toggle.classList.toggle("is-on");
   });
 });
+
+if (els.weatherWindToggle) {
+  els.weatherWindToggle.addEventListener("click", () => toggleWeatherLayer("wind"));
+}
+
+if (els.weatherPrecipToggle) {
+  els.weatherPrecipToggle.addEventListener("click", () => toggleWeatherLayer("precipitation"));
+}
+
+if (els.weatherRadarToggle) {
+  els.weatherRadarToggle.addEventListener("click", () => toggleWeatherLayer("radar"));
+}
+
+if (els.weatherCloudToggle) {
+  els.weatherCloudToggle.addEventListener("click", () => toggleWeatherLayer("cloud"));
+}
+
+if (els.weatherTemperatureToggle) {
+  els.weatherTemperatureToggle.addEventListener("click", () => toggleWeatherLayer("temperature"));
+}
 
 els.chartBaseToggle.addEventListener("click", toggleChartBase);
 els.followPositionToggle.addEventListener("click", toggleFollowPosition);
@@ -4595,6 +4793,7 @@ loadSavedPlaces();
 initMap();
 setMode("weather");
    updateTimeLabels();
+   syncWeatherLayerUi();
 </script>
 </body>
 </html>
