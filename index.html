@@ -5920,7 +5920,47 @@ maptilerMap.on("touchstart", function(){
 });
         maptilerMap.addControl(weatherGeolocateControl,'top-right');
         var lastGeolocateWeatherAt=0, GEOLOCATE_CLICK_WINDOW_MS=2500, weatherSelectionMode="manual", lastUserWeatherLat=null,lastUserWeatherLon=null,lastUserWeatherAt=0, USER_WEATHER_MIN_MOVE_KM=0.5, USER_WEATHER_MIN_INTERVAL_MS=60*1000;
-        setTimeout(function(){var geolocateButton=document.querySelector(".maplibregl-ctrl-geolocate, .mapboxgl-ctrl-geolocate");if(geolocateButton){var markLocateButtonPressed=function(){lastGeolocateWeatherAt=Date.now();};geolocateButton.addEventListener("pointerdown",markLocateButtonPressed,true);geolocateButton.addEventListener("touchstart",markLocateButtonPressed,true);geolocateButton.addEventListener("click",markLocateButtonPressed,true);}},0);
+        function centerAfterLocateButton(coords){
+          if(!coords) return;
+
+          var isNauticalMode = activeMode === "nautical";
+
+          if(isNauticalMode){
+            userTrackingMode = "follow";
+            nauticalCompassMode = "north";
+          }else{
+            userTrackingMode = "off";
+          }
+
+          handleUserPosition(coords, {
+            allowWeatherRefresh: true,
+            fromLocateButton: true,
+            allowCameraFollow: isNauticalMode,
+            immediateCamera: true
+          });
+
+          if(isNauticalMode){
+            updateNavigationCamera({immediate:true});
+          }else{
+            centerMapOnUserLocationOnce({immediate:true,ensureUsefulZoom:true});
+            setTimeout(function(){centerMapOnUserLocationOnce({immediate:true,ensureUsefulZoom:true});},220);
+          }
+        }
+
+        function requestLocateButtonCenter(){
+          if(!navigator.geolocation) return;
+          navigator.geolocation.getCurrentPosition(function(pos){
+            if(pos && pos.coords) centerAfterLocateButton(pos.coords);
+          },function(err){
+            console.warn("Manuell Min plats-centrering misslyckades", err);
+          },{
+            enableHighAccuracy:true,
+            maximumAge:0,
+            timeout:10000
+          });
+        }
+
+        setTimeout(function(){var geolocateButton=document.querySelector(".maplibregl-ctrl-geolocate, .mapboxgl-ctrl-geolocate");if(geolocateButton){var markLocateButtonPressed=function(){lastGeolocateWeatherAt=Date.now();};var triggerLocateButtonCenter=function(){lastGeolocateWeatherAt=Date.now();setTimeout(requestLocateButtonCenter,0);};geolocateButton.addEventListener("pointerdown",markLocateButtonPressed,true);geolocateButton.addEventListener("touchstart",markLocateButtonPressed,true);geolocateButton.addEventListener("click",triggerLocateButtonCenter,true);}},0);
         function shouldRefreshWeatherForUserLocation(lat,lon){var now=Date.now();if(lastUserWeatherLat==null||lastUserWeatherLon==null){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=now;return true;}var movedKm=distanceKmBetween(lastUserWeatherLat,lastUserWeatherLon,lat,lon), movedEnough=movedKm>=USER_WEATHER_MIN_MOVE_KM, waitedEnough=now-lastUserWeatherAt>=USER_WEATHER_MIN_INTERVAL_MS;if(movedEnough||waitedEnough){lastUserWeatherLat=lat;lastUserWeatherLon=lon;lastUserWeatherAt=now;return true;}return false;}
         async function updateWeatherFromUserLocation(lat,lon){weatherSelectionMode="user";clearWeatherSelectionMarker();saveSelection('weather',{lat:lat,lon:lon});selectedPlaceName="";updateMapOverlay("Hämtar plats...","Söker närmaste plats...");try{selectedPlaceName=await reverseGeocodePlace(lat,lon);}catch(e){selectedPlaceName="";}loadWeatherForPoint(lat,lon);}
         function selectAdvancedFromUserLocation(lat,lon){
@@ -5938,8 +5978,11 @@ weatherGeolocateControl.on('geolocate',function(e){
     lastGeolocateWeatherAt = 0;
   }
 
-  if(baseMapMode === "nautical"){
+  var isNauticalMode = activeMode === "nautical";
+
+  if(isNauticalMode){
     userTrackingMode = "follow";
+    nauticalCompassMode = "north";
   }else{
     userTrackingMode = "off";
   }
@@ -5947,17 +5990,25 @@ weatherGeolocateControl.on('geolocate',function(e){
   handleUserPosition(e.coords, {
     allowWeatherRefresh: clickedLocateRecently,
     fromLocateButton: clickedLocateRecently,
-    allowCameraFollow: baseMapMode === "nautical",
+    allowCameraFollow: isNauticalMode,
     immediateCamera: true
   });
 
   // Min plats should always center the map in every mode/layer.
   // In Sjökort this also re-enters follow mode; outside Sjökort it is a one-time center.
-  if(baseMapMode !== "nautical"){
+  if(isNauticalMode){
+    updateNavigationCamera({immediate:true});
+  }else{
     centerMapOnUserLocationOnce({
       immediate: true,
       ensureUsefulZoom: true
     });
+    setTimeout(function(){
+      centerMapOnUserLocationOnce({
+        immediate: true,
+        ensureUsefulZoom: true
+      });
+    },220);
   }
 });
         weatherGeolocateControl.on('error',function(e){console.warn("Min plats kunde inte aktiveras", e);});
