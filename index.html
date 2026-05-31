@@ -1601,7 +1601,54 @@
       }
     }
 
-  </style>
+
+    /* v34: nautical touch hitbox fix. Keep floating controls clickable, but never let their wrappers block the chart between buttons. */
+    @media (max-width:700px){
+      body[data-app-mode="nautical"] #modeSwitcher{
+        top:calc(var(--safe-top) + 12px) !important;
+        bottom:auto !important;
+        height:auto !important;
+        width:auto !important;
+        pointer-events:none !important;
+      }
+      body[data-app-mode="nautical"] #modeSwitcherBtn,
+      body[data-app-mode="nautical"] #modeSwitcherMenu,
+      body[data-app-mode="nautical"] .mode-switch-option{
+        pointer-events:auto !important;
+      }
+      body[data-app-mode="nautical"] #mobileQuickActions{
+        top:auto !important;
+        bottom:calc(var(--safe-bottom) + 148px) !important;
+        height:auto !important;
+        width:46px !important;
+        pointer-events:none !important;
+      }
+      body[data-app-mode="nautical"] #mobileQuickActions .quick-action-btn{
+        pointer-events:auto !important;
+      }
+    }
+
+  
+
+    /* v35: harden nautical floating controls so only visible buttons catch touch. */
+    @media (max-width:700px){
+      body[data-app-mode="nautical"] #modeSwitcher:not(.is-open) #modeSwitcherMenu{
+        display:none !important;
+        pointer-events:none !important;
+      }
+      body[data-app-mode="nautical"] #mobileQuickActions,
+      body[data-app-mode="nautical"] #modeSwitcher{
+        max-height:none !important;
+        overflow:visible !important;
+      }
+      body[data-app-mode="nautical"] #mobileQuickActions::before,
+      body[data-app-mode="nautical"] #mobileQuickActions::after,
+      body[data-app-mode="nautical"] #modeSwitcher::before,
+      body[data-app-mode="nautical"] #modeSwitcher::after{
+        pointer-events:none !important;
+      }
+    }
+</style>
 </head>
 <body>
   <div id="appSplash" aria-hidden="true">
@@ -5592,6 +5639,46 @@ function updateNavigationCamera(options){
 
   maptilerMap.easeTo(easeOptions);
 }
+
+function centerMapOnUserLocationOnce(options){
+  options = options || {};
+
+  if(!maptilerMap || !hasUserPosition()) return;
+
+  mapCameraProgrammaticUntil = Date.now() + 700;
+
+  var currentZoom = null;
+  try{
+    currentZoom = maptilerMap.getZoom ? maptilerMap.getZoom() : null;
+  }catch(e){
+    currentZoom = null;
+  }
+
+  var nextZoom = currentZoom;
+
+  if(options.ensureUsefulZoom && (!isFinite(nextZoom) || nextZoom < 10)){
+    nextZoom = 10;
+  }
+
+  var easeOptions = {
+    center: [userPositionState.lon, userPositionState.lat],
+    duration: options.immediate ? 320 : 520,
+    essential: true
+  };
+
+  if(isFinite(nextZoom)){
+    easeOptions.zoom = nextZoom;
+  }
+
+  try{
+    maptilerMap.easeTo(easeOptions);
+  }catch(e){
+    try{
+      maptilerMap.flyTo(easeOptions);
+    }catch(err){}
+  }
+}
+
 function updateNavigationCourseFromCoords(coords, lat, lon, now){
   var speed = Number(coords.speed);
   var accuracy = Number(coords.accuracy);
@@ -5863,6 +5950,15 @@ weatherGeolocateControl.on('geolocate',function(e){
     allowCameraFollow: baseMapMode === "nautical",
     immediateCamera: true
   });
+
+  // Min plats should always center the map in every mode/layer.
+  // In Sjökort this also re-enters follow mode; outside Sjökort it is a one-time center.
+  if(baseMapMode !== "nautical"){
+    centerMapOnUserLocationOnce({
+      immediate: true,
+      ensureUsefulZoom: true
+    });
+  }
 });
         weatherGeolocateControl.on('error',function(e){console.warn("Min plats kunde inte aktiveras", e);});
 
