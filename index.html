@@ -589,6 +589,74 @@
     .tab-btn-badge.visible{display:block;}
 
 
+
+
+    /* v37 Weather forecast-first view */
+    #weatherHomeView{display:none;position:fixed;inset:0;z-index:6800;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--safe-top) + 12px) 14px calc(var(--safe-bottom) + 22px);background:radial-gradient(circle at 18% 8%,rgba(123,199,255,0.16),transparent 30%),radial-gradient(circle at 85% 20%,rgba(152,240,219,0.08),transparent 25%),linear-gradient(180deg,rgba(3,8,18,0.98),rgba(6,13,25,0.96) 48%,rgba(5,10,20,0.99));color:var(--text);}
+    #weatherHomeView::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(255,255,255,0.020) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.014) 1px,transparent 1px);background-size:40px 40px;mask-image:radial-gradient(circle at 50% 28%,rgba(0,0,0,.9),transparent 72%);opacity:.45;pointer-events:none;}
+    body[data-app-mode="weather"] #weatherHomeView{display:block;}
+    body[data-app-mode="weather"] #timeControl,
+    body[data-app-mode="weather"] #mapOverlayPanel,
+    body[data-app-mode="weather"] #mobileQuickActions,
+    body[data-app-mode="weather"] #modeSwitcher{display:none !important;}
+    .weather-home-shell{width:min(560px,100%);margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+    .weather-mode-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;border:1px solid rgba(255,255,255,0.10);border-radius:22px;background:rgba(255,255,255,0.045);box-shadow:0 12px 36px rgba(0,0,0,0.26),inset 0 1px 0 rgba(255,255,255,0.06);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);}
+    .weather-mode-tab{appearance:none;border:0;background:transparent;color:rgba(223,232,247,0.64);border-radius:17px;min-height:46px;padding:9px 6px;font-size:13px;font-weight:900;letter-spacing:-0.01em;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;touch-action:manipulation;}
+    .weather-mode-tab svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.92;}
+    .weather-mode-tab.is-active{color:var(--text);background:linear-gradient(180deg,rgba(123,199,255,0.28),rgba(123,199,255,0.12));box-shadow:inset 0 1px 0 rgba(255,255,255,0.18),0 10px 22px rgba(35,133,255,0.16);border:1px solid rgba(123,199,255,0.30);}
+    .weather-location-card{display:grid;grid-template-columns:48px 1fr 46px;gap:12px;align-items:center;padding:12px;border:1px solid rgba(255,255,255,0.08);border-radius:22px;background:rgba(255,255,255,0.045);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 12px 30px rgba(0,0,0,0.20);}
+    .weather-location-pin{width:48px;height:48px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(180deg,rgba(123,199,255,0.26),rgba(123,199,255,0.11));color:#bfe6ff;border:1px solid rgba(123,199,255,0.18);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);}
+    .weather-location-pin svg,.weather-location-action svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .weather-location-main{min-width:0;}
+    .weather-location-title{font-size:18px;font-weight:950;letter-spacing:-0.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .weather-location-sub{margin-top:3px;font-size:12px;font-weight:750;color:rgba(183,197,217,0.74);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .weather-location-action{appearance:none;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.055);color:var(--text);width:46px;height:46px;border-radius:18px;display:grid;place-items:center;cursor:pointer;touch-action:manipulation;}
+    .weather-hero-card{position:relative;overflow:hidden;border-radius:26px;border:1px solid rgba(255,255,255,0.10);background:linear-gradient(135deg,rgba(16,34,58,0.92),rgba(5,13,26,0.92));box-shadow:0 18px 44px rgba(0,0,0,0.30),inset 0 1px 0 rgba(255,255,255,0.08);padding:20px 18px 16px;min-height:270px;}
+    .weather-hero-card::after{content:"";position:absolute;right:-36px;top:-36px;width:190px;height:190px;border-radius:999px;background:radial-gradient(circle,rgba(255,190,82,0.20),rgba(123,199,255,0.10) 42%,transparent 70%);filter:blur(2px);pointer-events:none;}
+    .weather-hero-top{position:relative;z-index:1;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;}
+    .weather-hero-temp{font-size:72px;font-weight:950;line-height:.9;letter-spacing:-0.075em;color:#fff;text-shadow:0 10px 26px rgba(0,0,0,0.28);}
+    .weather-hero-icon{font-size:76px;line-height:1;filter:drop-shadow(0 14px 26px rgba(0,0,0,0.28));}
+    .weather-hero-condition{position:relative;z-index:1;font-size:24px;font-weight:900;letter-spacing:-0.035em;margin-top:10px;}
+    .weather-hero-meta{position:relative;z-index:1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;}
+    .weather-chip{border:1px solid rgba(123,199,255,0.18);background:rgba(123,199,255,0.13);color:#cfeeff;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:850;}
+    .weather-highlow{margin-left:auto;color:rgba(223,232,247,0.76);font-size:13px;font-weight:850;}
+    .weather-highlow strong{color:#ffc45f;font-weight:950;}
+    .weather-hero-metrics{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.09);}
+    .weather-hero-metric{min-width:0;}
+    .weather-hero-metric span{display:block;color:rgba(183,197,217,0.74);font-size:11px;font-weight:850;letter-spacing:.02em;}
+    .weather-hero-metric strong{display:block;margin-top:5px;color:#fff;font-size:18px;font-weight:950;letter-spacing:-0.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .weather-hero-metric small{display:block;margin-top:3px;color:rgba(183,197,217,0.70);font-size:11px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .weather-section-card{border:1px solid rgba(255,255,255,0.08);border-radius:24px;background:rgba(255,255,255,0.045);box-shadow:0 12px 30px rgba(0,0,0,0.22);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden;}
+    .weather-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px 8px;}
+    .weather-section-title{font-size:15px;font-weight:950;letter-spacing:-0.02em;color:#fff;}
+    .weather-section-hint{font-size:11px;font-weight:750;color:rgba(183,197,217,0.70);white-space:nowrap;}
+    .weather-hourly-strip{display:flex;gap:9px;overflow-x:auto;padding:8px 14px 14px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;}
+    .weather-hourly-strip::-webkit-scrollbar{display:none;}
+    .weather-hour-card{appearance:none;border:1px solid rgba(255,255,255,0.085);background:rgba(4,11,22,0.36);color:var(--text);border-radius:18px;min-width:72px;padding:10px 8px 9px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;scroll-snap-align:start;touch-action:pan-x;}
+    .weather-hour-card.is-active{border-color:rgba(123,199,255,0.70);background:linear-gradient(180deg,rgba(123,199,255,0.22),rgba(123,199,255,0.08));box-shadow:0 0 0 1px rgba(123,199,255,0.16),0 10px 22px rgba(64,152,255,0.12);}
+    .weather-hour-time{font-size:12px;font-weight:850;color:rgba(223,232,247,0.78);}
+    .weather-hour-icon{font-size:27px;line-height:1;}
+    .weather-hour-temp{font-size:20px;font-weight:950;letter-spacing:-0.035em;color:#fff;}
+    .weather-hour-rain{font-size:10px;font-weight:800;color:#7bc7ff;min-height:13px;}
+    .weather-days-list{padding:2px 0;}
+    .weather-day-row{display:grid;grid-template-columns:minmax(88px,1fr) 38px minmax(98px,1.1fr) 64px;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid rgba(255,255,255,0.07);}
+    .weather-day-row:first-child{border-top:0;}
+    .weather-day-name{font-size:15px;font-weight:900;color:#fff;line-height:1.15;}
+    .weather-day-date{display:block;margin-top:3px;font-size:11px;color:rgba(183,197,217,0.70);font-weight:700;}
+    .weather-day-icon{font-size:25px;text-align:center;}
+    .weather-day-range{display:flex;align-items:center;gap:8px;min-width:0;}
+    .weather-day-low{color:#6fb8ff;font-size:15px;font-weight:950;min-width:31px;text-align:right;}
+    .weather-day-high{color:#ffc45f;font-size:17px;font-weight:950;min-width:35px;}
+    .weather-day-bar{height:5px;flex:1;border-radius:999px;background:linear-gradient(90deg,#4a9cff,#bde9ff 42%,#ffc45f);opacity:.92;min-width:34px;}
+    .weather-day-rain{font-size:12px;font-weight:850;color:rgba(183,197,217,0.78);text-align:right;white-space:nowrap;}
+    .weather-home-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:2px 2px 0;color:rgba(183,197,217,0.68);font-size:12px;font-weight:750;}
+    .weather-map-link{appearance:none;border:1px solid rgba(123,199,255,0.20);background:rgba(123,199,255,0.12);color:#eaf7ff;border-radius:999px;padding:10px 14px;font-size:13px;font-weight:950;display:flex;align-items:center;gap:8px;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 1px 0 rgba(255,255,255,0.10);}
+    .weather-map-link svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .weather-home-empty{border:1px solid rgba(255,255,255,0.08);border-radius:24px;background:rgba(255,255,255,0.045);padding:22px 18px;text-align:center;color:rgba(223,232,247,0.86);box-shadow:0 12px 30px rgba(0,0,0,0.22);}
+    .weather-home-empty strong{display:block;color:#fff;font-size:18px;margin-bottom:7px;}
+    .weather-home-empty button{margin-top:14px;appearance:none;border:1px solid rgba(123,199,255,0.22);background:rgba(123,199,255,0.14);color:#fff;border-radius:999px;padding:11px 15px;font-size:13px;font-weight:950;}
+    @media (max-width:390px){.weather-hero-temp{font-size:62px}.weather-hero-icon{font-size:64px}.weather-mode-tab{font-size:12px;gap:5px}.weather-day-row{grid-template-columns:minmax(78px,1fr) 32px minmax(88px,1.1fr) 54px;gap:8px}.weather-hour-card{min-width:66px}.weather-location-title{font-size:16px}}
+
     #launchScreen{position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center;padding:calc(24px + var(--safe-top)) 22px calc(26px + var(--safe-bottom));background:radial-gradient(circle at 50% -10%,rgba(123,199,255,0.20),transparent 34%),radial-gradient(circle at 12% 22%,rgba(152,240,219,0.10),transparent 26%),radial-gradient(circle at 88% 78%,rgba(232,215,168,0.08),transparent 30%),linear-gradient(180deg,#040913 0%,#08101d 54%,#0c1727 100%);overflow:hidden;}
     #launchScreen::before{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.018) 1px,transparent 1px);background-size:42px 42px;mask-image:radial-gradient(circle at 50% 44%,rgba(0,0,0,.9),transparent 72%);opacity:.42;pointer-events:none;}
     #launchScreen::after{content:"";position:absolute;left:50%;bottom:-24%;width:88vw;max-width:520px;height:52vw;max-height:310px;transform:translateX(-50%);background:radial-gradient(ellipse at center,rgba(123,199,255,0.12),transparent 68%);filter:blur(8px);opacity:.9;pointer-events:none;}
@@ -1726,6 +1794,19 @@
     </div>
   </div>
 </div>
+
+
+
+            <div id="weatherHomeView" aria-label="Väderprognos">
+              <div class="weather-home-shell">
+                <div class="weather-mode-tabs" aria-label="Välj läge">
+                  <button class="weather-mode-tab is-active" type="button" data-weather-home-mode="weather"><svg viewBox="0 0 24 24"><path d="M7.5 17h9a4.2 4.2 0 0 0 .3-8.39A6.2 6.2 0 0 0 5.9 10.1"></path><path d="M5 17a3 3 0 0 1 .9-5.86"></path></svg><span>Väder</span></button>
+                  <button class="weather-mode-tab" type="button" data-weather-home-mode="advanced"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 16V9m6 7V5m6 11v-6"></path><path d="M4.5 12.5c2-.8 3.7-2.7 5.8-2.2 1.8.4 2 2.6 3.9 2.7 2.1.1 3.2-2.8 5.3-4.4"></path></svg><span>Avancerat</span></button>
+                  <button class="weather-mode-tab" type="button" data-weather-home-mode="nautical"><svg viewBox="0 0 24 24"><path d="M4 17c1.7 0 1.7-1 3.4-1s1.7 1 3.4 1 1.7-1 3.4-1 1.7 1 3.4 1S19.3 16 21 16"></path><path d="M4 20c1.7 0 1.7-1 3.4-1s1.7 1 3.4 1 1.7-1 3.4-1 1.7 1 3.4 1S19.3 19 21 19"></path><path d="M12 4v8"></path><path d="m8 8 4-4 4 4"></path></svg><span>Sjökort</span></button>
+                </div>
+                <div id="weatherHomeContent"></div>
+              </div>
+            </div>
 
             <div id="mapOverlayPanel">
               <div id="overlayHeader">
@@ -3900,6 +3981,8 @@ setupSeaChartInteractions();
           showAisObjects=false;
           if(typeof clearAisMarkers === "function") clearAisMarkers();
           if(typeof updateModeUI === "function") updateModeUI();
+          if(typeof renderWeatherHome === "function") renderWeatherHome();
+          if(typeof requestWeatherHomeLocation === "function") requestWeatherHomeLocation({onlyIfNoSelection:true});
         }else if(activeMode === "advanced"){
           activeBottomTab="advanced";
           seaSelectionActive=true;
@@ -4173,6 +4256,142 @@ function closeSearch(){
         var dm=new Map();
         for(var i=0;i<ts.length;i++){var item=ts[i], time=item&&item.time; if(!time) continue; var dk=time.slice(0,10), inst=(item.data&&item.data.instant&&item.data.instant.details)||{}, at=inst.air_temperature, prec=((item.data&&item.data.next_1_hours&&item.data.next_1_hours.details&&item.data.next_1_hours.details.precipitation_amount)||0), sym=((item.data&&item.data.next_1_hours&&item.data.next_1_hours.summary&&item.data.next_1_hours.summary.symbol_code)||(item.data&&item.data.next_6_hours&&item.data.next_6_hours.summary&&item.data.next_6_hours.summary.symbol_code)||(item.data&&item.data.next_12_hours&&item.data.next_12_hours.summary&&item.data.next_12_hours.summary.symbol_code)||null), wind=inst.wind_speed||null, hour=new Date(time).getHours(); if(!dm.has(dk)) dm.set(dk,{date:dk,minTemp:at,maxTemp:at,precipitation:0,symbol:sym,windSpeed:wind,bestSymbolDistance:Math.abs(hour-12)}); var day=dm.get(dk); if(at!=null){day.minTemp=day.minTemp==null?at:Math.min(day.minTemp,at);day.maxTemp=day.maxTemp==null?at:Math.max(day.maxTemp,at);} day.precipitation+=Number(prec||0); var sd=Math.abs(hour-12); if(sym && (day.symbol==null || sd<day.bestSymbolDistance)){day.symbol=sym;day.bestSymbolDistance=sd;} if(wind!=null && sd<=day.bestSymbolDistance) day.windSpeed=wind;}
         return Array.from(dm.values()).slice(0,7);
+      }
+
+
+      var weatherHomeAutoLocationRequested=false;
+      var weatherHomeSelectedTime=null;
+      var weatherHomeLastUpdatedAt=null;
+
+      function compactTemp(v){return v==null || !isFinite(Number(v)) ? "--" : Math.round(Number(v)) + "°";}
+      function compactWind(v){return v==null || !isFinite(Number(v)) ? "--" : Number(v).toFixed(1).replace(".",",") + " m/s";}
+      function compactRain(v){return v==null || !isFinite(Number(v)) ? "--" : Number(v).toFixed(1).replace(".",",") + " mm";}
+      function getItemSymbol(item){
+        var data=item && item.data || {};
+        return (data.next_1_hours && data.next_1_hours.summary && data.next_1_hours.summary.symbol_code) ||
+          (data.next_6_hours && data.next_6_hours.summary && data.next_6_hours.summary.symbol_code) ||
+          (data.next_12_hours && data.next_12_hours.summary && data.next_12_hours.summary.symbol_code) || null;
+      }
+      function getWeatherItemTimeMs(item){var t=new Date(item && item.time).getTime();return isFinite(t)?t:null;}
+      function findNearestWeatherItem(timeValue){
+        var target=normalizeTimeMs(timeValue); if(!isFinite(target)) target=Date.now();
+        var rows=Array.isArray(weatherTimeseries)?weatherTimeseries:[]; if(!rows.length) return null;
+        var best=rows[0], bestDiff=Math.abs(getWeatherItemTimeMs(best)-target);
+        rows.forEach(function(item){var tm=getWeatherItemTimeMs(item); if(tm==null) return; var d=Math.abs(tm-target); if(d<bestDiff){best=item;bestDiff=d;}});
+        return best;
+      }
+      function getNearestGustRaw(timeValue){
+        var rows=Array.isArray(weatherGustTimeseries)?weatherGustTimeseries:[]; if(!rows.length) return null;
+        var target=normalizeTimeMs(timeValue); if(!isFinite(target)) target=Date.now();
+        var best=null,bestDiff=Infinity;
+        rows.forEach(function(row){var tm=new Date(row && row.time).getTime(); if(!isFinite(tm)) return; var d=Math.abs(tm-target); if(d<bestDiff){best=row;bestDiff=d;}});
+        return best && best.value != null && isFinite(Number(best.value)) ? Number(best.value) : null;
+      }
+      function getHourlyWeatherItems(){
+        var rows=Array.isArray(weatherTimeseries)?weatherTimeseries:[]; if(!rows.length) return [];
+        var now=Date.now();
+        var start=now - 45*60*1000;
+        return rows.filter(function(item){var tm=getWeatherItemTimeMs(item); return tm!=null && tm>=start;}).slice(0,30);
+      }
+      function buildWeatherHomeDailyRows(){
+        var days=Array.isArray(currentForecastDays)?currentForecastDays:[];
+        var todayKey=formatDateKeyGlobal(Date.now());
+        var tomorrow=new Date(); tomorrow.setDate(tomorrow.getDate()+1); var tomorrowKey=formatDateKeyGlobal(tomorrow);
+        return days.slice(0,5).map(function(day){
+          var dateObj=new Date(day.date+"T12:00:00");
+          var key=formatDateKeyGlobal(dateObj);
+          var label=key===todayKey ? "Idag" : (key===tomorrowKey ? "Imorgon" : dateObj.toLocaleDateString('sv-SE',{weekday:'long'}).replace(/^./,function(c){return c.toUpperCase();}));
+          var dateLabel=dateObj.toLocaleDateString('sv-SE',{day:'numeric',month:'short'});
+          var rain=day.precipitation!=null ? compactRain(day.precipitation) : "--";
+          return '<div class="weather-day-row">'+
+            '<div><div class="weather-day-name">'+escapeHtml(label)+'</div><span class="weather-day-date">'+escapeHtml(dateLabel)+'</span></div>'+
+            '<div class="weather-day-icon">'+weatherIconFromSymbol(day.symbol)+'</div>'+
+            '<div class="weather-day-range"><span class="weather-day-low">'+escapeHtml(compactTemp(day.minTemp))+'</span><span class="weather-day-bar"></span><span class="weather-day-high">'+escapeHtml(compactTemp(day.maxTemp))+'</span></div>'+
+            '<div class="weather-day-rain">💧 '+escapeHtml(rain)+'</div>'+
+          '</div>';
+        }).join('');
+      }
+      function renderWeatherHomeEmpty(title, text, showButton){
+        var content=document.getElementById('weatherHomeContent'); if(!content) return;
+        content.innerHTML='<div class="weather-home-empty"><strong>'+escapeHtml(title||'Hämtar väder')+'</strong><div>'+escapeHtml(text||'Vi försöker välja din plats automatiskt.')+'</div>'+(showButton?'<button type="button" id="weatherHomeLocateEmptyBtn">Använd min plats</button>':'')+'</div>';
+        var btn=document.getElementById('weatherHomeLocateEmptyBtn'); if(btn) btn.addEventListener('click',function(){requestWeatherHomeLocation({force:true});});
+      }
+      function renderWeatherHome(){
+        if(activeMode !== 'weather') return;
+        var content=document.getElementById('weatherHomeContent'); if(!content) return;
+        if(!Array.isArray(weatherTimeseries) || !weatherTimeseries.length){
+          renderWeatherHomeEmpty('Välj plats', 'Använd min plats eller sök efter en plats för att visa prognosen.', true);
+          return;
+        }
+        var selected=weatherHomeSelectedTime || getAnalysisFocusTime() || getSelectedAppTime();
+        var item=findNearestWeatherItem(selected) || weatherTimeseries[0];
+        var timeMs=getWeatherItemTimeMs(item) || Date.now();
+        weatherHomeSelectedTime=timeMs;
+        var data=item.data || {}, inst=(data.instant && data.instant.details) || {};
+        var symbol=getItemSymbol(item);
+        var precip=getForecastPrecipitation(item);
+        var gust=getNearestGustRaw(timeMs);
+        var dayKey=(item.time||'').slice(0,10);
+        var day=(currentForecastDays||[]).find(function(d){return d.date===dayKey;}) || null;
+        var place=(selectedPlaceName && selectedPlaceName.trim()) ? selectedPlaceName.trim() : 'Min plats';
+        var titlePrefix= place==='Min plats' ? 'Min plats' : 'Min plats · ' + place;
+        var temp=inst.air_temperature;
+        var feels=inst.apparent_temperature != null ? inst.apparent_temperature : calculateFeelsLikeTemperature(inst.air_temperature, inst.wind_speed, inst.relative_humidity);
+        var condition=weatherLabelFromSymbol(symbol);
+        var windDir=degreesToCompass(inst.wind_from_direction);
+        var updated=weatherHomeLastUpdatedAt ? formatClockDotGlobal(weatherHomeLastUpdatedAt) : formatClockDotGlobal(Date.now());
+        var hourly=getHourlyWeatherItems().map(function(hourItem){
+          var hTime=getWeatherItemTimeMs(hourItem); var hInst=(hourItem.data&&hourItem.data.instant&&hourItem.data.instant.details)||{}; var hPrecip=getForecastPrecipitation(hourItem); var active=Math.abs(hTime-timeMs)<31*60*1000;
+          var label=Math.abs(hTime-Date.now())<45*60*1000 ? 'Nu' : formatClockDotGlobal(hTime).replace('.',':');
+          var rainText=hPrecip.amount!=null && Number(hPrecip.amount)>0 ? compactRain(hPrecip.amount) : '0 mm';
+          return '<button type="button" class="weather-hour-card '+(active?'is-active':'')+'" data-weather-hour="'+String(hTime)+'">'+
+            '<span class="weather-hour-time">'+escapeHtml(label)+'</span>'+
+            '<span class="weather-hour-icon">'+weatherIconFromSymbol(getItemSymbol(hourItem))+'</span>'+
+            '<span class="weather-hour-temp">'+escapeHtml(compactTemp(hInst.air_temperature))+'</span>'+
+            '<span class="weather-hour-rain">💧 '+escapeHtml(rainText)+'</span>'+
+          '</button>';
+        }).join('');
+        var daysHtml=buildWeatherHomeDailyRows();
+        content.innerHTML=
+          '<div class="weather-location-card" id="weatherHomePlaceBtn" role="button" tabindex="0">'+
+            '<div class="weather-location-pin"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></div>'+
+            '<div class="weather-location-main"><div class="weather-location-title">'+escapeHtml(titlePrefix)+'</div><div class="weather-location-sub">Prognos för vald plats</div></div>'+
+            '<button class="weather-location-action" type="button" id="weatherHomeLocateBtn" aria-label="Använd min plats"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3"></path></svg></button>'+
+          '</div>'+
+          '<div class="weather-hero-card">'+
+            '<div class="weather-hero-top"><div><div class="weather-hero-temp">'+escapeHtml(compactTemp(temp))+'</div></div><div class="weather-hero-icon">'+weatherIconFromSymbol(symbol)+'</div></div>'+
+            '<div class="weather-hero-condition">'+escapeHtml(condition)+'</div>'+
+            '<div class="weather-hero-meta">'+(feels !== '--' ? '<span class="weather-chip">Känns som '+escapeHtml(compactTemp(feels))+'</span>' : '')+'<span class="weather-highlow">Högst <strong>'+escapeHtml(compactTemp(day&&day.maxTemp))+'</strong> · Lägst <strong style="color:#6fb8ff">'+escapeHtml(compactTemp(day&&day.minTemp))+'</strong></span></div>'+
+            '<div class="weather-hero-metrics"><div class="weather-hero-metric"><span>Vind</span><strong>'+escapeHtml(compactWind(inst.wind_speed))+'</strong><small>'+escapeHtml(windDir)+'</small></div><div class="weather-hero-metric"><span>Byvind</span><strong>'+escapeHtml(compactWind(gust))+'</strong><small>Max nära vald tid</small></div><div class="weather-hero-metric"><span>Nederbörd</span><strong>'+escapeHtml(compactRain(precip.amount))+'</strong><small>'+escapeHtml(formatForecastPeriodRange(timeMs, precip.hours) || 'per timme')+'</small></div></div>'+
+          '</div>'+
+          '<div class="weather-section-card"><div class="weather-section-head"><div class="weather-section-title">Timvis</div><div class="weather-section-hint">Svep för fler timmar</div></div><div class="weather-hourly-strip">'+hourly+'</div></div>'+
+          '<div class="weather-section-card"><div class="weather-section-head"><div class="weather-section-title">Kommande dagar</div><div class="weather-section-hint">'+escapeHtml((currentForecastDays||[]).length)+' dygn</div></div><div class="weather-days-list">'+daysHtml+'</div></div>'+
+          '<div class="weather-home-footer"><span>Uppdaterad '+escapeHtml(updated)+'</span><button class="weather-map-link" type="button" id="weatherHomeMapBtn"><svg viewBox="0 0 24 24"><path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z"></path><path d="M9 3v15M15 6v15"></path></svg>Visa karta</button></div>';
+        content.querySelectorAll('[data-weather-hour]').forEach(function(btn){btn.addEventListener('click',function(){var t=Number(btn.getAttribute('data-weather-hour')); if(isFinite(t)){weatherHomeSelectedTime=t; setSelectedAppTime(t,{noClamp:false}); if(typeof syncForecastTimeToLayers==='function') syncForecastTimeToLayers(t); renderWeatherHome();}});});
+        var locate=document.getElementById('weatherHomeLocateBtn'); if(locate) locate.addEventListener('click',function(e){e.stopPropagation();requestWeatherHomeLocation({force:true});});
+        var placeBtn=document.getElementById('weatherHomePlaceBtn'); if(placeBtn) placeBtn.addEventListener('click',function(e){if(e.target && e.target.closest && e.target.closest('#weatherHomeLocateBtn')) return; if(typeof openSearch==='function') openSearch();});
+        var mapBtn=document.getElementById('weatherHomeMapBtn'); if(mapBtn) mapBtn.addEventListener('click',function(){setAppMode('advanced',{openSheet:false});});
+      }
+      async function requestWeatherHomeLocation(options){
+        options=options||{};
+        if(!options.force && savedSelections && savedSelections.weather && weatherTimeseries && weatherTimeseries.length) return;
+        if(!navigator.geolocation){renderWeatherHomeEmpty('Plats saknas','Din webbläsare stödjer inte platsåtkomst. Sök efter en plats istället.',true);return;}
+        if(!options.force && weatherHomeAutoLocationRequested) return;
+        weatherHomeAutoLocationRequested=true;
+        renderWeatherHomeEmpty('Hämtar din plats','Vi väljer automatiskt vädret för din position.',false);
+        navigator.geolocation.getCurrentPosition(async function(pos){
+          var lat=pos && pos.coords && pos.coords.latitude, lon=pos && pos.coords && pos.coords.longitude;
+          if(!isFinite(Number(lat)) || !isFinite(Number(lon))){renderWeatherHomeEmpty('Plats saknas','Vi kunde inte läsa din position. Sök efter en plats istället.',true);return;}
+          clearWeatherSelectionMarker();
+          saveSelection('weather',{lat:Number(lat),lon:Number(lon)});
+          selectedPlaceName='';
+          try{selectedPlaceName=await reverseGeocodePlace(Number(lat),Number(lon));}catch(e){selectedPlaceName='';}
+          weatherHomeSelectedTime=Date.now();
+          loadWeatherForPoint(Number(lat),Number(lon));
+          try{centerMapOnUserLocationOnce({immediate:true,ensureUsefulZoom:true});}catch(e){}
+        },function(){
+          renderWeatherHomeEmpty('Välj plats','Platsåtkomst är inte aktiverad. Sök eller tryck på min plats igen.',true);
+        },{enableHighAccuracy:true,maximumAge:60000,timeout:10000});
       }
  function loadWeatherForPoint(lat, lon){
   var requestId = ++latestWeatherRequestId;
@@ -4518,6 +4737,8 @@ precipitationMetric +
     window.updateWeatherForSelectedTime(selectedForecastTime);
 
     currentForecastDays = buildDailyForecast(ts);
+    weatherHomeLastUpdatedAt = Date.now();
+    if(activeMode === "weather" && typeof renderWeatherHome === "function") renderWeatherHome();
     if(activeMode === "advanced") renderAdvancedAccordion();
     setOverlayHeaderDot('ready');
   }).catch(function(err){
@@ -4526,6 +4747,7 @@ precipitationMetric +
     console.error(err);
     setOverlayHeaderDot('ready');
     updateMapOverlay('Väder kunde inte hämtas', 'Försök igen eller välj en annan punkt på kartan.');
+    if(activeMode === "weather" && typeof renderWeatherHomeEmpty === "function") renderWeatherHomeEmpty('Väder kunde inte hämtas', 'Försök igen eller välj en annan plats.', true);
   });
 }
 
@@ -4654,8 +4876,9 @@ precipitationMetric +
       if(modeSwitcherBtn){modeSwitcherBtn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();if(modeSwitcher) modeSwitcher.classList.toggle('is-open');});}
       document.querySelectorAll('[data-mode-option]').forEach(function(btn){btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();if(modeSwitcher) modeSwitcher.classList.remove('is-open');var nextMode=btn.getAttribute('data-mode-option') || 'weather';setAppMode(nextMode,{openSheet:false});});});
       document.querySelectorAll('[data-launch-mode]').forEach(function(btn){btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var nextMode=btn.getAttribute('data-launch-mode') || 'weather';setAppMode(nextMode,{openSheet:false});});});
+      document.querySelectorAll('[data-weather-home-mode]').forEach(function(btn){btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var nextMode=btn.getAttribute('data-weather-home-mode') || 'weather';setAppMode(nextMode,{openSheet:false});});});
 
-      function clickedInsideMapControl(target){return !!(target&&target.closest&&target.closest('.maplibregl-ctrl, .mapboxgl-ctrl, .maplibregl-popup, .mapboxgl-popup, #timeControl, #mapOverlayPanel, #launchScreen, #modeSwitcher, #mobileQuickActions, #mobileSeaSheet, #mobileFilterSheet, #mobileSearchSheet')) ;}
+      function clickedInsideMapControl(target){return !!(target&&target.closest&&target.closest('.maplibregl-ctrl, .mapboxgl-ctrl, .maplibregl-popup, .mapboxgl-popup, #timeControl, #mapOverlayPanel, #weatherHomeView, #launchScreen, #modeSwitcher, #mobileQuickActions, #mobileSeaSheet, #mobileFilterSheet, #mobileSearchSheet')) ;}
       document.addEventListener('click',function(e){
         if(clickedInsideMapControl(e.target)) return;
         var clickedAdvancedTab=e.target&&e.target.closest?e.target.closest('#tabAdvanced'):null, clickedLayer=e.target&&e.target.closest?e.target.closest('#quickLayerBtn'):null, clickedSearch=e.target&&e.target.closest?e.target.closest('#quickSearchBtn'):null, clickedPlaces=e.target&&e.target.closest?e.target.closest('#quickPlacesBtn'):null;
