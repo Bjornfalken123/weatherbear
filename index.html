@@ -4436,6 +4436,7 @@ function closeSearch(){
       var weatherHomeLastUpdatedAt=null;
       var weatherHomeHourlyScrollByDay={};
       var weatherHomePendingHourScrollTime=null;
+      var weatherHomeNowcastData=null;
 
       function compactTemp(v){return v==null || !isFinite(Number(v)) ? "--" : Math.round(Number(v)) + "°";}
       function compactWind(v){return v==null || !isFinite(Number(v)) ? "--" : Number(v).toFixed(1).replace(".",",") + " m/s";}
@@ -4582,6 +4583,7 @@ function closeSearch(){
         var data=item.data || {}, inst=(data.instant && data.instant.details) || {};
         var symbol=getItemSymbol(item);
         var precip=getForecastPrecipitation(item);
+        var precipHomeSummary=summarizePrecipitationForCard(timeMs, precip.amount, weatherHomeNowcastData, precip.hours);
         var gust=getNearestGustRaw(timeMs);
         var dayKey=getWeatherDayKeyFromTime(timeMs);
         var day=(currentForecastDays||[]).find(function(d){return d.date===dayKey;}) || null;
@@ -4597,9 +4599,18 @@ function closeSearch(){
           weatherHomeSelectedDayKey=getWeatherDayKeyFromTime(timeMs);
           hourlyItems=getHourlyWeatherItems(weatherHomeSelectedDayKey);
         }
+        var nowLabelTime=null;
+        if(weatherHomeSelectedDayKey===getWeatherDayKeyFromTime(Date.now()) && hourlyItems.length){
+          var nowTs=Date.now();
+          hourlyItems.forEach(function(hourItem){
+            var ht=getWeatherItemTimeMs(hourItem);
+            if(ht==null) return;
+            if(nowLabelTime==null || Math.abs(ht-nowTs)<Math.abs(nowLabelTime-nowTs)) nowLabelTime=ht;
+          });
+        }
         var hourly=hourlyItems.map(function(hourItem){
           var hTime=getWeatherItemTimeMs(hourItem); var hInst=(hourItem.data&&hourItem.data.instant&&hourItem.data.instant.details)||{}; var hPrecip=getForecastPrecipitation(hourItem); var active=Math.abs(hTime-timeMs)<31*60*1000;
-          var label=(weatherHomeSelectedDayKey===getWeatherDayKeyFromTime(Date.now()) && Math.abs(hTime-Date.now())<45*60*1000) ? 'Nu' : formatClockDotGlobal(hTime).replace('.',':');
+          var label=(nowLabelTime!=null && hTime===nowLabelTime) ? 'Nu' : formatClockDotGlobal(hTime).replace('.',':');
           var rainText=hPrecip.amount!=null && Number(hPrecip.amount)>0 ? compactRain(hPrecip.amount) : '0 mm';
           return '<button type="button" class="weather-hour-card '+(active?'is-active':'')+'" data-weather-hour="'+String(hTime)+'">'+
             '<span class="weather-hour-time">'+escapeHtml(label)+'</span>'+
@@ -4624,7 +4635,7 @@ function closeSearch(){
             '<div class="weather-hero-top"><div><div class="weather-hero-temp">'+escapeHtml(compactTemp(temp))+'</div></div><div class="weather-hero-icon">'+weatherIconFromSymbol(symbol)+'</div></div>'+
             '<div class="weather-hero-condition">'+escapeHtml(condition)+'</div>'+
             '<div class="weather-hero-meta">'+(feels !== '--' ? '<span class="weather-chip">Känns som '+escapeHtml(compactTemp(feels))+'</span>' : '')+'<span class="weather-highlow">Högst <strong>'+escapeHtml(compactTemp(day&&day.maxTemp))+'</strong> · Lägst <strong style="color:#6fb8ff">'+escapeHtml(compactTemp(day&&day.minTemp))+'</strong></span></div>'+
-            '<div class="weather-hero-metrics"><div class="weather-hero-metric"><span>Vind</span><strong>'+escapeHtml(compactWind(inst.wind_speed))+'</strong><small>'+escapeHtml(windDir)+'</small></div><div class="weather-hero-metric"><span>Byvind</span><strong>'+escapeHtml(compactWind(gust))+'</strong><small>Max nära vald tid</small></div><div class="weather-hero-metric"><span>Nederbörd</span><strong>'+escapeHtml(compactRain(precip.amount))+'</strong><small>'+escapeHtml(formatForecastPeriodRange(timeMs, precip.hours) || 'per timme')+'</small></div></div>'+
+            '<div class="weather-hero-metrics"><div class="weather-hero-metric"><span>Vind</span><strong>'+escapeHtml(compactWind(inst.wind_speed))+'</strong><small>'+escapeHtml(windDir)+'</small></div><div class="weather-hero-metric"><span>Byvind</span><strong>'+escapeHtml(compactWind(gust))+'</strong><small>Max nära vald tid</small></div><div class="weather-hero-metric"><span>Nederbörd</span><strong>'+escapeHtml(compactRain(precipHomeSummary.amount))+'</strong><small>'+escapeHtml(precipHomeSummary.label || (formatForecastPeriodRange(timeMs, precip.hours) || 'per timme'))+'</small></div></div>'+
           '</div>'+
           '<div class="weather-section-card"><div class="weather-section-head"><div class="weather-section-title">'+escapeHtml(getWeatherDayLabel(weatherHomeSelectedDayKey))+'</div><div class="weather-section-hint">Svep för timmar</div></div><div class="weather-hourly-strip">'+hourly+'</div></div>'+
           '<div class="weather-section-card"><div class="weather-section-head"><div class="weather-section-title">Kommande dagar</div><div class="weather-section-hint">'+escapeHtml((currentForecastDays||[]).length)+' dygn</div></div><div class="weather-days-list">'+daysHtml+'</div></div>'+
@@ -4789,6 +4800,8 @@ function closeSearch(){
         nowcastData = null;
       }
     }
+
+    weatherHomeNowcastData = nowcastData;
 
     function getGustForTime(tms){
       if(!gustTimeseries.length) return gustFormatted;
