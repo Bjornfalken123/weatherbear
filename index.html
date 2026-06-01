@@ -1733,6 +1733,143 @@
         pointer-events:none !important;
       }
     }
+
+
+    /* v41 Weather solid premium direction: less glass, more composed app surface */
+    body[data-app-mode="weather"] #weatherHomeView{
+      background:
+        radial-gradient(circle at 18% 4%, rgba(74,151,255,0.12), transparent 30%),
+        radial-gradient(circle at 92% 18%, rgba(83,214,186,0.07), transparent 25%),
+        linear-gradient(180deg,#06111e 0%, #081625 46%, #06101c 100%);
+    }
+    body[data-app-mode="weather"] #weatherHomeView::before{
+      opacity:.20;
+      background:
+        linear-gradient(rgba(255,255,255,0.016) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,0.010) 1px,transparent 1px);
+      background-size:46px 46px;
+      mask-image:radial-gradient(circle at 50% 24%,rgba(0,0,0,.85),transparent 76%);
+    }
+    body[data-app-mode="weather"] .weather-home-shell{gap:12px;}
+    body[data-app-mode="weather"] .weather-mode-tabs{
+      background:#0b1a2a;
+      border-color:rgba(255,255,255,0.075);
+      box-shadow:0 14px 32px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.045);
+      backdrop-filter:none;
+      -webkit-backdrop-filter:none;
+    }
+    body[data-app-mode="weather"] .weather-mode-tab{
+      color:rgba(214,226,242,.62);
+      min-height:44px;
+    }
+    body[data-app-mode="weather"] .weather-mode-tab.is-active{
+      color:#f5fbff;
+      background:linear-gradient(180deg,#163251,#10243c);
+      border:1px solid rgba(102,188,255,.30);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 9px 18px rgba(0,0,0,.18);
+    }
+    body[data-app-mode="weather"] .weather-location-card,
+    body[data-app-mode="weather"] .weather-section-card,
+    body[data-app-mode="weather"] .weather-home-empty{
+      background:linear-gradient(180deg,#0e1e30 0%, #0a1727 100%);
+      border-color:rgba(255,255,255,.075);
+      box-shadow:0 14px 32px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.045);
+      backdrop-filter:none;
+      -webkit-backdrop-filter:none;
+    }
+    body[data-app-mode="weather"] .weather-location-card{
+      border-radius:22px;
+      padding:12px;
+      background:linear-gradient(180deg,#102235,#0b1828 100%);
+    }
+    body[data-app-mode="weather"] .weather-location-pin{
+      background:linear-gradient(180deg,#17385a,#102740);
+      border-color:rgba(108,197,255,.22);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+      color:#aee2ff;
+    }
+    body[data-app-mode="weather"] .weather-location-title{letter-spacing:-.03em;}
+    body[data-app-mode="weather"] .weather-location-sub{color:rgba(190,205,225,.68);}
+    body[data-app-mode="weather"] .weather-location-action{
+      background:#13263c;
+      border-color:rgba(255,255,255,.08);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045);
+    }
+    body[data-app-mode="weather"] .weather-place-actions{gap:8px;padding-top:2px;}
+    body[data-app-mode="weather"] .weather-place-action{
+      background:#0a1524;
+      border-color:rgba(255,255,255,.075);
+      color:rgba(236,245,255,.88);
+      border-radius:13px;
+      box-shadow:none;
+    }
+    body[data-app-mode="weather"] .weather-place-action.primary{
+      background:#13304d;
+      border-color:rgba(108,197,255,.32);
+      color:#e6f7ff;
+    }
+    body[data-app-mode="weather"] .weather-hero-card{
+      background:
+        radial-gradient(circle at 82% 7%, rgba(255,190,82,.14), transparent 31%),
+        linear-gradient(145deg,#142941 0%, #0d1c2f 52%, #091523 100%);
+      border-color:rgba(255,255,255,.08);
+      box-shadow:0 22px 46px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.055);
+      min-height:258px;
+    }
+    body[data-app-mode="weather"] .weather-hero-card::after{
+      opacity:.55;
+      filter:blur(12px);
+      background:radial-gradient(circle,rgba(255,183,73,.18),rgba(87,181,255,.07) 45%,transparent 72%);
+    }
+    body[data-app-mode="weather"] .weather-hero-condition{font-size:23px;}
+    body[data-app-mode="weather"] .weather-chip{
+      background:#102b45;
+      border-color:rgba(108,197,255,.20);
+      color:#d7f2ff;
+    }
+    body[data-app-mode="weather"] .weather-hero-metrics{border-top-color:rgba(255,255,255,.07);}
+    body[data-app-mode="weather"] .weather-hero-metric span{color:rgba(190,205,225,.68);}
+    body[data-app-mode="weather"] .weather-section-card{
+      border-radius:22px;
+      overflow:hidden;
+      background:linear-gradient(180deg,#0d1c2e,#091625);
+    }
+    body[data-app-mode="weather"] .weather-section-card::before{display:none;}
+    body[data-app-mode="weather"] .weather-section-head{padding:14px 14px 7px;}
+    body[data-app-mode="weather"] .weather-section-title{color:#f6fbff;}
+    body[data-app-mode="weather"] .weather-section-hint{color:rgba(190,205,225,.58);}
+    body[data-app-mode="weather"] .weather-hourly-strip{gap:8px;padding:8px 14px 15px;}
+    body[data-app-mode="weather"] .weather-hour-card{
+      background:#0a1524;
+      border-color:rgba(255,255,255,.07);
+      box-shadow:none;
+      border-radius:16px;
+    }
+    body[data-app-mode="weather"] .weather-hour-card.is-active{
+      background:linear-gradient(180deg,#17385b,#102845);
+      border-color:rgba(112,203,255,.58);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 10px 20px rgba(0,0,0,.18);
+    }
+    body[data-app-mode="weather"] .weather-hour-time{color:rgba(214,226,242,.72);}
+    body[data-app-mode="weather"] .weather-hour-rain{color:#80cdfd;}
+    body[data-app-mode="weather"] .weather-day-row{border-top-color:rgba(255,255,255,.055);}
+    body[data-app-mode="weather"] .weather-day-row.is-active{
+      background:linear-gradient(90deg,rgba(58,147,230,.18),rgba(58,147,230,.045));
+      box-shadow:inset 3px 0 0 #6bc8ff;
+    }
+    body[data-app-mode="weather"] .weather-day-date{color:rgba(190,205,225,.62);}
+    body[data-app-mode="weather"] .weather-day-rain{color:rgba(190,205,225,.72);}
+    body[data-app-mode="weather"] .weather-day-bar{
+      opacity:.78;
+      box-shadow:none;
+    }
+    body[data-app-mode="weather"] .weather-map-link{
+      background:#102b45;
+      border-color:rgba(108,197,255,.20);
+      box-shadow:none;
+    }
+    body[data-app-mode="weather"] .weather-home-footer{color:rgba(190,205,225,.58);}
+
 </style>
 </head>
 <body>
