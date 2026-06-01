@@ -4146,6 +4146,7 @@ setupSeaChartInteractions();
             window.updateWeatherForSelectedTime(getSelectedAppTime());
           }
           updateAdvancedTrayButton();
+          if(typeof requestModeAutoLocation === "function") requestModeAutoLocation("advanced", {onlyOnce:true});
         }else if(activeMode === "nautical"){
           activeBottomTab="nautical";
           seaSelectionActive=false;
@@ -4156,6 +4157,7 @@ setupSeaChartInteractions();
           if(typeof setBaseMapMode === "function") setBaseMapMode("nautical");
           if(typeof updateModeUI === "function") updateModeUI();
           updateNauticalCompassHud();
+          if(typeof requestModeAutoLocation === "function") requestModeAutoLocation("nautical", {onlyOnce:true});
         }
         enforceModeLayers();
         setModeSwitcherState();
@@ -4408,6 +4410,8 @@ function closeSearch(){
 
 
       var weatherHomeAutoLocationRequested=false;
+      var advancedAutoLocationRequested=false;
+      var nauticalAutoLocationRequested=false;
       var weatherHomeSelectedTime=null;
       var weatherHomeSelectedDayKey=null;
       var weatherHomeLastUpdatedAt=null;
@@ -4597,6 +4601,72 @@ function closeSearch(){
           try{centerMapOnUserLocationOnce({immediate:true,ensureUsefulZoom:true});}catch(e){}
         },function(){
           renderWeatherHomeEmpty('Välj plats','Platsåtkomst är inte aktiverad. Sök eller tryck på min plats igen.',true);
+        },{enableHighAccuracy:true,maximumAge:60000,timeout:10000});
+      }
+
+      function applyAutoLocationToMode(mode, coords){
+        if(!coords) return;
+        var lat=Number(coords.latitude), lon=Number(coords.longitude);
+        if(!isFinite(lat) || !isFinite(lon)) return;
+
+        handleUserPosition(coords, {
+          allowCameraFollow: mode === "nautical",
+          allowWeatherRefresh: false,
+          immediateCamera: true
+        });
+
+        saveSelection('weather',{lat:lat,lon:lon});
+        weatherSelectionMode="user";
+        selectedPlaceName="";
+        try{reverseGeocodePlace(lat,lon).then(function(name){selectedPlaceName=name||""; if(activeMode === "weather" && typeof renderWeatherHome === "function") renderWeatherHome();});}catch(e){}
+        loadWeatherForPoint(lat,lon);
+
+        if(mode === "advanced"){
+          selectAdvancedPoint(lat, lon, {openSheet:false});
+          centerMapOnUserLocationOnce({immediate:true,ensureUsefulZoom:true});
+          setTimeout(function(){centerMapOnUserLocationOnce({immediate:true,ensureUsefulZoom:true});},220);
+        }else if(mode === "nautical"){
+          userTrackingMode = "follow";
+          nauticalCompassMode = "north";
+          updateNauticalCompassHud();
+          updateNavigationCamera({immediate:true});
+          setTimeout(function(){updateNavigationCamera({immediate:true});},260);
+        }
+      }
+
+      function requestModeAutoLocation(mode, options){
+        options = options || {};
+        mode = mode === "nautical" ? "nautical" : (mode === "advanced" ? "advanced" : "weather");
+        if(mode !== "advanced" && mode !== "nautical") return;
+        if(!navigator.geolocation) return;
+
+        if(options.onlyOnce){
+          if(mode === "advanced" && advancedAutoLocationRequested) return;
+          if(mode === "nautical" && nauticalAutoLocationRequested) return;
+          if(mode === "advanced") advancedAutoLocationRequested = true;
+          if(mode === "nautical") nauticalAutoLocationRequested = true;
+        }
+
+        // Om vi redan har en färsk position använder vi den direkt för att undvika onödiga promptar.
+        if(hasUserPosition() && Date.now() - Number(userPositionState.updatedAt || 0) < 2 * 60 * 1000){
+          applyAutoLocationToMode(mode, {
+            latitude:userPositionState.lat,
+            longitude:userPositionState.lon,
+            accuracy:userPositionState.accuracy,
+            speed:userPositionState.speed,
+            heading:userPositionState.rawHeading
+          });
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(function(pos){
+          if(activeMode !== mode) return;
+          applyAutoLocationToMode(mode, pos && pos.coords);
+        },function(){
+          // Tyst fallback: om plats nekas behåller vi sparad/manuell plats och befintlig karta.
+          if(mode === "advanced"){
+            prepareAdvancedFromExistingSelection(false);
+          }
         },{enableHighAccuracy:true,maximumAge:60000,timeout:10000});
       }
  function loadWeatherForPoint(lat, lon){
