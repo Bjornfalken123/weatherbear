@@ -4,7 +4,7 @@ const AIS_VISIBLE_MAX_AGE_MS = 60 * 60 * 1000;
 const AIS_CACHE_REGIONS = [
   {
     id: "sweden-west",
-    name: "Orust med omnejd",
+    name: "Svenska västkusten",
     bbox: [10.0, 55.0, 13.2, 59.5]
   },
   {
