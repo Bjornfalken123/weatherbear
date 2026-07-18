@@ -3214,9 +3214,7 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
 }}catch(e){console.warn("Kunde inte justera sjökortets lagerordning", e);}}
       function viewportIntersectsBounds(bounds){if(!maptilerMap||!bounds||!maptilerMap.getBounds) return false;try{var b=maptilerMap.getBounds(), west=b.getWest(), east=b.getEast(), south=b.getSouth(), north=b.getNorth();return !(east<bounds.west||west>bounds.east||north<bounds.south||south>bounds.north);}catch(e){return false;}}
       function shouldShowNauticalDepthLayer(){
-        // During this depth test we keep the layer visible whenever the nautical basemap is active.
-        // The previous viewport gate could make the test look broken if the map started just outside the bbox.
-        return !!(nauticalDepthTestEnabled && baseMapMode==="nautical");
+        return !!(nauticalDepthTestEnabled && baseMapMode==="nautical" && viewportIntersectsBounds(NAUTICAL_DEPTH_WEST_COAST_BOUNDS));
       }
       function syncNauticalDepthLayerVisibility(){if(!maptilerMap||!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) return;try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(e){}}
       function scheduleNauticalLayerOrderRefresh(){if(nauticalLayerOrderTimer) clearTimeout(nauticalLayerOrderTimer);nauticalLayerOrderTimer=setTimeout(function(){nauticalLayerOrderTimer=null;refreshNauticalLayerOrder();},0);setTimeout(refreshNauticalLayerOrder,180);}
