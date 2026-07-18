@@ -1,5 +1,5 @@
 const EMODNET_WMS_URL = "https://ows.emodnet-bathymetry.eu/wms";
-const TILE_SIZE = 512;
+const TILE_SIZE = 256;
 const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_MERCATOR = 20037508.342789244;
 
@@ -14,6 +14,31 @@ const SWEDEN_DEPTH_BOUNDS = {
 function numberParam(url, name) {
   const value = Number(url.searchParams.get(name));
   return Number.isFinite(value) ? value : null;
+}
+
+function parseMercatorBbox(value) {
+  if (!value) return null;
+  const parts = String(value).split(",").map(Number);
+  if (parts.length !== 4 || !parts.every(Number.isFinite)) return null;
+  const [minX, minY, maxX, maxY] = parts;
+  const limit = MAX_MERCATOR * 1.001;
+  if (minX >= maxX || minY >= maxY) return null;
+  if (Math.abs(minX) > limit || Math.abs(maxX) > limit || Math.abs(minY) > limit || Math.abs(maxY) > limit) return null;
+  return parts;
+}
+
+function mercatorYToLatitude(y) {
+  return (Math.atan(Math.sinh((y / MAX_MERCATOR) * Math.PI)) * 180) / Math.PI;
+}
+
+function mercatorBoundsToLonLat(bbox) {
+  const [minX, minY, maxX, maxY] = bbox;
+  return {
+    west: (minX / MAX_MERCATOR) * 180,
+    south: mercatorYToLatitude(minY),
+    east: (maxX / MAX_MERCATOR) * 180,
+    north: mercatorYToLatitude(maxY)
+  };
 }
 
 function tileLonLatBounds(z, x, y) {
@@ -49,11 +74,11 @@ function buildWeatherbearDepthSld() {
     '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/sld http://schemas.opengis.net/sld/1.0.0/StyledLayerDescriptor.xsd">',
     '<NamedLayer><Name>emodnet:mean</Name><UserStyle><Title>Weatherbear depth zones</Title><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>',
     '<ColorMap type="intervals" extended="false">',
-    '<ColorMapEntry color="#ffffff" quantity="-12000" opacity="0.96" label="djupare än 50 m"/>',
-    '<ColorMapEntry color="#fbfdff" quantity="-50" opacity="0.96" label="20–50 m"/>',
-    '<ColorMapEntry color="#f2f9ff" quantity="-20" opacity="0.97" label="10–20 m"/>',
-    '<ColorMapEntry color="#e2f2ff" quantity="-10" opacity="0.98" label="6–10 m"/>',
-    '<ColorMapEntry color="#cce9fb" quantity="-6" opacity="0.99" label="3–6 m"/>',
+    '<ColorMapEntry color="#ffffff" quantity="-12000" opacity="1" label="djupare än 50 m"/>',
+    '<ColorMapEntry color="#fbfdff" quantity="-50" opacity="1" label="20–50 m"/>',
+    '<ColorMapEntry color="#f2f9ff" quantity="-20" opacity="1" label="10–20 m"/>',
+    '<ColorMapEntry color="#e2f2ff" quantity="-10" opacity="1" label="6–10 m"/>',
+    '<ColorMapEntry color="#cce9fb" quantity="-6" opacity="1" label="3–6 m"/>',
     '<ColorMapEntry color="#a9d9f3" quantity="-3" opacity="1" label="2–3 m"/>',
     '<ColorMapEntry color="#78c2e8" quantity="-2" opacity="1" label="0–2 m"/>',
     '<ColorMapEntry color="#4ba9d8" quantity="0" opacity="1" label="0 m"/>',
@@ -83,24 +108,30 @@ function buildWeatherbearContourSld() {
 
 function makeUpstreamUrl(type, bbox, fallback = false) {
   const customContours = type === "contours" && !fallback;
+  const layerName = type === "coverage"
+    ? "emodnet:mean_multicolour"
+    : (type === "contours" && fallback ? "emodnet:contours" : "emodnet:mean");
   const params = new URLSearchParams({
     service: "WMS",
     request: "GetMap",
     version: "1.1.1",
-    layers: type === "contours" && fallback ? "emodnet:contours" : "emodnet:mean",
+    layers: layerName,
     styles: "",
     format: "image/png",
     transparent: "true",
-    tiled: customContours ? "false" : "true",
+    // Dynamiska SLD-bilder ska renderas av WMS, inte via GeoWebCache/WMS-C.
+    // tiled=true tillsammans med 512/256-grid kan ge tomma eller feljusterade tiles.
+    tiled: "false",
     width: String(TILE_SIZE),
     height: String(TILE_SIZE),
     srs: "EPSG:3857",
     bbox: bbox.join(","),
-    interpolations: type === "fill" ? "bicubic" : "bilinear"
+    interpolations: type === "contours" ? "bilinear" : "bicubic"
   });
 
   if (type === "fill") {
     params.set("SLD_BODY", buildWeatherbearDepthSld());
+    params.set("buffer", "8");
   } else if (customContours) {
     params.set("SLD_BODY", buildWeatherbearContourSld());
     params.set("buffer", "24");
@@ -124,24 +155,40 @@ export async function onRequestGet(context) {
   const z = numberParam(requestUrl, "z");
   const x = numberParam(requestUrl, "x");
   const y = numberParam(requestUrl, "y");
-  const type = requestUrl.searchParams.get("type") === "contours" ? "contours" : "fill";
+  const requestedBbox = parseMercatorBbox(requestUrl.searchParams.get("bbox"));
+  const requestedType = requestUrl.searchParams.get("type");
+  const type = requestedType === "contours"
+    ? "contours"
+    : (requestedType === "coverage" ? "coverage" : "fill");
 
-  if (![z, x, y].every(Number.isInteger) || z < 0 || z > 14) {
-    return Response.json(
-      { error: true, message: "Ogiltiga tile-koordinater" },
-      { status: 400 }
-    );
+  let bbox = requestedBbox;
+  let lonLatBounds = null;
+
+  if (bbox) {
+    // MapLibre levererar den exakta Web Mercator-bbox som används för placeringen.
+    // Det tar bort dubbelberäkning och eventuell skillnad mot baskartan.
+    lonLatBounds = mercatorBoundsToLonLat(bbox);
+  } else {
+    // Bakåtkompatibilitet för äldre cachade klienter som fortfarande skickar z/x/y.
+    if (![z, x, y].every(Number.isInteger) || z < 0 || z > 14) {
+      return Response.json(
+        { error: true, message: "Ogiltig bbox eller tile-koordinater" },
+        { status: 400 }
+      );
+    }
+
+    const n = 2 ** z;
+    if (x < 0 || y < 0 || x >= n || y >= n) {
+      return Response.json(
+        { error: true, message: "Tile ligger utanför kartans rutnät" },
+        { status: 400 }
+      );
+    }
+
+    lonLatBounds = tileLonLatBounds(z, x, y);
+    bbox = tileMercatorBounds(z, x, y);
   }
 
-  const n = 2 ** z;
-  if (x < 0 || y < 0 || x >= n || y >= n) {
-    return Response.json(
-      { error: true, message: "Tile ligger utanför kartans rutnät" },
-      { status: 400 }
-    );
-  }
-
-  const lonLatBounds = tileLonLatBounds(z, x, y);
   if (!overlaps(lonLatBounds, SWEDEN_DEPTH_BOUNDS)) {
     return emptyTileResponse();
   }
@@ -155,7 +202,6 @@ export async function onRequestGet(context) {
     return response;
   }
 
-  const bbox = tileMercatorBounds(z, x, y);
   const upstreamUrl = makeUpstreamUrl(type, bbox);
 
   try {
@@ -198,7 +244,8 @@ export async function onRequestGet(context) {
         "content-type": upstream.headers.get("content-type") || "image/png",
         "cache-control": `public, max-age=${CACHE_TTL_SECONDS}, s-maxage=${CACHE_TTL_SECONDS}`,
         "x-weatherbear-depth-cache": "MISS",
-        "x-weatherbear-depth-source": type
+        "x-weatherbear-depth-source": type,
+        "x-weatherbear-depth-grid": requestedBbox ? "maplibre-bbox" : "legacy-zxy"
       }
     });
 
