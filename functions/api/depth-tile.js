@@ -5,10 +5,10 @@ const MAX_MERCATOR = 20037508.342789244;
 
 // Första Weatherbear-området: svenska hav och större kustvatten.
 const SWEDEN_DEPTH_BOUNDS = {
-  west: 9.4,
-  south: 54.3,
-  east: 25.8,
-  north: 66.8
+  west: 8.0,
+  south: 53.0,
+  east: 27.0,
+  north: 67.0
 };
 
 function numberParam(url, name) {

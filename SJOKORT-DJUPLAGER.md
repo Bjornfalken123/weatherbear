@@ -1,4 +1,4 @@
-# Weatherbear djuplager v1
+# Weatherbear djuplager v1.2
 
 Denna version ersätter det tidigare färdigmålade djupskiktet med ett eget Weatherbear-lager för svenska hav och kustvatten.
 
@@ -45,3 +45,12 @@ Lagret är en tydligare visualisering av öppna djupdata. Det är inte ett godk�
 - En separat suddad kustlinje ligger precis under landmasken. Eftersom landfyllningen täcker linjens inre halva återstår en mjuk övergång ut mot vattnet.
 - EMODnet-rastret begärs med bicubic interpolation för fyllningen och bilinear interpolation för konturerna. Detta minskar pixlighet utan att ändra appens startvy.
 - Kustmasken använder appens befintliga MapTiler-nyckel och kräver ingen ny tjänst eller ny API-nyckel.
+
+
+## Kustanslutning och hela Sveriges kust (v1.2)
+
+- Den tidigare landfärgade kustövergången låg ovanpå djupet och kunde skapa en ljus remsa utan djupmarkering. Den ligger nu under djupet och är vattenfärgad.
+- Ett neutralt kustvattenlager ligger under rådjupet och klipps visuellt av samma vektorbaserade landmask som används för öar och fastland. Där EMODnet har transparenta kustglipor visas därför vatten ända fram till kustlinjen.
+- Rådjupet är helt opakt ovanpå kustfyllningen, så giltiga djupzoner och djupkurvor behåller sina färger.
+- Klient och tile-endpoint använder samma täckning: 8.0°E–27.0°E och 53.0°N–67.0°N. Det omfattar hela Sveriges kust med marginal i Skagerrak, Kattegatt, Östersjön, Bottenhavet och Bottenviken.
+- Den neutrala kustfyllningen är en visuell no-data-fyllnad och ska inte tolkas som ett uppmätt djupvärde.
