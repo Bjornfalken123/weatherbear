@@ -4408,7 +4408,7 @@ function closeSearch(){
       }
       function refreshMapSizeSoon(){setTimeout(function(){try{map.invalidateSize();}catch(e){} try{if(maptilerMap) maptilerMap.resize();}catch(e){} updateMapViewportOffsets();},60);}
 
-      var map=L.map('map',{zoomControl:false}).setView([58.15,11.55],9);
+      var map=L.map('map',{zoomControl:false}).setView([58.6,13.0],6);
       var MAPTILER_API_KEY='72WUquDNJCLDzyB9DSky';
 
       var weatherMarker=null, waveSelectionMarker=null, lighthouseSelectionMarker=null, aisMarkerMap=new Map();
@@ -5345,7 +5345,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       // for the current viewport and recolour it into a more chart-like blue depth palette on a canvas.
       var NAUTICAL_EMODNET_DEPTH_TILE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&TILED=true&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256";
       var NAUTICAL_EMODNET_DEPTH_WMS_BASE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857";
-      var NAUTICAL_DEPTH_WEST_COAST_BOUNDS={west:10.65,south:57.55,east:12.35,north:58.75}; // Orust, Tjörn, Marstrand, Lysekil och omgivande kust
+      var NAUTICAL_DEPTH_ORUST_BOUNDS={west:10.75,south:57.85,east:12.05,north:58.55}; // Djupslagrets testblock: Orust och närliggande hav
       var nauticalDepthCanvasId="nauticalDepthCanvas";
       var nauticalDepthCanvasElement=null, nauticalDepthRenderToken=0, nauticalDepthRenderTimer=null, nauticalDepthMoveSyncAttached=false;
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
@@ -5373,13 +5373,13 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
   bringCustomUserLocationLayersToFront();
 }}catch(e){console.warn("Kunde inte justera sjökortets lagerordning", e);}}
       function viewportIntersectsBounds(bounds){if(!maptilerMap||!bounds||!maptilerMap.getBounds) return false;try{var b=maptilerMap.getBounds(), west=b.getWest(), east=b.getEast(), south=b.getSouth(), north=b.getNorth();return !(east<bounds.west||west>bounds.east||north<bounds.south||south>bounds.north);}catch(e){return false;}}
-      function shouldShowNauticalDepthLayer(){return !!(nauticalDepthTestEnabled && baseMapMode==="nautical" && viewportIntersectsBounds(NAUTICAL_DEPTH_WEST_COAST_BOUNDS));}
+      function shouldShowNauticalDepthLayer(){return !!(nauticalDepthTestEnabled && baseMapMode==="nautical" && viewportIntersectsBounds(NAUTICAL_DEPTH_ORUST_BOUNDS));}
       function syncNauticalDepthLayerVisibility(){if(!maptilerMap||!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) return;try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(e){try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(_){}}if(shouldShowNauticalDepthLayer()) scheduleNauticalDepthCanvasUpdate(false); else clearNauticalDepthCanvas();}
       function scheduleNauticalLayerOrderRefresh(){if(nauticalLayerOrderTimer) clearTimeout(nauticalLayerOrderTimer);nauticalLayerOrderTimer=setTimeout(function(){nauticalLayerOrderTimer=null;refreshNauticalLayerOrder();},0);setTimeout(refreshNauticalLayerOrder,180);}
       function getNauticalDepthCanvas(){if(nauticalDepthCanvasElement&&nauticalDepthCanvasElement.getContext) return nauticalDepthCanvasElement;var el=document.getElementById(nauticalDepthCanvasId);if(!el){el=document.createElement("canvas");el.id=nauticalDepthCanvasId;el.width=2;el.height=2;el.style.cssText="position:absolute;left:-99999px;top:-99999px;width:2px;height:2px;pointer-events:none;opacity:0;";document.body.appendChild(el);}nauticalDepthCanvasElement=el;return el;}
       function clampNauticalDepthValue(v,min,max){return v<min?min:v>max?max:v;}
       function projectMercator(lon,lat){var x=lon*20037508.34/180;var y=Math.log(Math.tan((90+lat)*Math.PI/360))/(Math.PI/180);y=y*20037508.34/180;return {x:x,y:y};}
-      function getNauticalDepthRenderBounds(){if(!maptilerMap||!maptilerMap.getBounds) return null;var b=maptilerMap.getBounds(), west=Math.max(b.getWest(),NAUTICAL_DEPTH_WEST_COAST_BOUNDS.west), south=Math.max(b.getSouth(),NAUTICAL_DEPTH_WEST_COAST_BOUNDS.south), east=Math.min(b.getEast(),NAUTICAL_DEPTH_WEST_COAST_BOUNDS.east), north=Math.min(b.getNorth(),NAUTICAL_DEPTH_WEST_COAST_BOUNDS.north);if(west>=east||south>=north) return null;return {getWest:function(){return west;},getSouth:function(){return south;},getEast:function(){return east;},getNorth:function(){return north;}};}
+      function getNauticalDepthRenderBounds(){if(!maptilerMap||!maptilerMap.getBounds) return null;var b=maptilerMap.getBounds(), west=Math.max(b.getWest(),NAUTICAL_DEPTH_ORUST_BOUNDS.west), south=Math.max(b.getSouth(),NAUTICAL_DEPTH_ORUST_BOUNDS.south), east=Math.min(b.getEast(),NAUTICAL_DEPTH_ORUST_BOUNDS.east), north=Math.min(b.getNorth(),NAUTICAL_DEPTH_ORUST_BOUNDS.north);if(west>=east||south>=north) return null;return {getWest:function(){return west;},getSouth:function(){return south;},getEast:function(){return east;},getNorth:function(){return north;}};}
       function getNauticalDepthCanvasCoordinates(bounds){if(!bounds) return [[0,0],[0,0],[0,0],[0,0]];var w=bounds.getWest(), e=bounds.getEast(), s=bounds.getSouth(), n=bounds.getNorth();return [[w,n],[e,n],[e,s],[w,s]];}
       function buildNauticalDepthWmsUrl(bounds,width,height){var sw=projectMercator(bounds.getWest(),bounds.getSouth());var ne=projectMercator(bounds.getEast(),bounds.getNorth());return NAUTICAL_EMODNET_DEPTH_WMS_BASE_URL+"&BBOX="+[sw.x,sw.y,ne.x,ne.y].join(",")+"&WIDTH="+width+"&HEIGHT="+height;}
       function nauticalDepthRgbToHsl(r,g,b){r/=255;g/=255;b/=255;var max=Math.max(r,g,b),min=Math.min(r,g,b),h=0,s=0,l=(max+min)/2;if(max!==min){var d=max-min;s=l>0.5?d/(2-max-min):d/(max+min);switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;default:h=(r-g)/d+4;break;}h*=60;}return {h:h,s:s,l:l};}
@@ -6568,7 +6568,7 @@ function syncCustomUserLocationVisuals(){
 
       if(window.maptilersdk){
         maptilersdk.config.apiKey=MAPTILER_API_KEY;
-        maptilerMap=new maptilersdk.Map({container:'maptilerMap',style:maptilersdk.MapStyle.STREETS.DARK,center:[11.55,58.15],zoom:9,geolocateControl:false});
+        maptilerMap=new maptilersdk.Map({container:'maptilerMap',style:maptilersdk.MapStyle.STREETS.DARK,center:[13.0,58.6],zoom:5,geolocateControl:false});
 maptilerMap.on("rotate", function(){
   updateNauticalCompassHud();
   syncCustomUserLocationVisuals();

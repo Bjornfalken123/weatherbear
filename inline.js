@@ -2249,7 +2249,7 @@ function closeSearch(){
       }
       function refreshMapSizeSoon(){setTimeout(function(){try{map.invalidateSize();}catch(e){} try{if(maptilerMap) maptilerMap.resize();}catch(e){} updateMapViewportOffsets();},60);}
 
-      var map=L.map('map',{zoomControl:false}).setView([58.15,11.55],9);
+      var map=L.map('map',{zoomControl:false}).setView([58.6,13.0],6);
       var MAPTILER_API_KEY='72WUquDNJCLDzyB9DSky';
 
       var weatherMarker=null, waveSelectionMarker=null, lighthouseSelectionMarker=null, aisMarkerMap=new Map();
@@ -3187,7 +3187,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       // The source maxzoom is only the highest EMODnet tile zoom to overscale from; it must not restrict the map camera zoom.
       var NAUTICAL_EMODNET_DEPTH_TILE_URL="https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png";
       // Keep the test available on/around the Swedish west coast, but do not hide it too aggressively while testing.
-      var NAUTICAL_DEPTH_WEST_COAST_BOUNDS={west:10.65,south:57.55,east:12.35,north:58.75}; // Orust, Tjörn, Marstrand, Lysekil och omgivande kust
+      var NAUTICAL_DEPTH_ORUST_BOUNDS={west:10.75,south:57.85,east:12.05,north:58.55}; // Djupslagrets testblock: Orust och närliggande hav
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";
       var OPEN_METEO_CLOUD_VARIABLE="cloud_cover";
@@ -3214,7 +3214,7 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
 }}catch(e){console.warn("Kunde inte justera sjökortets lagerordning", e);}}
       function viewportIntersectsBounds(bounds){if(!maptilerMap||!bounds||!maptilerMap.getBounds) return false;try{var b=maptilerMap.getBounds(), west=b.getWest(), east=b.getEast(), south=b.getSouth(), north=b.getNorth();return !(east<bounds.west||west>bounds.east||north<bounds.south||south>bounds.north);}catch(e){return false;}}
       function shouldShowNauticalDepthLayer(){
-        return !!(nauticalDepthTestEnabled && baseMapMode==="nautical" && viewportIntersectsBounds(NAUTICAL_DEPTH_WEST_COAST_BOUNDS));
+        return !!(nauticalDepthTestEnabled && baseMapMode==="nautical" && viewportIntersectsBounds(NAUTICAL_DEPTH_ORUST_BOUNDS));
       }
       function syncNauticalDepthLayerVisibility(){if(!maptilerMap||!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) return;try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(e){}}
       function scheduleNauticalLayerOrderRefresh(){if(nauticalLayerOrderTimer) clearTimeout(nauticalLayerOrderTimer);nauticalLayerOrderTimer=setTimeout(function(){nauticalLayerOrderTimer=null;refreshNauticalLayerOrder();},0);setTimeout(refreshNauticalLayerOrder,180);}
@@ -3223,7 +3223,7 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
         try{
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))) maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"© OpenStreetMap contributors © CARTO"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId))) maptilerMap.addLayer({id:nauticalBaseLayerId,type:"raster",source:nauticalBaseSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);
-          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"raster",tiles:[NAUTICAL_EMODNET_DEPTH_TILE_URL],tileSize:256,minzoom:0,maxzoom:15,attribution:"Bathymetry © EMODnet Bathymetry Consortium"});
+          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"raster",tiles:[NAUTICAL_EMODNET_DEPTH_TILE_URL],tileSize:256,minzoom:0,maxzoom:15,bounds:[NAUTICAL_DEPTH_ORUST_BOUNDS.west,NAUTICAL_DEPTH_ORUST_BOUNDS.south,NAUTICAL_DEPTH_ORUST_BOUNDS.east,NAUTICAL_DEPTH_ORUST_BOUNDS.north],attribution:"Bathymetry © EMODnet Bathymetry Consortium"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) maptilerMap.addLayer({id:nauticalDepthLayerId,type:"raster",source:nauticalDepthSourceId,layout:{visibility:shouldShowNauticalDepthLayer()?"visible":"none"},paint:{"raster-opacity":0.72,"raster-resampling":"nearest","raster-saturation":-0.05,"raster-contrast":0.14,"raster-brightness-min":0.02,"raster-brightness-max":0.98}},getFirstWeatherOverlayLayerId()||undefined);
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalSeamarkSourceId))) maptilerMap.addSource(nauticalSeamarkSourceId,{type:"raster",tiles:[NAUTICAL_SEAMARK_TILE_URL],tileSize:256,attribution:"© OpenSeaMap contributors"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId))) maptilerMap.addLayer({id:nauticalSeamarkLayerId,type:"raster",source:nauticalSeamarkSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1,"raster-resampling":"nearest"}},getFirstWeatherOverlayLayerId()||undefined);
@@ -4396,7 +4396,7 @@ function syncCustomUserLocationVisuals(){
 
       if(window.maptilersdk){
         maptilersdk.config.apiKey=MAPTILER_API_KEY;
-        maptilerMap=new maptilersdk.Map({container:'maptilerMap',style:maptilersdk.MapStyle.STREETS.DARK,center:[11.55,58.15],zoom:9,geolocateControl:false});
+        maptilerMap=new maptilersdk.Map({container:'maptilerMap',style:maptilersdk.MapStyle.STREETS.DARK,center:[13.0,58.6],zoom:5,geolocateControl:false});
 maptilerMap.on("rotate", function(){
   updateNauticalCompassHud();
   syncCustomUserLocationVisuals();
