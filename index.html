@@ -5340,12 +5340,10 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       var windLayerVisible=false, precipitationLayerVisible=false, satelliteLayerVisible=true, radarLayerVisible=false, temperatureLayerVisible=false;
       var NAUTICAL_LIGHT_BASE_TILE_URL="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
       var NAUTICAL_SEAMARK_TILE_URL="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
-      // EMODnet Bathymetry WMTS test for Swedish west coast. This is an orientation/depth-feel layer, not official navigational depth data.
-      // EMODnet WMTS uses the documented template: /2020/baselayer/{TileMatrixSet}/{TileMatrix}/{TileCol}/{TileRow}.png.
-      // In MapLibre/MapTiler XYZ notation this becomes /2020/baselayer/web_mercator/{z}/{x}/{y}.png.
-      // The source maxzoom is only the highest EMODnet tile zoom to overscale from; it must not restrict the map camera zoom.
-      var NAUTICAL_EMODNET_DEPTH_TILE_URL="https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png";
-      // Keep the test available on/around the Swedish west coast, but do not hide it too aggressively while testing.
+      // EMODnet Bathymetry WMS test: pure mean-depth colour layer, not the WMTS topographic/bathymetric baselayer.
+      // MapLibre/MapTiler raster sources support {bbox-epsg-3857}, so every map tile is rendered as a WMS GetMap request in Web Mercator.
+      // Layer: emodnet:mean_multicolour = Mean depth in multi colour, without land/topography.
+      var NAUTICAL_EMODNET_DEPTH_TILE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&TILED=true&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256";
       var NAUTICAL_DEPTH_WEST_COAST_BOUNDS={west:8.8,south:54.0,east:14.8,north:60.5};
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";
@@ -5384,8 +5382,8 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
         try{
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))) maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"© OpenStreetMap contributors © CARTO"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId))) maptilerMap.addLayer({id:nauticalBaseLayerId,type:"raster",source:nauticalBaseSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);
-          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"raster",tiles:[NAUTICAL_EMODNET_DEPTH_TILE_URL],tileSize:256,minzoom:0,maxzoom:15,attribution:"Bathymetry © EMODnet Bathymetry Consortium"});
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) maptilerMap.addLayer({id:nauticalDepthLayerId,type:"raster",source:nauticalDepthSourceId,layout:{visibility:shouldShowNauticalDepthLayer()?"visible":"none"},paint:{"raster-opacity":0.46,"raster-saturation":-0.10,"raster-contrast":0.08,"raster-brightness-min":0.02,"raster-brightness-max":0.96}},getFirstWeatherOverlayLayerId()||undefined);
+          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"raster",tiles:[NAUTICAL_EMODNET_DEPTH_TILE_URL],tileSize:256,attribution:"Bathymetry © EMODnet Bathymetry Consortium"});
+          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) maptilerMap.addLayer({id:nauticalDepthLayerId,type:"raster",source:nauticalDepthSourceId,layout:{visibility:shouldShowNauticalDepthLayer()?"visible":"none"},paint:{"raster-opacity":0.52,"raster-saturation":-0.22,"raster-contrast":0.06,"raster-brightness-min":0.04,"raster-brightness-max":0.94}},getFirstWeatherOverlayLayerId()||undefined);
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalSeamarkSourceId))) maptilerMap.addSource(nauticalSeamarkSourceId,{type:"raster",tiles:[NAUTICAL_SEAMARK_TILE_URL],tileSize:256,attribution:"© OpenSeaMap contributors"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId))) maptilerMap.addLayer({id:nauticalSeamarkLayerId,type:"raster",source:nauticalSeamarkSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);
           attachNauticalDepthMoveSync();syncNauticalDepthLayerVisibility();scheduleNauticalLayerOrderRefresh();applyNauticalTheme();return true;
