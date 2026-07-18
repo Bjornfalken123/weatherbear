@@ -5345,7 +5345,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       // for the current viewport and recolour it into a more chart-like blue depth palette on a canvas.
       var NAUTICAL_EMODNET_DEPTH_TILE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&TILED=true&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256";
       var NAUTICAL_EMODNET_DEPTH_WMS_BASE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857";
-      var NAUTICAL_DEPTH_WEST_COAST_BOUNDS={west:8.8,south:54.0,east:14.8,north:60.5};
+      var NAUTICAL_DEPTH_WEST_COAST_BOUNDS={west:10.65,south:57.55,east:12.35,north:58.75}; // Orust, Tjörn, Marstrand, Lysekil och omgivande kust
       var nauticalDepthCanvasId="nauticalDepthCanvas";
       var nauticalDepthCanvasElement=null, nauticalDepthRenderToken=0, nauticalDepthRenderTimer=null, nauticalDepthMoveSyncAttached=false;
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
