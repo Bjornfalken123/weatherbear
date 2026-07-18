@@ -1,4 +1,4 @@
-# Weatherbear djuplager v5
+# Weatherbear djuplager v6
 
 Denna version ersätter det tidigare färdigmålade djupskiktet med ett eget Weatherbear-lager för svenska hav och kustvatten.
 
@@ -93,3 +93,17 @@ V4 använde en fast zoomtabell på 4–30 tile-pixlar. Det motsvarade på vissa 
 - MapTilers landmask ligger fortsatt överst och klipper djupet vid samma kustgeometri som sjökortets landyta.
 
 Fyllningen är en visuell interpolation och ska inte tolkas som nya uppmätta djupvärden.
+
+
+## Gemensam vattenmask och flyttad djupskala (v6)
+
+- Närmaste-punkt-fyllningen använder nu samma MapTiler Land-vektortiles (`tiles/land`, `source-layer: land`) som ritar landytan i sjökortsläget.
+- För varje djup-tile hämtas och avkodas den motsvarande landtilen samt ett litet område från grann-tiles. Land rasteriseras till en binär barriärmask i exakt samma z/x/y-grid.
+- Originaldata och uppskattad fyllning klipps mot masken innan bilden lämnas till MapLibre.
+- Avståndsspridningen får bara gå genom sammanhängande vattenpixlar. Djupvärden kan därför inte hoppa över öar, näs eller land mellan separata vattenområden.
+- Om den centrala landtilen inte kan läsas avbryts uppskattningsfyllningen för den djup-tilen. Koden antar aldrig att ett okänt område är öppet vatten.
+- Masken påverkar bara kustnära no-data-fyllning. Verkliga EMODnet-pixlar på vattensidan ändras inte.
+- Cacheversionen är höjd till `v=6`.
+- Djupskalan ligger på större skärmar under kartans övre högra kontrollområde. På mobil ligger den centrerad ovanför sjökortets statuspanel, så den inte täcker lagerknappar, kompass eller statusmoduler.
+
+De lokalt inkluderade biblioteken `pbf`, `@mapbox/vector-tile` och `@mapbox/point-geometry` används endast för att läsa MapTilers landpolygoner. Deras licenser ligger i `vendor/licenses/`.

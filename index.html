@@ -1449,8 +1449,10 @@
     }
     #nauticalDepthLegend{
       position:fixed;
-      left:14px;
-      bottom:calc(var(--safe-bottom) + 18px);
+      top:calc(var(--safe-top) + 66px);
+      right:14px;
+      bottom:auto;
+      left:auto;
       z-index:7915;
       display:none;
       align-items:center;
@@ -1479,6 +1481,19 @@
     .nautical-depth-labels{display:flex;justify-content:space-between;width:112px;margin-top:2px;color:rgba(24,52,72,0.82);font-size:8px;}
     body[data-nautical-theme="evening"] #nauticalDepthLegend{background:rgba(8,18,29,0.86);color:rgba(255,247,223,0.94);border-color:rgba(232,215,168,0.16);}
     body[data-nautical-theme="evening"] .nautical-depth-labels{color:rgba(255,247,223,0.76);}
+    @media(max-width:700px){
+      #nauticalDepthLegend{
+        top:auto;
+        right:auto;
+        bottom:calc(var(--safe-bottom) + 108px);
+        left:50%;
+        transform:translateX(-50%);
+        padding:6px 8px;
+        border-radius:10px;
+      }
+      .nautical-depth-scale{width:104px;}
+      .nautical-depth-labels{width:104px;}
+    }
     body[data-app-mode="nautical"] .nautical-compass-mode{
       padding:3px 8px;
       border-radius:999px;
@@ -2232,6 +2247,9 @@
       var nauticalLandMaskSourceId = "weatherbear-land-mask-source";
       var nauticalLandMaskLayerId = "weatherbear-land-mask-layer";
       var nauticalCoastlineLayerId = "weatherbear-coastline-layer";
+      var weatherbearVectorTileModulesPromise = null;
+      var weatherbearLandTileGeometryCache = new Map();
+      var WEATHERBEAR_LAND_TILE_CACHE_LIMIT = 96;
       var nauticalSeamarkSourceId = "nautical-seamark-source";
       var nauticalSeamarkLayerId = "nautical-seamark-layer";
       var nauticalLayerOrderTimer = null;
@@ -5457,10 +5475,152 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         return t*t*(3-2*t);
       }
 
-      function fillWeatherbearDepthGaps(imageData,maxRadius){
+      function loadWeatherbearVectorTileModules(){
+        if(!weatherbearVectorTileModulesPromise){
+          weatherbearVectorTileModulesPromise=Promise.all([
+            import("./vendor/pbf.js?v=1"),
+            import("./vendor/vector-tile.js?v=1")
+          ]).then(function(modules){
+            return {Pbf:modules[0].default,VectorTile:modules[1].VectorTile};
+          });
+        }
+        return weatherbearVectorTileModulesPromise;
+      }
+
+      function trimWeatherbearLandTileCache(){
+        while(weatherbearLandTileGeometryCache.size>WEATHERBEAR_LAND_TILE_CACHE_LIMIT){
+          var firstKey=weatherbearLandTileGeometryCache.keys().next().value;
+          weatherbearLandTileGeometryCache.delete(firstKey);
+        }
+      }
+
+      function getWeatherbearLandTileGeometry(z,x,y,signal){
+        var zoom=Math.max(0,Math.round(Number(z)||0));
+        var n=Math.pow(2,zoom);
+        if(!isFinite(x)||!isFinite(y)||y<0||y>=n) return Promise.resolve([]);
+        var wrappedX=((Math.round(x)%n)+n)%n;
+        var tileY=Math.round(y);
+        var key=zoom+"/"+wrappedX+"/"+tileY;
+        if(weatherbearLandTileGeometryCache.has(key)) return weatherbearLandTileGeometryCache.get(key);
+
+        var promise=loadWeatherbearVectorTileModules().then(async function(modules){
+          var url="https://api.maptiler.com/tiles/land/"+zoom+"/"+wrappedX+"/"+tileY+"?key="+encodeURIComponent(MAPTILER_API_KEY);
+          var options={headers:{Accept:"application/vnd.mapbox-vector-tile,application/x-protobuf"}};
+          if(signal) options.signal=signal;
+          var response=await fetch(url,options);
+          if(response.status===204) return [];
+          if(!response.ok) throw new Error("MapTiler land tile "+response.status);
+          var arrayBuffer=await response.arrayBuffer();
+          var tile=new modules.VectorTile(new modules.Pbf(new Uint8Array(arrayBuffer)));
+          var layer=tile&&tile.layers&&tile.layers.land;
+          if(!layer) return [];
+          var output=[];
+          for(var i=0;i<layer.length;i++){
+            var feature=layer.feature(i);
+            if(!feature||feature.type!==3) continue;
+            var geometry=feature.loadGeometry();
+            if(!geometry||!geometry.length) continue;
+            output.push({extent:Number(feature.extent)||4096,rings:geometry.map(function(ring){
+              return ring.map(function(point){return [Number(point.x)||0,Number(point.y)||0];});
+            })});
+          }
+          return output;
+        }).catch(function(error){
+          weatherbearLandTileGeometryCache.delete(key);
+          throw error;
+        });
+        weatherbearLandTileGeometryCache.set(key,promise);
+        trimWeatherbearLandTileCache();
+        return promise;
+      }
+
+      function drawWeatherbearLandGeometry(context,features,offsetX,offsetY){
+        if(!features||!features.length) return;
+        context.fillStyle="#ffffff";
+        for(var featureIndex=0;featureIndex<features.length;featureIndex++){
+          var feature=features[featureIndex];
+          var scale=256/Math.max(1,feature.extent||4096);
+          context.beginPath();
+          for(var ringIndex=0;ringIndex<feature.rings.length;ringIndex++){
+            var ring=feature.rings[ringIndex];
+            if(!ring||ring.length<3) continue;
+            for(var pointIndex=0;pointIndex<ring.length;pointIndex++){
+              var point=ring[pointIndex];
+              var px=offsetX+point[0]*scale;
+              var py=offsetY+point[1]*scale;
+              if(pointIndex===0) context.moveTo(px,py); else context.lineTo(px,py);
+            }
+            context.closePath();
+          }
+          try{context.fill("evenodd");}catch(error){context.fill();}
+        }
+      }
+
+      async function buildWeatherbearWaterMask(z,x,y,pad,signal){
+        var zoom=Math.round(Number(z));
+        var tileX=Math.round(Number(x));
+        var tileY=Math.round(Number(y));
+        var halo=Math.max(0,Math.round(Number(pad)||0));
+        if(![zoom,tileX,tileY].every(Number.isFinite)) return null;
+        var size=256+halo*2;
+        var canvas=createWeatherbearDepthCanvas(size,size);
+        var context=canvas.getContext("2d",{willReadFrequently:true});
+        context.clearRect(0,0,size,size);
+
+        // Samma MapTiler Land-tiles som ritar det synliga landet används som hård barriär.
+        // Grann-tiles tas med för halot, så masken blir kontinuerlig över tilegränser.
+        var jobs=[];
+        for(var dy=-1;dy<=1;dy++){
+          for(var dx=-1;dx<=1;dx++){
+            (function(tileDx,tileDy){
+              jobs.push(getWeatherbearLandTileGeometry(zoom,tileX+tileDx,tileY+tileDy,null).then(function(features){
+                return {dx:tileDx,dy:tileDy,features:features,failed:false};
+              }).catch(function(){return {dx:tileDx,dy:tileDy,features:[],failed:true};}));
+            })(dx,dy);
+          }
+        }
+        var tiles=await Promise.all(jobs);
+        var centralTile=tiles.find(function(tile){return tile.dx===0&&tile.dy===0;});
+        if(!centralTile||centralTile.failed) return null;
+        for(var i=0;i<tiles.length;i++){
+          var tile=tiles[i];
+          var offsetX=halo+tile.dx*256;
+          var offsetY=halo+tile.dy*256;
+          if(tile.failed){
+            // Saknad granntile är en barriär, aldrig automatiskt vatten.
+            context.fillStyle="#ffffff";
+            context.fillRect(offsetX,offsetY,256,256);
+          }else{
+            drawWeatherbearLandGeometry(context,tile.features,offsetX,offsetY);
+          }
+        }
+        var landPixels=context.getImageData(0,0,size,size).data;
+        var waterMask=new Uint8Array(size*size);
+        for(var pixel=0;pixel<waterMask.length;pixel++){
+          // Antialiasade kustpixlar räknas som land från halv täckning och uppåt.
+          waterMask[pixel]=landPixels[pixel*4+3]<128?1:0;
+        }
+        return waterMask;
+      }
+
+      function applyWeatherbearWaterMask(imageData,waterMask){
+        if(!waterMask||waterMask.length!==imageData.width*imageData.height) return imageData;
+        var pixels=imageData.data;
+        for(var i=0;i<waterMask.length;i++){
+          if(waterMask[i]) continue;
+          var offset=i*4;
+          pixels[offset]=0;
+          pixels[offset+1]=0;
+          pixels[offset+2]=0;
+          pixels[offset+3]=0;
+        }
+        return imageData;
+      }
+
+      function fillWeatherbearDepthGaps(imageData,maxRadius,waterMask){
         var width=imageData.width, height=imageData.height, pixels=imageData.data;
         var count=width*height;
-        if(!maxRadius||maxRadius<1||!count) return imageData;
+        if(!maxRadius||maxRadius<1||!count||!waterMask||waterMask.length!==count) return imageData;
 
         var infinity=65535;
         var distance=new Uint16Array(count);
@@ -5474,21 +5634,20 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         distance.fill(infinity);
         nearest.fill(-1);
 
-        // Bara fullt synliga originalpixlar räknas som uppmätta datakällor.
-        // Halvtransparent kantutjämning från WMS får inte driva expansionen.
+        // Endast originaldata på vattensidan får vara källa. Land är en hård barriär.
         for(i=0;i<count;i++){
-          if(pixels[i*4+3]>=180){
+          if(waterMask[i]&&pixels[i*4+3]>=180){
             distance[i]=0;
             nearest[i]=i;
             originalSource[i]=1;
             sourceCount++;
           }
         }
-        // Helt tomma tiles och tiles med full täckning behöver ingen pixelbearbetning.
-        if(sourceCount===0||sourceCount===count) return imageData;
+        if(sourceCount===0) return imageData;
 
         function relax(target,source,cost){
-          if(source<0||source>=count||nearest[source]<0) return;
+          if(target<0||target>=count||source<0||source>=count) return;
+          if(!waterMask[target]||!waterMask[source]||nearest[source]<0) return;
           var candidate=distance[source]+cost;
           if(candidate<distance[target]){
             distance[target]=candidate;
@@ -5496,38 +5655,36 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           }
         }
 
-        // Tvåpassig chamfer-transform ger en stabil approximation av närmaste
-        // giltiga djuppunkt utan den fyrkantiga Chebyshev-radie som användes tidigare.
-        for(var y=0;y<height;y++){
-          for(var x=0;x<width;x++){
-            i=y*width+x;
-            if(distance[i]===0) continue;
-            if(x>0) relax(i,i-1,10);
-            if(y>0) relax(i,i-width,10);
-            if(x>0&&y>0) relax(i,i-width-1,14);
-            if(x+1<width&&y>0) relax(i,i-width+1,14);
+        // Avståndet sprids endast genom sammanhängande vattenpixlar. Därmed kan värden
+        // inte hoppa över öar, näs eller land mellan två vattenområden.
+        for(var py=0;py<height;py++){
+          for(var px=0;px<width;px++){
+            i=py*width+px;
+            if(!waterMask[i]||distance[i]===0) continue;
+            if(px>0) relax(i,i-1,10);
+            if(py>0) relax(i,i-width,10);
+            if(px>0&&py>0) relax(i,i-width-1,14);
+            if(px+1<width&&py>0) relax(i,i-width+1,14);
           }
         }
-        for(var y2=height-1;y2>=0;y2--){
-          for(var x2=width-1;x2>=0;x2--){
-            i=y2*width+x2;
-            if(x2+1<width) relax(i,i+1,10);
-            if(y2+1<height) relax(i,i+width,10);
-            if(x2+1<width&&y2+1<height) relax(i,i+width+1,14);
-            if(x2>0&&y2+1<height) relax(i,i+width-1,14);
+        for(var py2=height-1;py2>=0;py2--){
+          for(var px2=width-1;px2>=0;px2--){
+            i=py2*width+px2;
+            if(!waterMask[i]) continue;
+            if(px2+1<width) relax(i,i+1,10);
+            if(py2+1<height) relax(i,i+width,10);
+            if(px2+1<width&&py2+1<height) relax(i,i+width+1,14);
+            if(px2>0&&py2+1<height) relax(i,i+width-1,14);
           }
         }
 
         var maxCost=maxRadius*10;
         for(i=0;i<count;i++){
-          if(originalSource[i]||nearest[i]<0||distance[i]>maxCost) continue;
+          if(!waterMask[i]||originalSource[i]||nearest[i]<0||distance[i]>maxCost) continue;
           var sourceOffset=nearest[i]*4;
           var targetOffset=i*4;
           var normalized=distance[i]/Math.max(1,maxCost);
-
-          // Full färg nära sista riktiga värdet, därefter en mjuk avtoning.
-          // Om glipan är större än den tillåtna radien lämnas resten ofyllt.
-          var fade=1-weatherbearSmoothstep(0.55,1,normalized);
+          var fade=1-weatherbearSmoothstep(0.45,1,normalized);
           if(fade<=0) continue;
 
           pixels[targetOffset]=pixels[sourceOffset];
@@ -5539,24 +5696,24 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         }
         if(filledCount===0) return imageData;
 
-        // Mjuka endast de uppskattade pixlarna. Riktig EMODnet-data ändras aldrig.
-        // Den närmaste färgen behåller 72 % vikt och lokala grannar får 28 %, vilket
-        // tar bort hårda Voronoi-gränser utan att sudda ut de verkliga djupzonerna.
+        // Mjuka bara uppskattade vattenpixlar och blanda aldrig över landbarriären.
         for(var pass=0;pass<2;pass++){
           var previous=new Uint8ClampedArray(pixels);
           for(var fillIndex=0;fillIndex<filledCount;fillIndex++){
             i=filledIndices[fillIndex];
-            var py=(i/width)|0;
-            var px=i%width;
+            if(!waterMask[i]) continue;
+            var y=(i/width)|0;
+            var x=i%width;
             var offset=i*4;
             var sumR=0,sumG=0,sumB=0,sumWeight=0;
             for(var dy=-1;dy<=1;dy++){
-              var ny=py+dy;
+              var ny=y+dy;
               if(ny<0||ny>=height) continue;
               for(var dx=-1;dx<=1;dx++){
-                var nx=px+dx;
+                var nx=x+dx;
                 if(nx<0||nx>=width) continue;
                 var neighbour=ny*width+nx;
+                if(!waterMask[neighbour]) continue;
                 var neighbourOffset=neighbour*4;
                 var alpha=previous[neighbourOffset+3]/255;
                 if(alpha<=0) continue;
@@ -5569,9 +5726,9 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
               }
             }
             if(sumWeight>0){
-              pixels[offset]=Math.round(previous[offset]*0.72+(sumR/sumWeight)*0.28);
-              pixels[offset+1]=Math.round(previous[offset+1]*0.72+(sumG/sumWeight)*0.28);
-              pixels[offset+2]=Math.round(previous[offset+2]*0.72+(sumB/sumWeight)*0.28);
+              pixels[offset]=Math.round(previous[offset]*0.78+(sumR/sumWeight)*0.22);
+              pixels[offset+1]=Math.round(previous[offset+1]*0.78+(sumG/sumWeight)*0.22);
+              pixels[offset+2]=Math.round(previous[offset+2]*0.78+(sumB/sumWeight)*0.22);
             }
           }
         }
@@ -5592,7 +5749,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         return target;
       }
 
-      async function processWeatherbearDepthTile(response,settings){
+      async function processWeatherbearDepthTile(response,settings,waterMask){
         var pad=settings&&Number(settings.pad)||0;
         if(!response||!response.ok){
           var emptyCanvas=createWeatherbearDepthCanvas(256,256);
@@ -5610,7 +5767,8 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         context.drawImage(bitmap,0,0,canvas.width,canvas.height);
         if(bitmap&&typeof bitmap.close==="function") bitmap.close();
         var imageData=context.getImageData(0,0,canvas.width,canvas.height);
-        fillWeatherbearDepthGaps(imageData,settings&&settings.radius||0);
+        applyWeatherbearWaterMask(imageData,waterMask);
+        fillWeatherbearDepthGaps(imageData,settings&&settings.radius||0,waterMask);
         context.putImageData(imageData,0,0);
         var cropped=cropWeatherbearDepthCanvas(canvas,pad);
         return weatherbearCanvasToPngArrayBuffer(cropped);
@@ -5626,14 +5784,23 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             var query=queryIndex>=0?raw.slice(queryIndex+1):"";
             var searchParams=new URLSearchParams(query);
             var zoom=Number(searchParams.get("z"));
+            var tileX=Number(searchParams.get("x"));
+            var tileY=Number(searchParams.get("y"));
             var bboxValue=searchParams.get("bbox");
             var settings=getWeatherbearDepthGapFillSettings(zoom,bboxValue);
             searchParams.set("pad",String(settings.pad));
             var upstreamUrl="/api/depth-tile?"+searchParams.toString();
+            var signal=abortController&&abortController.signal;
             var fetchOptions={headers:{Accept:"image/png"}};
-            if(abortController&&abortController.signal) fetchOptions.signal=abortController.signal;
-            var response=await fetch(upstreamUrl,fetchOptions);
-            var data=await processWeatherbearDepthTile(response,settings);
+            if(signal) fetchOptions.signal=signal;
+            var results=await Promise.all([
+              fetch(upstreamUrl,fetchOptions),
+              settings.radius>0?buildWeatherbearWaterMask(zoom,tileX,tileY,settings.pad,signal).catch(function(error){
+                console.warn("Kustmask saknas för djup-tile",zoom,tileX,tileY,error);
+                return null;
+              }):Promise.resolve(null)
+            ]);
+            var data=await processWeatherbearDepthTile(results[0],settings,results[1]);
             return {data:data};
           });
           weatherbearDepthProtocolRegistered=true;
@@ -5645,13 +5812,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       }
 
       function buildWeatherbearDepthTileUrl(){
-        // V5 använder en meterbegränsad närmaste-punkt-fyllning. Ett litet halo runt varje
-        // tile tar bort skarvar, medan MapTilers vektorland fortfarande klipper exakt vid land.
-        return weatherbearDepthProtocolName+"://tile?v=5&type=fill&z={z}&bbox={bbox-epsg-3857}";
+        // V6 använder en meterbegränsad, vattenmedveten närmaste-punkt-fyllning. Ett litet halo runt varje
+        // tile tar bort skarvar och samma MapTiler Land-geometri stoppar fyllning vid land.
+        return weatherbearDepthProtocolName+"://tile?v=6&type=fill&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(){
-        return "/api/depth-tile?v=5&type=contours&bbox={bbox-epsg-3857}";
+        return "/api/depth-tile?v=6&type=contours&bbox={bbox-epsg-3857}";
       }
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";
