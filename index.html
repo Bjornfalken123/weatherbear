@@ -5340,11 +5340,14 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       var windLayerVisible=false, precipitationLayerVisible=false, satelliteLayerVisible=true, radarLayerVisible=false, temperatureLayerVisible=false;
       var NAUTICAL_LIGHT_BASE_TILE_URL="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
       var NAUTICAL_SEAMARK_TILE_URL="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
-      // EMODnet Bathymetry WMS test: pure mean-depth colour layer, not the WMTS topographic/bathymetric baselayer.
-      // MapLibre/MapTiler raster sources support {bbox-epsg-3857}, so every map tile is rendered as a WMS GetMap request in Web Mercator.
-      // Layer: emodnet:mean_multicolour = Mean depth in multi colour, without land/topography.
+      // EMODnet Bathymetry custom-colour test for the Swedish west coast.
+      // Instead of showing EMODnet's own multicolour image directly, we fetch the mean-depth WMS image
+      // for the current viewport and recolour it into a more chart-like blue depth palette on a canvas.
       var NAUTICAL_EMODNET_DEPTH_TILE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&TILED=true&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256";
+      var NAUTICAL_EMODNET_DEPTH_WMS_BASE_URL="https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=emodnet:mean_multicolour&STYLES=&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857";
       var NAUTICAL_DEPTH_WEST_COAST_BOUNDS={west:8.8,south:54.0,east:14.8,north:60.5};
+      var nauticalDepthCanvasId="nauticalDepthCanvas";
+      var nauticalDepthCanvasElement=null, nauticalDepthRenderToken=0, nauticalDepthRenderTimer=null, nauticalDepthMoveSyncAttached=false;
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";
       var OPEN_METEO_CLOUD_VARIABLE="cloud_cover";
@@ -5370,28 +5373,36 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
   bringCustomUserLocationLayersToFront();
 }}catch(e){console.warn("Kunde inte justera sjökortets lagerordning", e);}}
       function viewportIntersectsBounds(bounds){if(!maptilerMap||!bounds||!maptilerMap.getBounds) return false;try{var b=maptilerMap.getBounds(), west=b.getWest(), east=b.getEast(), south=b.getSouth(), north=b.getNorth();return !(east<bounds.west||west>bounds.east||north<bounds.south||south>bounds.north);}catch(e){return false;}}
-      function shouldShowNauticalDepthLayer(){
-        // During this depth test we keep the layer visible whenever the nautical basemap is active.
-        // The previous viewport gate could make the test look broken if the map started just outside the bbox.
-        return !!(nauticalDepthTestEnabled && baseMapMode==="nautical");
-      }
-      function syncNauticalDepthLayerVisibility(){if(!maptilerMap||!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) return;try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(e){}}
+      function shouldShowNauticalDepthLayer(){return !!(nauticalDepthTestEnabled && baseMapMode==="nautical" && viewportIntersectsBounds(NAUTICAL_DEPTH_WEST_COAST_BOUNDS));}
+      function syncNauticalDepthLayerVisibility(){if(!maptilerMap||!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) return;try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(e){try{maptilerMap.setLayoutProperty(nauticalDepthLayerId,"visibility",shouldShowNauticalDepthLayer()?"visible":"none");}catch(_){}}if(shouldShowNauticalDepthLayer()) scheduleNauticalDepthCanvasUpdate(false); else clearNauticalDepthCanvas();}
       function scheduleNauticalLayerOrderRefresh(){if(nauticalLayerOrderTimer) clearTimeout(nauticalLayerOrderTimer);nauticalLayerOrderTimer=setTimeout(function(){nauticalLayerOrderTimer=null;refreshNauticalLayerOrder();},0);setTimeout(refreshNauticalLayerOrder,180);}
+      function getNauticalDepthCanvas(){if(nauticalDepthCanvasElement&&nauticalDepthCanvasElement.getContext) return nauticalDepthCanvasElement;var el=document.getElementById(nauticalDepthCanvasId);if(!el){el=document.createElement("canvas");el.id=nauticalDepthCanvasId;el.width=2;el.height=2;el.style.cssText="position:absolute;left:-99999px;top:-99999px;width:2px;height:2px;pointer-events:none;opacity:0;";document.body.appendChild(el);}nauticalDepthCanvasElement=el;return el;}
+      function clampNauticalDepthValue(v,min,max){return v<min?min:v>max?max:v;}
+      function projectMercator(lon,lat){var x=lon*20037508.34/180;var y=Math.log(Math.tan((90+lat)*Math.PI/360))/(Math.PI/180);y=y*20037508.34/180;return {x:x,y:y};}
+      function getNauticalDepthCanvasCoordinates(){if(!maptilerMap||!maptilerMap.getBounds) return [[0,0],[0,0],[0,0],[0,0]];var b=maptilerMap.getBounds(), w=b.getWest(), e=b.getEast(), s=b.getSouth(), n=b.getNorth();return [[w,n],[e,n],[e,s],[w,s]];}
+      function buildNauticalDepthWmsUrl(bounds,width,height){var sw=projectMercator(bounds.getWest(),bounds.getSouth());var ne=projectMercator(bounds.getEast(),bounds.getNorth());return NAUTICAL_EMODNET_DEPTH_WMS_BASE_URL+"&BBOX="+[sw.x,sw.y,ne.x,ne.y].join(",")+"&WIDTH="+width+"&HEIGHT="+height;}
+      function nauticalDepthRgbToHsl(r,g,b){r/=255;g/=255;b/=255;var max=Math.max(r,g,b),min=Math.min(r,g,b),h=0,s=0,l=(max+min)/2;if(max!==min){var d=max-min;s=l>0.5?d/(2-max-min):d/(max+min);switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;default:h=(r-g)/d+4;break;}h*=60;}return {h:h,s:s,l:l};}
+      function isLikelyLandTopography(r,g,b,a){if(a<10) return false;var max=Math.max(r,g,b),min=Math.min(r,g,b),range=max-min,avg=(r+g+b)/3;if(g>b*1.05&&g>=r*0.9&&g>70) return true;if(r>110&&g>80&&b<110&&r>=g*0.9) return true;if(r>150&&g>130&&b<125) return true;if(range<16&&avg>95) return true;return false;}
+      function nauticalDepthScoreFromRgb(r,g,b){var hsl=nauticalDepthRgbToHsl(r,g,b);var h=hsl.h,s=hsl.s,l=hsl.l;var score;if(s<0.10){score=1-l;}else if(h<20){score=0.05;}else if(h<55){score=0.16;}else if(h<95){score=0.28;}else if(h<145){score=0.44;}else if(h<195){score=0.60;}else if(h<245){score=0.76;}else if(h<305){score=0.90;}else{score=0.98;}score=score*0.72+(1-l)*0.28;return clampNauticalDepthValue(score,0,1);}
+      function sampleNauticalDepthPalette(score){var palette=nauticalTheme==="evening"?[{t:0,c:[173,216,236]},{t:0.22,c:[126,187,225]},{t:0.42,c:[82,148,201]},{t:0.64,c:[48,109,168]},{t:0.82,c:[25,77,132]},{t:1,c:[9,49,95]}]:[{t:0,c:[223,242,252]},{t:0.22,c:[183,225,244]},{t:0.42,c:[126,192,229]},{t:0.64,c:[78,151,208]},{t:0.82,c:[38,108,177]},{t:1,c:[12,66,137]}];for(var i=1;i<palette.length;i++){if(score<=palette[i].t){var a=palette[i-1],b=palette[i],range=b.t-a.t||1,local=(score-a.t)/range;return [Math.round(a.c[0]+(b.c[0]-a.c[0])*local),Math.round(a.c[1]+(b.c[1]-a.c[1])*local),Math.round(a.c[2]+(b.c[2]-a.c[2])*local)];}}return palette[palette.length-1].c.slice();}
+      function recolourNauticalDepthCanvas(ctx,width,height){var imageData;try{imageData=ctx.getImageData(0,0,width,height);}catch(e){return;}var data=imageData.data,evening=nauticalTheme==="evening";for(var i=0;i<data.length;i+=4){var a=data[i+3],r=data[i],g=data[i+1],b=data[i+2];if(a<8){data[i+3]=0;continue;}if(isLikelyLandTopography(r,g,b,a)){data[i+3]=0;continue;}var score=nauticalDepthScoreFromRgb(r,g,b);var color=sampleNauticalDepthPalette(score);data[i]=color[0];data[i+1]=color[1];data[i+2]=color[2];data[i+3]=Math.round((evening?118:150)+(score*24));}ctx.putImageData(imageData,0,0);}
+      function clearNauticalDepthCanvas(){var canvas=getNauticalDepthCanvas(),ctx=canvas.getContext&&canvas.getContext("2d");if(ctx){ctx.clearRect(0,0,canvas.width,canvas.height);}nauticalDepthRenderToken++;}
+      function scheduleNauticalDepthCanvasUpdate(force){if(nauticalDepthRenderTimer) clearTimeout(nauticalDepthRenderTimer);nauticalDepthRenderTimer=setTimeout(function(){nauticalDepthRenderTimer=null;renderNauticalDepthCanvas(!!force);},force?80:180);}
+      function renderNauticalDepthCanvas(force){if(!maptilerMap||!shouldShowNauticalDepthLayer()||!maptilerMap.getBounds) return clearNauticalDepthCanvas();var canvas=getNauticalDepthCanvas(),container=(maptilerMap.getCanvasContainer&&maptilerMap.getCanvasContainer())||(maptilerMap.getContainer&&maptilerMap.getContainer())||{clientWidth:512,clientHeight:512};var dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));var width=clampNauticalDepthValue(Math.round((container.clientWidth||512)*dpr),512,1536),height=clampNauticalDepthValue(Math.round((container.clientHeight||512)*dpr),512,1536);if(canvas.width!==width) canvas.width=width;if(canvas.height!==height) canvas.height=height;var bounds=maptilerMap.getBounds(),url=buildNauticalDepthWmsUrl(bounds,width,height),requestId=++nauticalDepthRenderToken;var img=new Image();img.crossOrigin="anonymous";img.onload=function(){if(requestId!==nauticalDepthRenderToken) return;var ctx=canvas.getContext("2d",{willReadFrequently:true});ctx.clearRect(0,0,width,height);ctx.drawImage(img,0,0,width,height);recolourNauticalDepthCanvas(ctx,width,height);try{var source=maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId);if(source&&typeof source.setCoordinates==="function") source.setCoordinates(getNauticalDepthCanvasCoordinates());}catch(e){}try{maptilerMap.triggerRepaint&&maptilerMap.triggerRepaint();}catch(e){}};img.onerror=function(){if(requestId!==nauticalDepthRenderToken) return;clearNauticalDepthCanvas();};img.src=url;}
       function ensureNauticalChartLayers(){
         if(!maptilerMap) return false;
         try{
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))) maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"© OpenStreetMap contributors © CARTO"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId))) maptilerMap.addLayer({id:nauticalBaseLayerId,type:"raster",source:nauticalBaseSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);
-          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"raster",tiles:[NAUTICAL_EMODNET_DEPTH_TILE_URL],tileSize:256,attribution:"Bathymetry © EMODnet Bathymetry Consortium"});
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) maptilerMap.addLayer({id:nauticalDepthLayerId,type:"raster",source:nauticalDepthSourceId,layout:{visibility:shouldShowNauticalDepthLayer()?"visible":"none"},paint:{"raster-opacity":0.52,"raster-saturation":-0.22,"raster-contrast":0.06,"raster-brightness-min":0.04,"raster-brightness-max":0.94}},getFirstWeatherOverlayLayerId()||undefined);
+          var depthCanvas=getNauticalDepthCanvas();
+          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"canvas",canvas:nauticalDepthCanvasId,coordinates:getNauticalDepthCanvasCoordinates(),animate:false});
+          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))) maptilerMap.addLayer({id:nauticalDepthLayerId,type:"raster",source:nauticalDepthSourceId,layout:{visibility:shouldShowNauticalDepthLayer()?"visible":"none"},paint:{"raster-opacity":nauticalTheme==="evening"?0.58:0.78,"raster-brightness-min":0,"raster-brightness-max":1,"raster-saturation":0,"raster-contrast":0.04}},getFirstWeatherOverlayLayerId()||undefined);
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalSeamarkSourceId))) maptilerMap.addSource(nauticalSeamarkSourceId,{type:"raster",tiles:[NAUTICAL_SEAMARK_TILE_URL],tileSize:256,attribution:"© OpenSeaMap contributors"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId))) maptilerMap.addLayer({id:nauticalSeamarkLayerId,type:"raster",source:nauticalSeamarkSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);
-          attachNauticalDepthMoveSync();syncNauticalDepthLayerVisibility();scheduleNauticalLayerOrderRefresh();applyNauticalTheme();return true;
+          attachNauticalDepthMoveSync();syncNauticalDepthLayerVisibility();scheduleNauticalLayerOrderRefresh();scheduleNauticalDepthCanvasUpdate(true);applyNauticalTheme();return true;
         }catch(e){console.warn("Sjökortslagret kunde inte läggas till", e);return false;}
       }
-      var nauticalDepthMoveSyncAttached=false;
-      function attachNauticalDepthMoveSync(){if(nauticalDepthMoveSyncAttached||!maptilerMap||!maptilerMap.on) return;nauticalDepthMoveSyncAttached=true;try{maptilerMap.on("moveend",function(){syncNauticalDepthLayerVisibility();});maptilerMap.on("zoomend",function(){syncNauticalDepthLayerVisibility();});}catch(e){}}
-
+      function attachNauticalDepthMoveSync(){if(nauticalDepthMoveSyncAttached||!maptilerMap||!maptilerMap.on) return;nauticalDepthMoveSyncAttached=true;try{maptilerMap.on("moveend",function(){syncNauticalDepthLayerVisibility();scheduleNauticalDepthCanvasUpdate(false);});maptilerMap.on("zoomend",function(){syncNauticalDepthLayerVisibility();scheduleNauticalDepthCanvasUpdate(false);});maptilerMap.on("resize",function(){scheduleNauticalDepthCanvasUpdate(true);});}catch(e){}}
       function setBaseMapMode(mode){
   baseMapMode = mode === "nautical" ? "nautical" : "standard";
 
@@ -5883,11 +5894,12 @@ function applyNauticalTheme(){
       maptilerMap.setPaintProperty(nauticalBaseLayerId, "raster-contrast", theme === "evening" ? 0.16 : 0);
     }
     if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthLayerId)){
-      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-opacity", theme === "evening" ? 0.32 : 0.46);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-brightness-min", theme === "evening" ? 0.02 : 0.03);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-brightness-max", theme === "evening" ? 0.58 : 0.96);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-saturation", theme === "evening" ? -0.28 : -0.10);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-contrast", theme === "evening" ? 0.16 : 0.08);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-opacity", theme === "evening" ? 0.64 : 0.82);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-brightness-min", 0);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-brightness-max", 1);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-saturation", 0);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-contrast", theme === "evening" ? 0.08 : 0.04);
+      scheduleNauticalDepthCanvasUpdate(true);
     }
     if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalSeamarkLayerId)){
       maptilerMap.setPaintProperty(nauticalSeamarkLayerId, "raster-opacity", theme === "evening" ? 0.92 : 1);
