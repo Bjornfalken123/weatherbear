@@ -108,9 +108,7 @@ function buildWeatherbearContourSld() {
 
 function makeUpstreamUrl(type, bbox, fallback = false) {
   const customContours = type === "contours" && !fallback;
-  const layerName = type === "coverage"
-    ? "emodnet:mean_multicolour"
-    : (type === "contours" && fallback ? "emodnet:contours" : "emodnet:mean");
+  const layerName = type === "contours" && fallback ? "emodnet:contours" : "emodnet:mean";
   const params = new URLSearchParams({
     service: "WMS",
     request: "GetMap",
@@ -157,9 +155,9 @@ export async function onRequestGet(context) {
   const y = numberParam(requestUrl, "y");
   const requestedBbox = parseMercatorBbox(requestUrl.searchParams.get("bbox"));
   const requestedType = requestUrl.searchParams.get("type");
-  const type = requestedType === "contours"
-    ? "contours"
-    : (requestedType === "coverage" ? "coverage" : "fill");
+  // Äldre klienter kan fortfarande skicka type=coverage. Behandla det som Weatherbears
+  // egen fyllning så att EMODnets röda multicolour-karta aldrig kan läcka igenom.
+  const type = requestedType === "contours" ? "contours" : "fill";
 
   let bbox = requestedBbox;
   let lonLatBounds = null;

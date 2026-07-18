@@ -2221,10 +2221,6 @@
         openMeteoCloudApplyTimer=null, openMeteoCloudPendingTime=null, openMeteoCloudLastAppliedAt=0, openMeteoCloudSourceCache=new Map();
 
       var baseMapMode = "standard";
-      var nauticalBaseSourceId = "nautical-light-base-source";
-      var nauticalBaseLayerId = "nautical-light-base-layer";
-      var nauticalDepthCoverageSourceId = "weatherbear-depth-coverage-source";
-      var nauticalDepthCoverageLayerId = "weatherbear-depth-coverage-layer";
       var nauticalDepthSourceId = "weatherbear-depth-source";
       var nauticalDepthLayerId = "weatherbear-depth-layer";
       var nauticalDepthContourSourceId = "weatherbear-depth-contours-source";
@@ -2232,7 +2228,6 @@
       var nauticalCoastalFallbackSourceId = "weatherbear-coastal-fallback-source";
       var nauticalCoastalFallbackLayerId = "weatherbear-coastal-fallback-layer";
       var nauticalLandMaskSourceId = "weatherbear-land-mask-source";
-      var nauticalCoastFadeLayerId = "weatherbear-coast-fade-layer";
       var nauticalLandMaskLayerId = "weatherbear-land-mask-layer";
       var nauticalCoastlineLayerId = "weatherbear-coastline-layer";
       var nauticalSeamarkSourceId = "nautical-seamark-source";
@@ -5385,7 +5380,6 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       function updateActiveLayersBadge(){var count=[windLayerVisible,precipitationLayerVisible,satelliteLayerVisible,radarLayerVisible,smhiRadarObservationVisible,temperatureLayerVisible].filter(Boolean).length;var badge=document.getElementById("activeLayersBadge"), text=document.getElementById("activeLayersText"), fb=document.getElementById("filterBadge");if(badge&&text){badge.classList.toggle("visible",count>0);if(count>0) text.textContent=count+" lager";}if(fb) fb.classList.toggle("visible",count>0);}
 
       var windLayerVisible=false, precipitationLayerVisible=false, satelliteLayerVisible=true, radarLayerVisible=false, temperatureLayerVisible=false;
-      var NAUTICAL_LIGHT_BASE_TILE_URL="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
       var NAUTICAL_SEAMARK_TILE_URL="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
       // Hela Sveriges kust med marginal runt Skagerrak, Kattegatt, Östersjön och Bottenviken.
       var WEATHERBEAR_DEPTH_BOUNDS=[8.0,53.0,27.0,67.0];
@@ -5397,18 +5391,12 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       function buildWeatherbearDepthTileUrl(){
         // MapLibre räknar bboxen som används för att placera varje rastertile.
-        // v=2 bryter tidigare tomma/feljusterade Cloudflare- och webbläsarcacher.
-        return "/api/depth-tile?v=2&type=fill&bbox={bbox-epsg-3857}";
-      }
-
-      function buildWeatherbearCoverageTileUrl(){
-        // Reservtäckning från EMODnets no-land/GEBCO-kompletterade lager.
-        // Den ligger under Weatherbears egna opaka djupzoner och syns bara i rådatagap.
-        return "/api/depth-tile?v=2&type=coverage&bbox={bbox-epsg-3857}";
+        // v=3 bryter tidigare cachar och tar bort det röda multicolour-reservlagret.
+        return "/api/depth-tile?v=3&type=fill&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(){
-        return "/api/depth-tile?v=2&type=contours&bbox={bbox-epsg-3857}";
+        return "/api/depth-tile?v=3&type=contours&bbox={bbox-epsg-3857}";
       }
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";
@@ -5429,8 +5417,8 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         if(!maptilerMap) return;
         try{
           var firstWeatherLayerId=getFirstWeatherOverlayLayerId();
-          // Fallback + vattenfärgad kustövergång ligger UNDER djupet. De syns bara där rådjupet har transparenta kustglipor.
-          var orderedIds=[nauticalBaseLayerId,nauticalCoastalFallbackLayerId,nauticalCoastFadeLayerId,nauticalDepthCoverageLayerId,nauticalDepthLayerId,nauticalDepthContourLayerId,nauticalLandMaskLayerId,nauticalCoastlineLayerId];
+          // Neutralt kustvatten ligger under djupet. Landmasken ovanpå skär exakt i samma MapTiler-kustgeometri som baskartan.
+          var orderedIds=[nauticalCoastalFallbackLayerId,nauticalDepthLayerId,nauticalDepthContourLayerId,nauticalLandMaskLayerId,nauticalCoastlineLayerId];
           orderedIds.forEach(function(id){
             if(maptilerMap.getLayer&&maptilerMap.getLayer(id)){
               if(firstWeatherLayerId&&firstWeatherLayerId!==id) maptilerMap.moveLayer(id,firstWeatherLayerId);
@@ -5450,27 +5438,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           var beforeLayer=getFirstWeatherOverlayLayerId()||undefined;
           var visibility=baseMapMode==="nautical"?"visible":"none";
 
-          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))){
-            maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"© OpenStreetMap contributors © CARTO"});
-          }
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId))){
-            maptilerMap.addLayer({id:nauticalBaseLayerId,type:"raster",source:nauticalBaseSourceId,layout:{visibility:visibility},paint:{"raster-opacity":1}},beforeLayer);
-          }
-
-          // Neutralt kustvatten under rådjupet. Landmasken ovanpå klipper det exakt mot kustlinjen.
-          // Det fyller endast transparenta no-data-glipor; giltiga djupzoner ligger helt opaka ovanpå.
+          // Neutralt kustvatten under rådjupet. Samma MapTiler-landgeometri som appens baskarta klipper vattnet exakt vid kustlinjen.
+          // Ingen bred kusttoning används; där rådjup saknas möter reservvattnet landmasken direkt.
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalCoastalFallbackSourceId))){
             maptilerMap.addSource(nauticalCoastalFallbackSourceId,{type:"geojson",data:buildWeatherbearCoastalFallbackGeoJson()});
           }
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastalFallbackLayerId))){
             maptilerMap.addLayer({id:nauticalCoastalFallbackLayerId,type:"fill",source:nauticalCoastalFallbackSourceId,minzoom:4,maxzoom:22,layout:{visibility:visibility},paint:{"fill-color":"#d7edf8","fill-opacity":1,"fill-antialias":true}},beforeLayer);
-          }
-
-          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthCoverageSourceId))){
-            maptilerMap.addSource(nauticalDepthCoverageSourceId,{type:"raster",tiles:[buildWeatherbearCoverageTileUrl()],tileSize:256,minzoom:4,maxzoom:12,bounds:WEATHERBEAR_DEPTH_BOUNDS,attribution:"Reservtäckning: EMODnet Bathymetry / GEBCO"});
-          }
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthCoverageLayerId))){
-            maptilerMap.addLayer({id:nauticalDepthCoverageLayerId,type:"raster",source:nauticalDepthCoverageSourceId,minzoom:4,maxzoom:22,layout:{visibility:visibility},paint:{"raster-opacity":0.92,"raster-resampling":"linear","raster-fade-duration":0,"raster-saturation":-0.7,"raster-contrast":0.08,"raster-brightness-min":0.48,"raster-brightness-max":1}},beforeLayer);
           }
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))){
@@ -5489,9 +5463,6 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalLandMaskSourceId))){
             maptilerMap.addSource(nauticalLandMaskSourceId,{type:"vector",url:"https://api.maptiler.com/tiles/land/tiles.json?key="+encodeURIComponent(MAPTILER_API_KEY),attribution:"© MapTiler © OpenStreetMap contributors"});
-          }
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastFadeLayerId))){
-            maptilerMap.addLayer({id:nauticalCoastFadeLayerId,type:"line",source:nauticalLandMaskSourceId,"source-layer":"land",minzoom:4,maxzoom:22,layout:{visibility:visibility,"line-join":"round","line-cap":"round"},paint:{"line-color":"#c5e4f4","line-opacity":0.96,"line-width":["interpolate",["linear"],["zoom"],4,2,8,4,12,12,14,28,16,56,20,96],"line-blur":["interpolate",["linear"],["zoom"],4,0.5,8,1,12,2.2,14,4,16,8,20,14]}},beforeLayer);
           }
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalLandMaskLayerId))){
             maptilerMap.addLayer({id:nauticalLandMaskLayerId,type:"fill",source:nauticalLandMaskSourceId,"source-layer":"land",minzoom:4,maxzoom:22,layout:{visibility:visibility},paint:{"fill-color":"#f1eee5","fill-opacity":1}},beforeLayer);
@@ -5521,7 +5492,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
     var visibility = baseMapMode === "nautical" ? "visible" : "none";
 
     try{
-      [nauticalBaseLayerId,nauticalCoastalFallbackLayerId,nauticalDepthCoverageLayerId,nauticalDepthLayerId,nauticalDepthContourLayerId,nauticalCoastFadeLayerId,nauticalLandMaskLayerId,nauticalCoastlineLayerId,nauticalSeamarkLayerId].forEach(function(layerId){
+      [nauticalCoastalFallbackLayerId,nauticalDepthLayerId,nauticalDepthContourLayerId,nauticalLandMaskLayerId,nauticalCoastlineLayerId,nauticalSeamarkLayerId].forEach(function(layerId){
         if(maptilerMap.getLayer && maptilerMap.getLayer(layerId)){
           maptilerMap.setLayoutProperty(layerId, "visibility", visibility);
         }
@@ -5989,20 +5960,6 @@ function applyNauticalTheme(){
 
   if(!maptilerMap) return;
   try{
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalBaseLayerId)){
-      maptilerMap.setPaintProperty(nauticalBaseLayerId, "raster-opacity", theme === "evening" ? 0.82 : 1);
-      maptilerMap.setPaintProperty(nauticalBaseLayerId, "raster-brightness-min", theme === "evening" ? 0.02 : 0);
-      maptilerMap.setPaintProperty(nauticalBaseLayerId, "raster-brightness-max", theme === "evening" ? 0.62 : 1);
-      maptilerMap.setPaintProperty(nauticalBaseLayerId, "raster-saturation", theme === "evening" ? -0.28 : 0);
-      maptilerMap.setPaintProperty(nauticalBaseLayerId, "raster-contrast", theme === "evening" ? 0.16 : 0);
-    }
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthCoverageLayerId)){
-      maptilerMap.setPaintProperty(nauticalDepthCoverageLayerId, "raster-opacity", theme === "evening" ? 0.78 : 0.92);
-      maptilerMap.setPaintProperty(nauticalDepthCoverageLayerId, "raster-saturation", theme === "evening" ? -0.82 : -0.7);
-      maptilerMap.setPaintProperty(nauticalDepthCoverageLayerId, "raster-brightness-min", theme === "evening" ? 0.08 : 0.48);
-      maptilerMap.setPaintProperty(nauticalDepthCoverageLayerId, "raster-brightness-max", theme === "evening" ? 0.62 : 1);
-      maptilerMap.setPaintProperty(nauticalDepthCoverageLayerId, "raster-contrast", theme === "evening" ? 0.18 : 0.08);
-    }
     if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthLayerId)){
       maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-opacity", 1);
       maptilerMap.setPaintProperty(nauticalDepthLayerId, "raster-brightness-min", theme === "evening" ? 0.03 : 0);
@@ -6018,10 +5975,6 @@ function applyNauticalTheme(){
     if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalCoastalFallbackLayerId)){
       maptilerMap.setPaintProperty(nauticalCoastalFallbackLayerId, "fill-color", theme === "evening" ? "#274653" : "#d7edf8");
       maptilerMap.setPaintProperty(nauticalCoastalFallbackLayerId, "fill-opacity", 1);
-    }
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalCoastFadeLayerId)){
-      maptilerMap.setPaintProperty(nauticalCoastFadeLayerId, "line-color", theme === "evening" ? "#315766" : "#c5e4f4");
-      maptilerMap.setPaintProperty(nauticalCoastFadeLayerId, "line-opacity", theme === "evening" ? 0.92 : 0.96);
     }
     if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalLandMaskLayerId)){
       maptilerMap.setPaintProperty(nauticalLandMaskLayerId, "fill-color", theme === "evening" ? "#263038" : "#f1eee5");

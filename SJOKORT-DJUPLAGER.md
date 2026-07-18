@@ -64,4 +64,14 @@ Lagret är en tydligare visualisering av öppna djupdata. Det är inte ett godk�
 - Tile-URL:en har versionsparametern `v=2`, vilket bryter den tidigare sju dagar långa cachen.
 - Startposition och övriga appfunktioner är oförändrade.
 
-- Ett separat EMODnet/GEBCO-kompletterat reservlager ligger under Weatherbears egna, helt opaka djupzoner. Det visas bara där primärlagret är transparent, exempelvis i lokala rådatagap runt kusten. Reservlagret har maxzoom 12 och överskalas därefter för att begränsa antalet externa anrop.
+- Det tidigare EMODnet `mean_multicolour`-reservlagret är borttaget. Det kunde synas som en röd/orange karta genom transparenta rådatagap. I stället används en neutral vattenfyllning under Weatherbears egna djupzoner.
+
+
+## Kustpassning v3
+
+- Den breda vattenfärgade kusttoningen är borttagen. Den kunde skapa en synlig remsa och ge intryck av förskjutning.
+- Neutral vattenfyllning och landmask möts nu direkt i MapTilers landgeometri.
+- Djupzonerna ligger under landmasken och kan därför inte målas över land även när EMODnets rågrid är grovt.
+- Fyllning och konturer använder cacheversion `v=3`.
+
+- Det separata CARTO-rasterlagret är borttaget ur sjökortsläget. Appens befintliga MapTiler-bas och MapTilers landmask använder nu samma kustgeometri, vilket undviker en enpixels-/generaliseringsskillnad mellan två olika kartleverantörer.
