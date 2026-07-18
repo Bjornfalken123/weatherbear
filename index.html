@@ -5391,15 +5391,42 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         return {type:"FeatureCollection",features:[{type:"Feature",properties:{coverage:"sweden-coast"},geometry:{type:"Polygon",coordinates:[[[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]]]}}]};
       }
 
-      function getWeatherbearDepthGapFillRadius(zoom){
+      function parseWeatherbearMercatorBbox(value){
+        if(!value) return null;
+        var parts=String(value).split(",").map(Number);
+        if(parts.length!==4||parts.some(function(number){return !isFinite(number);})) return null;
+        if(parts[0]>=parts[2]||parts[1]>=parts[3]) return null;
+        return parts;
+      }
+
+      function weatherbearMercatorYToLatitude(y){
+        var maxMercator=20037508.342789244;
+        return Math.atan(Math.sinh((Number(y)/maxMercator)*Math.PI))*180/Math.PI;
+      }
+
+      function getWeatherbearDepthGapFillSettings(zoom,bboxValue){
         var z=Number(zoom);
-        if(!isFinite(z)) return 16;
-        if(z>=14) return 30;
-        if(z>=13) return 24;
-        if(z>=12) return 17;
-        if(z>=11) return 11;
-        if(z>=9) return 7;
-        return 4;
+        var bbox=parseWeatherbearMercatorBbox(bboxValue);
+
+        // Under låg zoom motsvarar en enda pixel ett för stort verkligt område.
+        // Där används ingen artificiell kustfyllning alls.
+        if(!isFinite(z)||z<11||!bbox){
+          return {radius:0,pad:3,maxGroundMeters:0};
+        }
+
+        var projectedMetersPerPixel=(bbox[2]-bbox[0])/256;
+        var centerLatitude=weatherbearMercatorYToLatitude((bbox[1]+bbox[3])/2);
+        var groundMetersPerPixel=projectedMetersPerPixel*Math.max(0.15,Math.cos(centerLatitude*Math.PI/180));
+
+        // Fyllningen får aldrig sträcka sig längre än cirka 36 meter på marken.
+        // Det motsvarar ungefär 1 px vid z11, 2 px vid z12, 4 px vid z13 och 7 px vid z14 runt Orust.
+        var maxGroundMeters=36;
+        var radius=Math.round(maxGroundMeters/Math.max(0.1,groundMetersPerPixel));
+        radius=Math.max(1,Math.min(8,radius));
+
+        // Ett litet osynligt halo hämtas runt varje tile så närmaste datapunkt även kan
+        // komma från grann-rutan. Resultatet beskärs tillbaka till exakt 256x256.
+        return {radius:radius,pad:Math.min(12,radius+3),maxGroundMeters:maxGroundMeters};
       }
 
       function createWeatherbearDepthCanvas(width,height){
@@ -5423,63 +5450,150 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         });
       }
 
+      function weatherbearSmoothstep(edge0,edge1,value){
+        if(value<=edge0) return 0;
+        if(value>=edge1) return 1;
+        var t=(value-edge0)/(edge1-edge0);
+        return t*t*(3-2*t);
+      }
+
       function fillWeatherbearDepthGaps(imageData,maxRadius){
         var width=imageData.width, height=imageData.height, pixels=imageData.data;
         var count=width*height;
+        if(!maxRadius||maxRadius<1||!count) return imageData;
+
+        var infinity=65535;
+        var distance=new Uint16Array(count);
         var nearest=new Int32Array(count);
+        var originalSource=new Uint8Array(count);
+        var filledMask=new Uint8Array(count);
+        var filledIndices=new Int32Array(count);
+        var filledCount=0;
+        var sourceCount=0;
+        var i;
+        distance.fill(infinity);
         nearest.fill(-1);
-        var distance=new Uint8Array(count);
-        distance.fill(255);
-        var queue=new Int32Array(count);
-        var head=0, tail=0, i;
 
-        // Alla pixlar med synlig djupfärg är startpunkter. Transparenta land- och no-data-pixlar fylls
-        // därefter från närmaste startpunkt, men bara inom en begränsad kustnära radie.
+        // Bara fullt synliga originalpixlar räknas som uppmätta datakällor.
+        // Halvtransparent kantutjämning från WMS får inte driva expansionen.
         for(i=0;i<count;i++){
-          if(pixels[i*4+3]>=24){
-            nearest[i]=i;
+          if(pixels[i*4+3]>=180){
             distance[i]=0;
-            queue[tail++]=i;
+            nearest[i]=i;
+            originalSource[i]=1;
+            sourceCount++;
           }
         }
-        if(tail===0) return imageData;
+        // Helt tomma tiles och tiles med full täckning behöver ingen pixelbearbetning.
+        if(sourceCount===0||sourceCount===count) return imageData;
 
-        while(head<tail){
-          var index=queue[head++];
-          var currentDistance=distance[index];
-          if(currentDistance>=maxRadius) continue;
-          var x=index%width;
-          var y=(index/width)|0;
-          var nextDistance=currentDistance+1;
-          for(var dy=-1;dy<=1;dy++){
-            var ny=y+dy;
-            if(ny<0||ny>=height) continue;
-            for(var dx=-1;dx<=1;dx++){
-              if(dx===0&&dy===0) continue;
-              var nx=x+dx;
-              if(nx<0||nx>=width) continue;
-              var neighbour=ny*width+nx;
-              if(nearest[neighbour]!==-1) continue;
-              nearest[neighbour]=nearest[index];
-              distance[neighbour]=nextDistance;
-              queue[tail++]=neighbour;
-            }
+        function relax(target,source,cost){
+          if(source<0||source>=count||nearest[source]<0) return;
+          var candidate=distance[source]+cost;
+          if(candidate<distance[target]){
+            distance[target]=candidate;
+            nearest[target]=nearest[source];
           }
         }
 
+        // Tvåpassig chamfer-transform ger en stabil approximation av närmaste
+        // giltiga djuppunkt utan den fyrkantiga Chebyshev-radie som användes tidigare.
+        for(var y=0;y<height;y++){
+          for(var x=0;x<width;x++){
+            i=y*width+x;
+            if(distance[i]===0) continue;
+            if(x>0) relax(i,i-1,10);
+            if(y>0) relax(i,i-width,10);
+            if(x>0&&y>0) relax(i,i-width-1,14);
+            if(x+1<width&&y>0) relax(i,i-width+1,14);
+          }
+        }
+        for(var y2=height-1;y2>=0;y2--){
+          for(var x2=width-1;x2>=0;x2--){
+            i=y2*width+x2;
+            if(x2+1<width) relax(i,i+1,10);
+            if(y2+1<height) relax(i,i+width,10);
+            if(x2+1<width&&y2+1<height) relax(i,i+width+1,14);
+            if(x2>0&&y2+1<height) relax(i,i+width-1,14);
+          }
+        }
+
+        var maxCost=maxRadius*10;
         for(i=0;i<count;i++){
-          if(pixels[i*4+3]>=24||nearest[i]<0||distance[i]>maxRadius) continue;
+          if(originalSource[i]||nearest[i]<0||distance[i]>maxCost) continue;
           var sourceOffset=nearest[i]*4;
           var targetOffset=i*4;
+          var normalized=distance[i]/Math.max(1,maxCost);
+
+          // Full färg nära sista riktiga värdet, därefter en mjuk avtoning.
+          // Om glipan är större än den tillåtna radien lämnas resten ofyllt.
+          var fade=1-weatherbearSmoothstep(0.55,1,normalized);
+          if(fade<=0) continue;
+
           pixels[targetOffset]=pixels[sourceOffset];
           pixels[targetOffset+1]=pixels[sourceOffset+1];
           pixels[targetOffset+2]=pixels[sourceOffset+2];
-          pixels[targetOffset+3]=255;
+          pixels[targetOffset+3]=Math.round(255*fade);
+          filledMask[i]=1;
+          filledIndices[filledCount++]=i;
+        }
+        if(filledCount===0) return imageData;
+
+        // Mjuka endast de uppskattade pixlarna. Riktig EMODnet-data ändras aldrig.
+        // Den närmaste färgen behåller 72 % vikt och lokala grannar får 28 %, vilket
+        // tar bort hårda Voronoi-gränser utan att sudda ut de verkliga djupzonerna.
+        for(var pass=0;pass<2;pass++){
+          var previous=new Uint8ClampedArray(pixels);
+          for(var fillIndex=0;fillIndex<filledCount;fillIndex++){
+            i=filledIndices[fillIndex];
+            var py=(i/width)|0;
+            var px=i%width;
+            var offset=i*4;
+            var sumR=0,sumG=0,sumB=0,sumWeight=0;
+            for(var dy=-1;dy<=1;dy++){
+              var ny=py+dy;
+              if(ny<0||ny>=height) continue;
+              for(var dx=-1;dx<=1;dx++){
+                var nx=px+dx;
+                if(nx<0||nx>=width) continue;
+                var neighbour=ny*width+nx;
+                var neighbourOffset=neighbour*4;
+                var alpha=previous[neighbourOffset+3]/255;
+                if(alpha<=0) continue;
+                var spatial=(dx===0&&dy===0)?2:(dx===0||dy===0?1:0.7);
+                var weight=alpha*spatial;
+                sumR+=previous[neighbourOffset]*weight;
+                sumG+=previous[neighbourOffset+1]*weight;
+                sumB+=previous[neighbourOffset+2]*weight;
+                sumWeight+=weight;
+              }
+            }
+            if(sumWeight>0){
+              pixels[offset]=Math.round(previous[offset]*0.72+(sumR/sumWeight)*0.28);
+              pixels[offset+1]=Math.round(previous[offset+1]*0.72+(sumG/sumWeight)*0.28);
+              pixels[offset+2]=Math.round(previous[offset+2]*0.72+(sumB/sumWeight)*0.28);
+            }
+          }
         }
         return imageData;
       }
 
-      async function processWeatherbearDepthTile(response,zoom){
+      function cropWeatherbearDepthCanvas(canvas,pad){
+        var target=createWeatherbearDepthCanvas(256,256);
+        var context=target.getContext("2d");
+        var sourceWidth=Number(canvas&&canvas.width)||256;
+        var sourceHeight=Number(canvas&&canvas.height)||256;
+        var cropX=Math.max(0,Math.floor((sourceWidth-256)/2));
+        var cropY=Math.max(0,Math.floor((sourceHeight-256)/2));
+        if(Number(pad)>=0&&sourceWidth>=256+Number(pad)*2) cropX=Number(pad);
+        if(Number(pad)>=0&&sourceHeight>=256+Number(pad)*2) cropY=Number(pad);
+        context.clearRect(0,0,256,256);
+        context.drawImage(canvas,cropX,cropY,Math.min(256,sourceWidth-cropX),Math.min(256,sourceHeight-cropY),0,0,256,256);
+        return target;
+      }
+
+      async function processWeatherbearDepthTile(response,settings){
+        var pad=settings&&Number(settings.pad)||0;
         if(!response||!response.ok){
           var emptyCanvas=createWeatherbearDepthCanvas(256,256);
           return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
@@ -5496,9 +5610,10 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         context.drawImage(bitmap,0,0,canvas.width,canvas.height);
         if(bitmap&&typeof bitmap.close==="function") bitmap.close();
         var imageData=context.getImageData(0,0,canvas.width,canvas.height);
-        fillWeatherbearDepthGaps(imageData,getWeatherbearDepthGapFillRadius(zoom));
+        fillWeatherbearDepthGaps(imageData,settings&&settings.radius||0);
         context.putImageData(imageData,0,0);
-        return weatherbearCanvasToPngArrayBuffer(canvas);
+        var cropped=cropWeatherbearDepthCanvas(canvas,pad);
+        return weatherbearCanvasToPngArrayBuffer(cropped);
       }
 
       function registerWeatherbearDepthProtocol(){
@@ -5508,14 +5623,17 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           maptilersdk.addProtocol(weatherbearDepthProtocolName,async function(params,abortController){
             var raw=String(params&&params.url||"").replace(/^weatherbear-depth:\/\//,"");
             var queryIndex=raw.indexOf("?");
-            var query=queryIndex>=0?raw.slice(queryIndex):"";
+            var query=queryIndex>=0?raw.slice(queryIndex+1):"";
             var searchParams=new URLSearchParams(query);
             var zoom=Number(searchParams.get("z"));
-            var upstreamUrl="/api/depth-tile"+query;
+            var bboxValue=searchParams.get("bbox");
+            var settings=getWeatherbearDepthGapFillSettings(zoom,bboxValue);
+            searchParams.set("pad",String(settings.pad));
+            var upstreamUrl="/api/depth-tile?"+searchParams.toString();
             var fetchOptions={headers:{Accept:"image/png"}};
             if(abortController&&abortController.signal) fetchOptions.signal=abortController.signal;
             var response=await fetch(upstreamUrl,fetchOptions);
-            var data=await processWeatherbearDepthTile(response,zoom);
+            var data=await processWeatherbearDepthTile(response,settings);
             return {data:data};
           });
           weatherbearDepthProtocolRegistered=true;
@@ -5527,13 +5645,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       }
 
       function buildWeatherbearDepthTileUrl(){
-        // Den egna protokollhanteraren fyller transparenta kustglipor från närmaste giltiga djuppixel.
-        // Landmasken ligger ovanpå, så den utökade färgen syns bara i vatten fram till den exakta kustlinjen.
-        return weatherbearDepthProtocolName+"://tile?v=4&type=fill&z={z}&bbox={bbox-epsg-3857}";
+        // V5 använder en meterbegränsad närmaste-punkt-fyllning. Ett litet halo runt varje
+        // tile tar bort skarvar, medan MapTilers vektorland fortfarande klipper exakt vid land.
+        return weatherbearDepthProtocolName+"://tile?v=5&type=fill&z={z}&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(){
-        return "/api/depth-tile?v=4&type=contours&bbox={bbox-epsg-3857}";
+        return "/api/depth-tile?v=5&type=contours&bbox={bbox-epsg-3857}";
       }
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";

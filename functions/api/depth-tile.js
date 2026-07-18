@@ -106,8 +106,20 @@ function buildWeatherbearContourSld() {
   ].join("");
 }
 
-function makeUpstreamUrl(type, bbox, fallback = false) {
+function makeUpstreamUrl(type, bbox, fallback = false, pad = 0) {
   const customContours = type === "contours" && !fallback;
+  const safePad = type === "fill" ? Math.max(0, Math.min(12, Number(pad) || 0)) : 0;
+  const pixelWidth = (bbox[2] - bbox[0]) / TILE_SIZE;
+  const pixelHeight = (bbox[3] - bbox[1]) / TILE_SIZE;
+  const requestBbox = safePad > 0
+    ? [
+        bbox[0] - pixelWidth * safePad,
+        bbox[1] - pixelHeight * safePad,
+        bbox[2] + pixelWidth * safePad,
+        bbox[3] + pixelHeight * safePad
+      ]
+    : bbox;
+  const requestSize = TILE_SIZE + safePad * 2;
   const layerName = type === "contours" && fallback ? "emodnet:contours" : "emodnet:mean";
   const params = new URLSearchParams({
     service: "WMS",
@@ -120,11 +132,12 @@ function makeUpstreamUrl(type, bbox, fallback = false) {
     // Dynamiska SLD-bilder ska renderas av WMS, inte via GeoWebCache/WMS-C.
     // tiled=true tillsammans med 512/256-grid kan ge tomma eller feljusterade tiles.
     tiled: "false",
-    width: String(TILE_SIZE),
-    height: String(TILE_SIZE),
+    width: String(requestSize),
+    height: String(requestSize),
     srs: "EPSG:3857",
-    bbox: bbox.join(","),
-    interpolations: type === "contours" ? "bilinear" : "bicubic"
+    bbox: requestBbox.join(","),
+    // Bilinjär omsampling undviker bicubisk översvängning precis vid no-data-kanten.
+    interpolations: "bilinear"
   });
 
   if (type === "fill") {
@@ -155,6 +168,7 @@ export async function onRequestGet(context) {
   const y = numberParam(requestUrl, "y");
   const requestedBbox = parseMercatorBbox(requestUrl.searchParams.get("bbox"));
   const requestedType = requestUrl.searchParams.get("type");
+  const requestedPad = Math.max(0, Math.min(12, Math.round(numberParam(requestUrl, "pad") || 0)));
   // Äldre klienter kan fortfarande skicka type=coverage. Behandla det som Weatherbears
   // egen fyllning så att EMODnets röda multicolour-karta aldrig kan läcka igenom.
   const type = requestedType === "contours" ? "contours" : "fill";
@@ -200,13 +214,13 @@ export async function onRequestGet(context) {
     return response;
   }
 
-  const upstreamUrl = makeUpstreamUrl(type, bbox);
+  const upstreamUrl = makeUpstreamUrl(type, bbox, false, requestedPad);
 
   try {
     let upstream = await fetch(upstreamUrl, {
       headers: {
         Accept: "image/png",
-        "User-Agent": "Weatherbear depth layer/1.1"
+        "User-Agent": "Weatherbear depth layer/1.2"
       }
     });
 
@@ -216,10 +230,10 @@ export async function onRequestGet(context) {
     // Om servern saknar GeoServers contour-transformation används EMODnets
     // generaliserade konturlager som reserv i stället för att hela lagret försvinner.
     if (!validImage && type === "contours") {
-      upstream = await fetch(makeUpstreamUrl(type, bbox, true), {
+      upstream = await fetch(makeUpstreamUrl(type, bbox, true, 0), {
         headers: {
           Accept: "image/png",
-          "User-Agent": "Weatherbear depth layer/1.1"
+          "User-Agent": "Weatherbear depth layer/1.2"
         }
       });
       contentType = upstream.headers.get("content-type") || "";
@@ -243,7 +257,8 @@ export async function onRequestGet(context) {
         "cache-control": `public, max-age=${CACHE_TTL_SECONDS}, s-maxage=${CACHE_TTL_SECONDS}`,
         "x-weatherbear-depth-cache": "MISS",
         "x-weatherbear-depth-source": type,
-        "x-weatherbear-depth-grid": requestedBbox ? "maplibre-bbox" : "legacy-zxy"
+        "x-weatherbear-depth-grid": requestedBbox ? "maplibre-bbox" : "legacy-zxy",
+        "x-weatherbear-depth-pad": String(type === "fill" ? requestedPad : 0)
       }
     });
 

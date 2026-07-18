@@ -1,4 +1,4 @@
-# Weatherbear djuplager v1.2
+# Weatherbear djuplager v5
 
 Denna version ersätter det tidigare färdigmålade djupskiktet med ett eget Weatherbear-lager för svenska hav och kustvatten.
 
@@ -30,7 +30,7 @@ Grunda områden framträder alltså tydligare, medan djupare vatten tonar mot vi
 - Konturer: egna 2, 3, 6, 10, 20 och 50 meterskurvor som genereras från `emodnet:mean`; EMODnets generaliserade konturlager används som reserv
 - Egen färgsättning: SLD som genereras av `functions/api/depth-tile.js`
 - Cache: sju dagar via Cloudflare Cache API
-- Tile-storlek: 512 × 512 pixlar
+- Tile-storlek: 256 × 256 pixlar i kartan. WMS hämtas med ett litet halo och beskärs tillbaka till exakt 256 × 256.
 - Källans maxzoom: 14; kartan får zooma vidare och skalar då upp sista giltiga nivån
 - Geografisk första version: svenska hav och kustvatten
 
@@ -78,7 +78,18 @@ Lagret är en tydligare visualisering av öppna djupdata. Det är inte ett godk�
 
 ## Kustnära närmaste-punkt-fyllning (v4)
 
-Djupbildens transparenta no-data-glipor fylls lokalt i webbläsaren från närmaste giltiga djuppixel.
-Fyllningen är begränsad till en zoomanpassad radie (4–30 tile-pixlar) och används endast under MapTilers landmask.
-Det innebär att djupfärgen kan nå ända fram till den exakta kustlinjen utan att synas ovanpå land.
-Fyllningen skapar inte nya mätvärden och ska betraktas som en visuell kustanslutning.
+V4 använde en fast zoomtabell på 4–30 tile-pixlar. Det motsvarade på vissa zoomnivåer 150–350 meter och gav därför för stora och hårda kustfält. Varje tile behandlades dessutom isolerat, vilket kunde skapa skarvar.
+
+## Precisionsfyllning och tile-halo (v5)
+
+- Endast transparenta no-data-pixlar behandlas. Originalpixlar med riktig djupfärg ändras aldrig.
+- Fyllningen är begränsad i verkliga meter i stället för en grov pixelradie. Målet är högst cirka 36 meter.
+- Vid zoom under 11 används ingen artificiell fyllning, eftersom en enda pixel då motsvarar ett för stort verkligt område.
+- Runt Orust motsvarar radien ungefär 1 px vid z11, 2 px vid z12, 4 px vid z13 och 7 px vid z14.
+- Närmaste giltiga djuppunkt beräknas med en åttariktnings chamfer-transform, vilket ger rundare avstånd än den tidigare fyrkantiga BFS-expansionen.
+- Den första delen av glipan behåller närmaste djupfärg. Den sista delen tonas mjukt mot transparens, så större dataluckor lämnas synliga i stället för att fyllas på låtsas.
+- Endast de uppskattade pixlarna mjukas lokalt. Verkliga djupzoner och konturer suddas inte.
+- WMS-anropet hämtar ett litet halo runt varje tile. Efter fyllningen beskärs bilden tillbaka till exakt MapLibre-bbox och 256 × 256 pixlar. Det minskar tile-skarvar utan att flytta lagret.
+- MapTilers landmask ligger fortsatt överst och klipper djupet vid samma kustgeometri som sjökortets landyta.
+
+Fyllningen är en visuell interpolation och ska inte tolkas som nya uppmätta djupvärden.
