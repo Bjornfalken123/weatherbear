@@ -2189,7 +2189,7 @@
       var nauticalSeamarkLayerId = "nautical-seamark-layer";
       var nauticalDepthSourceId = "nautical-emodnet-depth-source";
       var nauticalDepthLayerId = "nautical-emodnet-depth-layer";
-      var nauticalDepthTestEnabled = true;
+      var nauticalDepthTestEnabled = false;
       var nauticalLayerOrderTimer = null;
       var nauticalCompassMode = "north";
 var nauticalTheme = localStorage.getItem("weatherbear:nauticalTheme") || "day";
@@ -5338,7 +5338,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       function updateActiveLayersBadge(){var count=[windLayerVisible,precipitationLayerVisible,satelliteLayerVisible,radarLayerVisible,smhiRadarObservationVisible,temperatureLayerVisible].filter(Boolean).length;var badge=document.getElementById("activeLayersBadge"), text=document.getElementById("activeLayersText"), fb=document.getElementById("filterBadge");if(badge&&text){badge.classList.toggle("visible",count>0);if(count>0) text.textContent=count+" lager";}if(fb) fb.classList.toggle("visible",count>0);}
 
       var windLayerVisible=false, precipitationLayerVisible=false, satelliteLayerVisible=true, radarLayerVisible=false, temperatureLayerVisible=false;
-      var NAUTICAL_LIGHT_BASE_TILE_URL="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
+      var NAUTICAL_LIGHT_BASE_TILE_URL="https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png";
       var NAUTICAL_SEAMARK_TILE_URL="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
       // EMODnet Bathymetry custom-colour test for the Swedish west coast.
       // Instead of showing EMODnet's own multicolour image directly, we fetch the mean-depth WMS image
@@ -5392,7 +5392,7 @@ if(typeof bringCustomUserLocationLayersToFront === "function"){
       function ensureNauticalChartLayers(){
         if(!maptilerMap) return false;
         try{
-          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))) maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"© OpenStreetMap contributors © CARTO"});
+          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalBaseSourceId))) maptilerMap.addSource(nauticalBaseSourceId,{type:"raster",tiles:[NAUTICAL_LIGHT_BASE_TILE_URL],tileSize:256,attribution:"EMODnet Bathymetry © EU, CC BY 4.0"});
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalBaseLayerId))) maptilerMap.addLayer({id:nauticalBaseLayerId,type:"raster",source:nauticalBaseSourceId,layout:{visibility:baseMapMode==="nautical"?"visible":"none"},paint:{"raster-opacity":1}},getFirstWeatherOverlayLayerId()||undefined);
           var depthCanvas=getNauticalDepthCanvas();
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))) maptilerMap.addSource(nauticalDepthSourceId,{type:"canvas",canvas:nauticalDepthCanvasId,coordinates:getNauticalDepthCanvasCoordinates(),animate:false});
