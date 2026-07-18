@@ -95,7 +95,8 @@ function makeUpstreamUrl(type, bbox, fallback = false) {
     width: String(TILE_SIZE),
     height: String(TILE_SIZE),
     srs: "EPSG:3857",
-    bbox: bbox.join(",")
+    bbox: bbox.join(","),
+    interpolations: type === "fill" ? "bicubic" : "bilinear"
   });
 
   if (type === "fill") {

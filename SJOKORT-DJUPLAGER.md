@@ -37,3 +37,11 @@ Grunda områden framträder alltså tydligare, medan djupare vatten tonar mot vi
 ## Viktigt
 
 Lagret är en tydligare visualisering av öppna djupdata. Det är inte ett godkänt navigationssjökort och skapar inte detaljer som saknas i källdatan.
+
+## Kustmask och mjuk strandlinje (v1.1)
+
+- Djupskiktet maskas visuellt med MapTiler Lands vektorpolygoner (`source-layer: land`).
+- Landmasken ligger över djupzoner och djupkurvor, vilket gör att djupfärgen följer den faktiska kustlinjen och öarna i kartunderlaget i stället för EMODnet-rutnätets grova nollinje.
+- En separat suddad kustlinje ligger precis under landmasken. Eftersom landfyllningen täcker linjens inre halva återstår en mjuk övergång ut mot vattnet.
+- EMODnet-rastret begärs med bicubic interpolation för fyllningen och bilinear interpolation för konturerna. Detta minskar pixlighet utan att ändra appens startvy.
+- Kustmasken använder appens befintliga MapTiler-nyckel och kräver ingen ny tjänst eller ny API-nyckel.
