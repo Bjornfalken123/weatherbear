@@ -17,3 +17,9 @@ Visa attribution för både EMODnet och OpenSeaMap i kartan. EMODnet-produkten a
 ## Begränsning
 
 Detta är en kostnadsfri öppen kartlösning, men inte ett officiellt navigationssjökort och ska inte marknadsföras som ersättning för uppdaterade officiella sjökort.
+
+
+## Fokusområde och skärpa
+
+Standardvyn är centrerad utanför Orust (cirka 58.15 N, 11.55 E) med zoomnivå 9.
+Djup- och sjömärkeslagren använder skarpare rasteråtergivning vid inzoomning. Detta förbättrar läsbarheten men skapar inte ny mätdata; EMODnets grundmodell är fortfarande grövre än ett officiellt svenskt sjökort.

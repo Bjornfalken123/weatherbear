@@ -2070,7 +2070,7 @@ function focusMapOnPoint(lat, lon, zoomLevel){
 
     function refreshMapSizeSoon(){ setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} try{ if(maptilerMap) maptilerMap.resize(); }catch(e){} updateMapViewportOffsets(); },60); }
 
-    var map=L.map('map',{zoomControl:false}).setView([58.6,13.0],6);
+    var map=L.map('map',{zoomControl:false}).setView([58.15,11.55],9);
 
     var MAPTILER_API_KEY='72WUquDNJCLDzyB9DSky';
 

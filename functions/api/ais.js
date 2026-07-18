@@ -20,7 +20,7 @@ const MANAGED_REGIONS = [
   },
   {
     id: "sweden-west",
-    name: "Svenska västkusten",
+    name: "Orust med omnejd",
     bbox: {
       minLon: 10.0,
       minLat: 55.0,
