@@ -2221,6 +2221,8 @@
         openMeteoCloudApplyTimer=null, openMeteoCloudPendingTime=null, openMeteoCloudLastAppliedAt=0, openMeteoCloudSourceCache=new Map();
 
       var baseMapMode = "standard";
+      var weatherbearDepthProtocolRegistered = false;
+      var weatherbearDepthProtocolName = "weatherbear-depth";
       var nauticalDepthSourceId = "weatherbear-depth-source";
       var nauticalDepthLayerId = "weatherbear-depth-layer";
       var nauticalDepthContourSourceId = "weatherbear-depth-contours-source";
@@ -5389,14 +5391,149 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         return {type:"FeatureCollection",features:[{type:"Feature",properties:{coverage:"sweden-coast"},geometry:{type:"Polygon",coordinates:[[[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]]]}}]};
       }
 
+      function getWeatherbearDepthGapFillRadius(zoom){
+        var z=Number(zoom);
+        if(!isFinite(z)) return 16;
+        if(z>=14) return 30;
+        if(z>=13) return 24;
+        if(z>=12) return 17;
+        if(z>=11) return 11;
+        if(z>=9) return 7;
+        return 4;
+      }
+
+      function createWeatherbearDepthCanvas(width,height){
+        if(typeof OffscreenCanvas!=="undefined") return new OffscreenCanvas(width,height);
+        var canvas=document.createElement("canvas");
+        canvas.width=width;
+        canvas.height=height;
+        return canvas;
+      }
+
+      function weatherbearCanvasToPngArrayBuffer(canvas){
+        if(canvas&&typeof canvas.convertToBlob==="function"){
+          return canvas.convertToBlob({type:"image/png"}).then(function(blob){return blob.arrayBuffer();});
+        }
+        return new Promise(function(resolve,reject){
+          if(!canvas||typeof canvas.toBlob!=="function"){reject(new Error("Canvas kan inte exportera PNG"));return;}
+          canvas.toBlob(function(blob){
+            if(!blob){reject(new Error("PNG-export misslyckades"));return;}
+            blob.arrayBuffer().then(resolve,reject);
+          },"image/png");
+        });
+      }
+
+      function fillWeatherbearDepthGaps(imageData,maxRadius){
+        var width=imageData.width, height=imageData.height, pixels=imageData.data;
+        var count=width*height;
+        var nearest=new Int32Array(count);
+        nearest.fill(-1);
+        var distance=new Uint8Array(count);
+        distance.fill(255);
+        var queue=new Int32Array(count);
+        var head=0, tail=0, i;
+
+        // Alla pixlar med synlig djupfärg är startpunkter. Transparenta land- och no-data-pixlar fylls
+        // därefter från närmaste startpunkt, men bara inom en begränsad kustnära radie.
+        for(i=0;i<count;i++){
+          if(pixels[i*4+3]>=24){
+            nearest[i]=i;
+            distance[i]=0;
+            queue[tail++]=i;
+          }
+        }
+        if(tail===0) return imageData;
+
+        while(head<tail){
+          var index=queue[head++];
+          var currentDistance=distance[index];
+          if(currentDistance>=maxRadius) continue;
+          var x=index%width;
+          var y=(index/width)|0;
+          var nextDistance=currentDistance+1;
+          for(var dy=-1;dy<=1;dy++){
+            var ny=y+dy;
+            if(ny<0||ny>=height) continue;
+            for(var dx=-1;dx<=1;dx++){
+              if(dx===0&&dy===0) continue;
+              var nx=x+dx;
+              if(nx<0||nx>=width) continue;
+              var neighbour=ny*width+nx;
+              if(nearest[neighbour]!==-1) continue;
+              nearest[neighbour]=nearest[index];
+              distance[neighbour]=nextDistance;
+              queue[tail++]=neighbour;
+            }
+          }
+        }
+
+        for(i=0;i<count;i++){
+          if(pixels[i*4+3]>=24||nearest[i]<0||distance[i]>maxRadius) continue;
+          var sourceOffset=nearest[i]*4;
+          var targetOffset=i*4;
+          pixels[targetOffset]=pixels[sourceOffset];
+          pixels[targetOffset+1]=pixels[sourceOffset+1];
+          pixels[targetOffset+2]=pixels[sourceOffset+2];
+          pixels[targetOffset+3]=255;
+        }
+        return imageData;
+      }
+
+      async function processWeatherbearDepthTile(response,zoom){
+        if(!response||!response.ok){
+          var emptyCanvas=createWeatherbearDepthCanvas(256,256);
+          return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
+        }
+        var blob=await response.blob();
+        if(!blob.size){
+          var blankCanvas=createWeatherbearDepthCanvas(256,256);
+          return weatherbearCanvasToPngArrayBuffer(blankCanvas);
+        }
+        var bitmap=await createImageBitmap(blob);
+        var canvas=createWeatherbearDepthCanvas(bitmap.width||256,bitmap.height||256);
+        var context=canvas.getContext("2d",{willReadFrequently:true});
+        context.clearRect(0,0,canvas.width,canvas.height);
+        context.drawImage(bitmap,0,0,canvas.width,canvas.height);
+        if(bitmap&&typeof bitmap.close==="function") bitmap.close();
+        var imageData=context.getImageData(0,0,canvas.width,canvas.height);
+        fillWeatherbearDepthGaps(imageData,getWeatherbearDepthGapFillRadius(zoom));
+        context.putImageData(imageData,0,0);
+        return weatherbearCanvasToPngArrayBuffer(canvas);
+      }
+
+      function registerWeatherbearDepthProtocol(){
+        if(weatherbearDepthProtocolRegistered) return true;
+        if(!window.maptilersdk||typeof maptilersdk.addProtocol!=="function") return false;
+        try{
+          maptilersdk.addProtocol(weatherbearDepthProtocolName,async function(params,abortController){
+            var raw=String(params&&params.url||"").replace(/^weatherbear-depth:\/\//,"");
+            var queryIndex=raw.indexOf("?");
+            var query=queryIndex>=0?raw.slice(queryIndex):"";
+            var searchParams=new URLSearchParams(query);
+            var zoom=Number(searchParams.get("z"));
+            var upstreamUrl="/api/depth-tile"+query;
+            var fetchOptions={headers:{Accept:"image/png"}};
+            if(abortController&&abortController.signal) fetchOptions.signal=abortController.signal;
+            var response=await fetch(upstreamUrl,fetchOptions);
+            var data=await processWeatherbearDepthTile(response,zoom);
+            return {data:data};
+          });
+          weatherbearDepthProtocolRegistered=true;
+          return true;
+        }catch(error){
+          console.warn("Weatherbears kustnära djupfyllning kunde inte registreras",error);
+          return false;
+        }
+      }
+
       function buildWeatherbearDepthTileUrl(){
-        // MapLibre räknar bboxen som används för att placera varje rastertile.
-        // v=3 bryter tidigare cachar och tar bort det röda multicolour-reservlagret.
-        return "/api/depth-tile?v=3&type=fill&bbox={bbox-epsg-3857}";
+        // Den egna protokollhanteraren fyller transparenta kustglipor från närmaste giltiga djuppixel.
+        // Landmasken ligger ovanpå, så den utökade färgen syns bara i vatten fram till den exakta kustlinjen.
+        return weatherbearDepthProtocolName+"://tile?v=4&type=fill&z={z}&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(){
-        return "/api/depth-tile?v=3&type=contours&bbox={bbox-epsg-3857}";
+        return "/api/depth-tile?v=4&type=contours&bbox={bbox-epsg-3857}";
       }
       var OPEN_METEO_CLOUD_METADATA_URL="https://map-tiles.open-meteo.com/data_spatial/dwd_icon/latest.json";
       var OPEN_METEO_CLOUD_METADATA_PROXY_URL="/api/openmeteo-cloud-metadata";
@@ -5435,6 +5572,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       function ensureNauticalChartLayers(){
         if(!maptilerMap) return false;
         try{
+          registerWeatherbearDepthProtocol();
           var beforeLayer=getFirstWeatherOverlayLayerId()||undefined;
           var visibility=baseMapMode==="nautical"?"visible":"none";
 

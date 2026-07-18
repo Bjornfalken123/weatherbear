@@ -75,3 +75,10 @@ Lagret är en tydligare visualisering av öppna djupdata. Det är inte ett godk�
 - Fyllning och konturer använder cacheversion `v=3`.
 
 - Det separata CARTO-rasterlagret är borttaget ur sjökortsläget. Appens befintliga MapTiler-bas och MapTilers landmask använder nu samma kustgeometri, vilket undviker en enpixels-/generaliseringsskillnad mellan två olika kartleverantörer.
+
+## Kustnära närmaste-punkt-fyllning (v4)
+
+Djupbildens transparenta no-data-glipor fylls lokalt i webbläsaren från närmaste giltiga djuppixel.
+Fyllningen är begränsad till en zoomanpassad radie (4–30 tile-pixlar) och används endast under MapTilers landmask.
+Det innebär att djupfärgen kan nå ända fram till den exakta kustlinjen utan att synas ovanpå land.
+Fyllningen skapar inte nya mätvärden och ska betraktas som en visuell kustanslutning.

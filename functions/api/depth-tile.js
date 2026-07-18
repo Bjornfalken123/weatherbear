@@ -206,7 +206,7 @@ export async function onRequestGet(context) {
     let upstream = await fetch(upstreamUrl, {
       headers: {
         Accept: "image/png",
-        "User-Agent": "Weatherbear depth layer/1.0"
+        "User-Agent": "Weatherbear depth layer/1.1"
       }
     });
 
@@ -219,7 +219,7 @@ export async function onRequestGet(context) {
       upstream = await fetch(makeUpstreamUrl(type, bbox, true), {
         headers: {
           Accept: "image/png",
-          "User-Agent": "Weatherbear depth layer/1.0"
+          "User-Agent": "Weatherbear depth layer/1.1"
         }
       });
       contentType = upstream.headers.get("content-type") || "";
