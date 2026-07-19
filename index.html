@@ -5653,6 +5653,18 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         exact.sort(function(a,b){return b.score-a.score||b.index-a.index;});
         if(exact.length){
           weatherbearBaseWaterDescriptor=exact[0];
+          weatherbearBaseWaterDescriptor.maskFilterExact=true;
+          return weatherbearBaseWaterDescriptor;
+        }
+
+        // Robust reservväg: vissa MapTiler-stilar har bara filtrerade water-fill-lager.
+        // Källan och source-layer är fortfarande samma som baskartan; filtret kan däremot
+        // inte alltid återskapas i pixelmasken. Detta får aldrig stoppa själva djuplagret.
+        candidates.sort(function(a,b){return b.score-a.score||b.index-a.index;});
+        if(candidates.length){
+          weatherbearBaseWaterDescriptor=candidates[0];
+          weatherbearBaseWaterDescriptor.maskFilterExact=false;
+          console.warn("MapTilers vattenkälla hittades, men fill-lagret är filtrerat. Djuplagret visas med konservativ maskreserv.");
           return weatherbearBaseWaterDescriptor;
         }
         return null;
@@ -6152,9 +6164,30 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         return target;
       }
 
+      function buildWeatherbearIntrinsicDepthMask(imageData,type){
+        if(!imageData||!imageData.data) return null;
+        var count=imageData.width*imageData.height;
+        var binary=new Uint8Array(count),coverage=new Uint8Array(count),validCount=0;
+        var pixels=imageData.data;
+        for(var i=0;i<count;i++){
+          var offset=i*4,alpha=Number(pixels[offset+3])||0,valid=false;
+          if(type==="contours") valid=alpha>8;
+          else valid=decodeWeatherbearDepthSample(pixels[offset],pixels[offset+1],pixels[offset+2],alpha)!=null;
+          if(valid){binary[i]=1;coverage[i]=alpha;validCount++;}
+        }
+        return validCount?{binary:binary,coverage:coverage,width:imageData.width,height:imageData.height,intrinsic:true}:null;
+      }
+
+      function weatherbearMaskHasWater(mask){
+        var binary=mask&&mask.binary?mask.binary:mask;
+        if(!binary||!binary.length) return false;
+        for(var i=0;i<binary.length;i++) if(binary[i]) return true;
+        return false;
+      }
+
       async function processWeatherbearDepthTile(response,settings,waterMask,type,theme){
         var emptyCanvas=createWeatherbearDepthCanvas(256,256);
-        if(!response||!response.ok||!waterMask) return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
+        if(!response||!response.ok) return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
         var blob=await response.blob();
         if(!blob.size) return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
         var bitmap=await createImageBitmap(blob);
@@ -6163,8 +6196,20 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);
         if(bitmap&&typeof bitmap.close==="function") bitmap.close();
         var imageData=context.getImageData(0,0,canvas.width,canvas.height);
-        if(!applyWeatherbearWaterMask(imageData,waterMask)) return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
-        if(type!=="contours") renderWeatherbearDepthField(imageData,settings,waterMask,theme);
+
+        // MapTiler-masken är förstahandsval. Om den inte går att läsa får djupet
+        // ändå visas från EMODnets egen alfakanal. Reservläget gör ingen kustfyllning,
+        // så det kan aldrig sprida uppskattade värden över okänd geometri.
+        var effectiveMask=weatherbearMaskHasWater(waterMask)?waterMask:buildWeatherbearIntrinsicDepthMask(imageData,type);
+        if(!effectiveMask) return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
+        if(!applyWeatherbearWaterMask(imageData,effectiveMask)) return weatherbearCanvasToPngArrayBuffer(emptyCanvas);
+        if(type!=="contours"){
+          var effectiveSettings=settings;
+          if(effectiveMask.intrinsic){
+            effectiveSettings=Object.assign({},settings||{},{radius:0,landRadius:0,maxGroundMeters:0,maxLandGroundMeters:0});
+          }
+          renderWeatherbearDepthField(imageData,effectiveSettings,effectiveMask,theme);
+        }
         context.putImageData(imageData,0,0);
         var cropped=cropWeatherbearDepthCanvas(canvas,settings&&settings.pad||0,settings&&settings.renderScale||1);
         return weatherbearCanvasToPngArrayBuffer(cropped);
@@ -6213,13 +6258,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       function buildWeatherbearDepthTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
-        return weatherbearDepthProtocolName+"://tile?v=8&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=8.1&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
         // Konturer går genom samma protokoll och samma vattenmask som djupfärgen.
-        return weatherbearDepthProtocolName+"://tile?v=8&type=contours&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=8.1&type=contours&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function refreshWeatherbearDepthThemeSources(theme){
@@ -6275,11 +6320,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       function ensureNauticalChartLayers(){
         if(!maptilerMap) return false;
         try{
-          registerWeatherbearDepthProtocol();
+          var depthProtocolReady=registerWeatherbearDepthProtocol();
+          if(!depthProtocolReady) console.warn("Weatherbears djup-protokoll kunde inte registreras");
           var waterDescriptor=findWeatherbearBaseWaterDescriptor();
           if(!waterDescriptor||!waterDescriptor.sourceId){
-            console.warn("En ofiltrerad vattenyta i den aktiva MapTiler-stilen kunde inte identifieras");
-            return false;
+            // Vattenmasken är en förbättring, inte ett villkor för att visa djupdata.
+            console.warn("MapTilers vattenyta kunde inte identifieras. Djuplagret använder sin konservativa alfamask.");
+            waterDescriptor=null;
           }
 
           var beforeLayer=getFirstWeatherOverlayLayerId()||undefined;
@@ -6301,10 +6348,10 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             },beforeLayer);
           }
 
-          // Vattenytan, kustlinjen och klientens pixelmask använder samma ofiltrerade
-          // source-id/source-layer från den aktiva MapTiler-stilen.
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastalFallbackLayerId))){
-            maptilerMap.addLayer({
+          // När descriptor finns används exakt samma vektorkälla som baskartan.
+          // Om den saknas fortsätter djupkällan ändå i konservativt reservläge.
+          if(waterDescriptor&&!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastalFallbackLayerId))){
+            var fallbackWaterLayer={
               id:nauticalCoastalFallbackLayerId,
               type:"fill",
               source:waterDescriptor.sourceId,
@@ -6317,7 +6364,9 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
                 "fill-opacity":1,
                 "fill-antialias":true
               }
-            },beforeLayer);
+            };
+            if(waterDescriptor.filter) fallbackWaterLayer.filter=waterDescriptor.filter;
+            maptilerMap.addLayer(fallbackWaterLayer,beforeLayer);
           }
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))){
@@ -6367,8 +6416,8 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             },beforeLayer);
           }
 
-          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastlineLayerId))){
-            maptilerMap.addLayer({
+          if(waterDescriptor&&!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastlineLayerId))){
+            var coastlineLayer={
               id:nauticalCoastlineLayerId,
               type:"line",
               source:waterDescriptor.sourceId,
@@ -6381,7 +6430,9 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
                 "line-opacity":theme==="night"?0.55:0.72,
                 "line-width":["interpolate",["linear"],["zoom"],7,0.35,12,0.55,16,0.9]
               }
-            },beforeLayer);
+            };
+            if(waterDescriptor.filter) coastlineLayer.filter=waterDescriptor.filter;
+            maptilerMap.addLayer(coastlineLayer,beforeLayer);
           }
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalSeamarkSourceId))){
