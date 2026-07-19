@@ -2288,6 +2288,8 @@
       var weatherbearDepthProtocolName = "weatherbear-depth";
       var nauticalDepthSourceId = "weatherbear-depth-source";
       var nauticalDepthLayerId = "weatherbear-depth-layer";
+      var nauticalDepthContourSourceId = "weatherbear-depth-contour-source";
+      var nauticalDepthContourLayerId = "weatherbear-depth-contour-layer";
       var nauticalNightDimmerSourceId = "weatherbear-night-dimmer-source";
       var nauticalNightDimmerLayerId = "weatherbear-night-dimmer-layer";
       var nauticalCoastlineLayerId = "weatherbear-coastline-layer";
@@ -5455,6 +5457,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       var windLayerVisible=false, precipitationLayerVisible=false, satelliteLayerVisible=true, radarLayerVisible=false, temperatureLayerVisible=false;
       var NAUTICAL_SEAMARK_TILE_URL="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png";
+      var NAUTICAL_CONTOUR_WMS_TILE_URL="https://ows.emodnet-bathymetry.eu/wms?service=WMS&request=GetMap&version=1.1.1&layers=emodnet%3Acontours&styles=&format=image%2Fpng&transparent=true&tiled=true&srs=EPSG%3A3857&bbox={bbox-epsg-3857}&width=256&height=256";
       // Hela Sveriges kust med marginal runt Skagerrak, Kattegatt, Östersjön och Bottenviken.
       var WEATHERBEAR_DEPTH_BOUNDS=[8.0,53.0,27.0,67.0];
 
@@ -5714,7 +5717,9 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         var rendered=renderWeatherbearDepthField(imageData,effectiveSettings,effectiveMask,theme,built.depthValues);
         var context=canvas.getContext("2d",{willReadFrequently:true});
         context.putImageData(rendered.imageData,0,0);
-        drawWeatherbearDepthContours(context,rendered.depthValues,effectiveMask,effectiveSettings,theme);
+        // Djupkurvor och etiketter hämtas åter från EMODnets externa konturlager.
+        // Weatherbear renderar här endast färgzonerna och den lokala ifyllnaden.
+
         var cropped=cropWeatherbearDepthCanvas(canvas,settings&&settings.pad||0,settings&&settings.renderScale||1);
         return weatherbearCanvasToPngArrayBuffer(cropped);
       }
@@ -6239,6 +6244,27 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             filledMask[i]=1;
           }
 
+          // Andra passet: fyll återstående vattenpixlar som fortfarande saknar djup.
+          // Nära land antas de vara grunda; längre ut används en djupare reserv
+          // baserad på närmaste uppmätta vatten och avståndet till land.
+          for(i=0;i<count;i++){
+            if(!waterMask[i]||isFinite(finalDepth[i])||nearest[i]<0||distance[i]===infinity) continue;
+            var fallbackSourceDepth=depthValues[nearest[i]];
+            if(!isFinite(fallbackSourceDepth)) continue;
+            var shorePx=landDistance[i]===infinity?Infinity:landDistance[i]/10;
+            var fallbackDepth=fallbackSourceDepth;
+            if(isFinite(shorePx)&&shorePx<=Math.max(1,maxLandRadius*1.25)){
+              if(shorePx<=Math.max(1,maxLandRadius*0.25)) fallbackDepth=Math.min(fallbackSourceDepth,1.4);
+              else if(shorePx<=Math.max(1,maxLandRadius*0.55)) fallbackDepth=Math.min(fallbackSourceDepth,2.6);
+              else fallbackDepth=Math.min(fallbackSourceDepth,4.8);
+            }else{
+              var offshoreFloor=!isFinite(shorePx)||shorePx>maxLandRadius*3?20:10;
+              fallbackDepth=Math.max(fallbackSourceDepth,offshoreFloor);
+            }
+            finalDepth[i]=fallbackDepth;
+            filledMask[i]=1;
+          }
+
           // Bara uppskattade kustpixlar jämnas, med verkliga djup som låsta ankare.
           // Detta tar bort blockighet utan att flytta eller skriva över källdata.
           for(var smoothPass=0;smoothPass<2;smoothPass++){
@@ -6422,7 +6448,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             var settings=getWeatherbearDepthGapFillSettings(zoom,bboxValue,"fill");
             settings.tileX=tileX;settings.tileY=tileY;
             var apiParams=new URLSearchParams({
-              v:"12",
+              v:"13",
               z:String(zoom),
               x:String(tileX),
               y:String(tileY),
@@ -6453,7 +6479,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       function buildWeatherbearDepthTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
-        return weatherbearDepthProtocolName+"://tile?v=12&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=13&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function refreshWeatherbearDepthThemeSources(theme){
@@ -6488,6 +6514,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           var orderedIds=[
             nauticalNightDimmerLayerId,
             nauticalDepthLayerId,
+            nauticalDepthContourLayerId,
             nauticalCoastlineLayerId
           ];
           orderedIds.forEach(function(id){
@@ -6533,7 +6560,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             },beforeLayer);
           }
 
-          // Ingen enfärgad vattenyta eller WMS-färgkod används bakom djuplagret i v12.
+          // Ingen enfärgad vattenyta eller WMS-färgkod används bakom djuplagret i v13.
           // Om en djup-tile saknas ska baskartan synas, inte en färg som kan
           // misstolkas som en faktisk djupzon.
 
@@ -6558,6 +6585,29 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
               maxzoom:22,
               layout:{visibility:visibility},
               paint:{"raster-opacity":1,"raster-resampling":"linear","raster-fade-duration":0}
+            },beforeLayer);
+          }
+
+          if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthContourSourceId))){
+            maptilerMap.addSource(nauticalDepthContourSourceId,{
+              type:"raster",
+              tiles:[NAUTICAL_CONTOUR_WMS_TILE_URL],
+              tileSize:256,
+              minzoom:4,
+              maxzoom:15,
+              bounds:WEATHERBEAR_DEPTH_BOUNDS,
+              attribution:"Djupkurvor © EMODnet Bathymetry Consortium (CC BY 4.0)"
+            });
+          }
+          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthContourLayerId))){
+            maptilerMap.addLayer({
+              id:nauticalDepthContourLayerId,
+              type:"raster",
+              source:nauticalDepthContourSourceId,
+              minzoom:4,
+              maxzoom:22,
+              layout:{visibility:visibility},
+              paint:{"raster-opacity":theme==="night"?0.62:0.86,"raster-fade-duration":0,"raster-resampling":"linear","raster-saturation":-1,"raster-contrast":theme==="night"?0.14:0.08,"raster-brightness-min":0,"raster-brightness-max":theme==="night"?0.78:1}
             },beforeLayer);
           }
 
@@ -6624,6 +6674,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       [
         nauticalNightDimmerLayerId,
         nauticalDepthLayerId,
+        nauticalDepthContourLayerId,
         nauticalCoastlineLayerId,
         nauticalSeamarkLayerId
       ].forEach(function(layerId){
@@ -7184,6 +7235,14 @@ function applyNauticalTheme(){
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-brightness-max",1);
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-saturation",0);
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-contrast",0);
+    }
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthContourLayerId)){
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-opacity",theme==="night"?0.62:0.86);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-min",0);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-max",theme==="night"?0.78:1);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-saturation",-1);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-contrast",theme==="night"?0.14:0.08);
     }
 
     if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastlineLayerId)){
