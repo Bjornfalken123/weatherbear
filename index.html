@@ -6245,21 +6245,64 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           }
 
           // Andra passet: fyll återstående vattenpixlar som fortfarande saknar djup.
-          // Nära land antas de vara grunda; längre ut används en djupare reserv
-          // baserad på närmaste uppmätta vatten och avståndet till land.
+          // Här styrs uppskattningen av de lokala djupbanden (2,3,6,10,20,50 m)
+          // i stället för av fasta färgregler. Nära land får grunt vatten bli
+          // grundare mot kusten, medan branta kustpartier behåller samma djupband
+          // om vi saknar stöd för att de verkligen grundar upp.
           for(i=0;i<count;i++){
             if(!waterMask[i]||isFinite(finalDepth[i])||nearest[i]<0||distance[i]===infinity) continue;
-            var fallbackSourceDepth=depthValues[nearest[i]];
+            var fallbackSource=nearest[i];
+            var fallbackSourceDepth=depthValues[fallbackSource];
             if(!isFinite(fallbackSourceDepth)) continue;
-            var shorePx=landDistance[i]===infinity?Infinity:landDistance[i]/10;
+            var sourceBand=getWeatherbearDepthBandIndex(fallbackSourceDepth);
+            var sourceShorePx=landDistance[fallbackSource]===infinity?Infinity:landDistance[fallbackSource]/10;
+            var targetShorePx=landDistance[i]===infinity?Infinity:landDistance[i]/10;
             var fallbackDepth=fallbackSourceDepth;
-            if(isFinite(shorePx)&&shorePx<=Math.max(1,maxLandRadius*1.25)){
-              if(shorePx<=Math.max(1,maxLandRadius*0.25)) fallbackDepth=Math.min(fallbackSourceDepth,1.4);
-              else if(shorePx<=Math.max(1,maxLandRadius*0.55)) fallbackDepth=Math.min(fallbackSourceDepth,2.6);
-              else fallbackDepth=Math.min(fallbackSourceDepth,4.8);
+            var fallbackBand=sourceBand;
+            var nearCoast=isFinite(targetShorePx)&&targetShorePx<=Math.max(1,maxLandRadius*1.35);
+            var sourceMovesCoastward=isFinite(sourceShorePx)&&isFinite(targetShorePx)&&targetShorePx<sourceShorePx;
+            var fallbackProfile=null;
+            if(profileKnown[fallbackSource]) fallbackProfile=profileCache[fallbackSource]||null;
+            else{
+              fallbackProfile=analyzeWeatherbearContourProfile(
+                fallbackSource,width,height,depthValues,landDistance,waterMask,
+                Math.max(8,Math.min(24,Math.round(maxRadius*0.34)))
+              );
+              profileKnown[fallbackSource]=1;profileCache[fallbackSource]=fallbackProfile;
+            }
+
+            if(nearCoast&&sourceMovesCoastward){
+              if(sourceBand<=1){
+                var coastRatio=(targetShorePx+0.2)/Math.max(0.2,sourceShorePx+0.2);
+                coastRatio=Math.max(0.03,Math.min(1,coastRatio));
+                fallbackDepth=Math.max(0.08,fallbackSourceDepth*Math.pow(coastRatio,0.88));
+                fallbackBand=getWeatherbearDepthBandIndex(fallbackDepth);
+              }else if(fallbackProfile&&fallbackProfile.slope>0){
+                var projected=fallbackSourceDepth-fallbackProfile.slope*Math.max(0,sourceShorePx-targetShorePx);
+                var shallowestBand=Math.max(0,sourceBand-fallbackProfile.contourSpan);
+                fallbackBand=Math.max(shallowestBand,Math.min(sourceBand,getWeatherbearDepthBandIndex(projected)));
+                var bandMin=WEATHERBEAR_DEPTH_BANDS[fallbackBand].min;
+                var bandMax=WEATHERBEAR_DEPTH_BANDS[fallbackBand].max;
+                fallbackDepth=Math.max(bandMin+0.02,Math.min(isFinite(bandMax)?bandMax-0.02:fallbackSourceDepth,projected));
+              }else{
+                // Ingen säker kurvprofil: behåll i första hand samma djupband.
+                // Endast 3–6 m-bandet får närmast land gå ned ett steg, eftersom
+                // det nästan alltid följs av ett grundare kustbälte i sjökort.
+                if(sourceBand===2&&targetShorePx<=Math.max(1,maxLandRadius*0.45)){
+                  fallbackBand=1;
+                  fallbackDepth=Math.min(fallbackSourceDepth,WEATHERBEAR_DEPTH_BANDS[1].representative);
+                }else{
+                  fallbackBand=sourceBand;
+                  fallbackDepth=Math.max(WEATHERBEAR_DEPTH_BANDS[fallbackBand].min+0.02,
+                    Math.min(isFinite(WEATHERBEAR_DEPTH_BANDS[fallbackBand].max)?WEATHERBEAR_DEPTH_BANDS[fallbackBand].max-0.02:fallbackSourceDepth,fallbackSourceDepth));
+                }
+              }
             }else{
-              var offshoreFloor=!isFinite(shorePx)||shorePx>maxLandRadius*3?20:10;
-              fallbackDepth=Math.max(fallbackSourceDepth,offshoreFloor);
+              // Hål längre ut till havs: behåll närmaste observerade djupband i stället
+              // för att uppfinna ett konstlat grunt kustbälte.
+              fallbackBand=sourceBand;
+              fallbackDepth=Math.max(WEATHERBEAR_DEPTH_BANDS[fallbackBand].min+0.02,
+                Math.min(isFinite(WEATHERBEAR_DEPTH_BANDS[fallbackBand].max)?WEATHERBEAR_DEPTH_BANDS[fallbackBand].max-0.02:fallbackSourceDepth,fallbackSourceDepth));
             }
             finalDepth[i]=fallbackDepth;
             filledMask[i]=1;
@@ -6448,7 +6491,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             var settings=getWeatherbearDepthGapFillSettings(zoom,bboxValue,"fill");
             settings.tileX=tileX;settings.tileY=tileY;
             var apiParams=new URLSearchParams({
-              v:"13",
+              v:"14",
               z:String(zoom),
               x:String(tileX),
               y:String(tileY),
@@ -6479,7 +6522,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       function buildWeatherbearDepthTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
-        return weatherbearDepthProtocolName+"://tile?v=13&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=14&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function refreshWeatherbearDepthThemeSources(theme){
@@ -6514,8 +6557,8 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           var orderedIds=[
             nauticalNightDimmerLayerId,
             nauticalDepthLayerId,
-            nauticalDepthContourLayerId,
-            nauticalCoastlineLayerId
+            nauticalCoastlineLayerId,
+            nauticalDepthContourLayerId
           ];
           orderedIds.forEach(function(id){
             if(maptilerMap.getLayer&&maptilerMap.getLayer(id)){
@@ -6607,7 +6650,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
               minzoom:4,
               maxzoom:22,
               layout:{visibility:visibility},
-              paint:{"raster-opacity":theme==="night"?0.62:0.86,"raster-fade-duration":0,"raster-resampling":"linear","raster-saturation":-1,"raster-contrast":theme==="night"?0.14:0.08,"raster-brightness-min":0,"raster-brightness-max":theme==="night"?0.78:1}
+              paint:{"raster-opacity":theme==="night"?0.76:0.98,"raster-fade-duration":0,"raster-resampling":"nearest","raster-saturation":-1,"raster-contrast":theme==="night"?0.18:0.16,"raster-brightness-min":0,"raster-brightness-max":theme==="night"?0.82:1}
             },beforeLayer);
           }
 
@@ -6674,8 +6717,8 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       [
         nauticalNightDimmerLayerId,
         nauticalDepthLayerId,
-        nauticalDepthContourLayerId,
         nauticalCoastlineLayerId,
+        nauticalDepthContourLayerId,
         nauticalSeamarkLayerId
       ].forEach(function(layerId){
         if(maptilerMap.getLayer&&maptilerMap.getLayer(layerId)){
@@ -7238,11 +7281,11 @@ function applyNauticalTheme(){
     }
 
     if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthContourLayerId)){
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-opacity",theme==="night"?0.62:0.86);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-opacity",theme==="night"?0.76:0.98);
       maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-min",0);
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-max",theme==="night"?0.78:1);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-max",theme==="night"?0.82:1);
       maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-saturation",-1);
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-contrast",theme==="night"?0.14:0.08);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-contrast",theme==="night"?0.18:0.16);
     }
 
     if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastlineLayerId)){
