@@ -5547,13 +5547,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       }
 
       var WEATHERBEAR_DEPTH_BANDS=[
-        {min:0,max:2,representative:1,code:224},
-        {min:2,max:3,representative:2.5,code:192},
-        {min:3,max:6,representative:4.5,code:160},
-        {min:6,max:10,representative:8,code:128},
-        {min:10,max:20,representative:15,code:96},
-        {min:20,max:50,representative:35,code:64},
-        {min:50,max:Infinity,representative:75,code:32}
+        {min:0,max:2,representative:1,signature:[255,64,32]},
+        {min:2,max:3,representative:2.5,signature:[32,208,96]},
+        {min:3,max:6,representative:4.5,signature:[32,96,255]},
+        {min:6,max:10,representative:8,signature:[255,208,0]},
+        {min:10,max:20,representative:15,signature:[255,64,192]},
+        {min:20,max:50,representative:35,signature:[0,208,255]},
+        {min:50,max:Infinity,representative:75,signature:[128,64,255]}
       ];
       var WEATHERBEAR_DEPTH_PALETTES={
         day:[
@@ -5594,19 +5594,20 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       }
 
       function decodeWeatherbearDepthSample(r,g,b,alpha){
-        // V9 använder exakta gråskalekoder från GeoServers intervall-SLD.
-        // PNG8 + nearest-neighbour gör att varje giltig pixel representerar en
-        // bestämd djupzon. Delvis transparenta kustpixlar används aldrig som källa.
+        // V10 avkodar sju tydligt separerade signaturfärger. Det är robustare
+        // än gråskalekoder, som kunde förväxlas med ett vanligt renderat WMS-svar.
+        // Delvis transparenta kustpixlar används aldrig som källa.
         if(Number(alpha)<245) return null;
-        var maximum=Math.max(r,g,b),minimum=Math.min(r,g,b);
-        if(maximum-minimum>5) return null;
-        var gray=(Number(r)+Number(g)+Number(b))/3;
-        var nearestIndex=-1,nearestDifference=Infinity;
+        var nearestIndex=-1,nearestDistance=Infinity;
         for(var i=0;i<WEATHERBEAR_DEPTH_BANDS.length;i++){
-          var difference=Math.abs(gray-WEATHERBEAR_DEPTH_BANDS[i].code);
-          if(difference<nearestDifference){nearestDifference=difference;nearestIndex=i;}
+          var signature=WEATHERBEAR_DEPTH_BANDS[i].signature;
+          var dr=Number(r)-signature[0],dg=Number(g)-signature[1],db=Number(b)-signature[2];
+          var distance=dr*dr+dg*dg+db*db;
+          if(distance<nearestDistance){nearestDistance=distance;nearestIndex=i;}
         }
-        if(nearestIndex<0||nearestDifference>14) return null;
+        // PNG och nearest-neighbour ska ge exakt färg. En liten tolerans tillåter
+        // endast ofarliga färgprofil-/canvasavvikelser, inte en främmande kartstil.
+        if(nearestIndex<0||nearestDistance>32*32) return null;
         return getWeatherbearDepthBandRepresentative(nearestIndex);
       }
 
@@ -6270,13 +6271,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       function buildWeatherbearDepthTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
-        return weatherbearDepthProtocolName+"://tile?v=9&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=10&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
         // Konturer går genom samma protokoll och samma vattenmask som djupfärgen.
-        return weatherbearDepthProtocolName+"://tile?v=9&type=contours&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=10&type=contours&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function refreshWeatherbearDepthThemeSources(theme){
@@ -6383,7 +6384,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
               minzoom:4,
               maxzoom:22,
               layout:{visibility:visibility},
-              paint:{"raster-opacity":1,"raster-resampling":"linear","raster-fade-duration":0}
+              paint:{"raster-opacity":1,"raster-resampling":"nearest","raster-fade-duration":0}
             },beforeLayer);
           }
 
@@ -7033,7 +7034,7 @@ function applyNauticalTheme(){
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-brightness-min",0);
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-brightness-max",1);
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-saturation",0);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-contrast",theme==="night"?0.08:0.04);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-contrast",0);
     }
 
     if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthContourLayerId)){

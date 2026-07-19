@@ -107,24 +107,23 @@ function xmlEscape(value) {
 }
 
 function buildWeatherbearDepthAnalysisSld() {
-  // V9 kodar sjökortets djupzoner som exakta gråskaleklasser.
-  // Klasserna följer samma nivåer som djupkurvorna: 2, 3, 6, 10, 20 och 50 m.
-  // Klienten avkodar därefter klassen och applicerar dag-/nattpaletten lokalt.
-  // Land och positiva höjder görs transparenta.
+  // V10 använder sju interna signaturfärger. Färgerna visas aldrig direkt för
+  // användaren; klienten avkodar dem till Weatherbears dag-/nattpalett.
+  // GeoServers intervals-quantity är den ÖVRE gränsen för varje intervall.
+  // Därför måste gränserna ligga i stigande ordning och färgen höra till zonen
+  // som slutar vid den aktuella kvantiteten.
   return [
     '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/sld http://schemas.opengis.net/sld/1.0.0/StyledLayerDescriptor.xsd">',
-    '<NamedLayer><Name>emodnet:mean</Name><UserStyle><Title>Weatherbear depth bands v9</Title><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>',
+    '<NamedLayer><Name>emodnet:mean</Name><UserStyle><Title>Weatherbear signed depth bands v10</Title><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>',
     '<ColorMap type="intervals" extended="false">',
-    '<ColorMapEntry color="#000000" quantity="-32768" opacity="0" label="no data"/>',
-    '<ColorMapEntry color="#202020" quantity="-1000" opacity="1" label="djupare än 50 m"/>',
-    '<ColorMapEntry color="#404040" quantity="-50" opacity="1" label="20–50 m"/>',
-    '<ColorMapEntry color="#606060" quantity="-20" opacity="1" label="10–20 m"/>',
-    '<ColorMapEntry color="#808080" quantity="-10" opacity="1" label="6–10 m"/>',
-    '<ColorMapEntry color="#a0a0a0" quantity="-6" opacity="1" label="3–6 m"/>',
-    '<ColorMapEntry color="#c0c0c0" quantity="-3" opacity="1" label="2–3 m"/>',
-    '<ColorMapEntry color="#e0e0e0" quantity="-2" opacity="1" label="0–2 m"/>',
-    '<ColorMapEntry color="#e0e0e0" quantity="0" opacity="1" label="0 m"/>',
-    '<ColorMapEntry color="#ffffff" quantity="0.001" opacity="0" label="land"/>',
+    '<ColorMapEntry color="#000000" quantity="-9999" opacity="0" label="no data"/>',
+    '<ColorMapEntry color="#8040ff" quantity="-50" opacity="1" label="djupare än 50 m"/>',
+    '<ColorMapEntry color="#00d0ff" quantity="-20" opacity="1" label="20–50 m"/>',
+    '<ColorMapEntry color="#ff40c0" quantity="-10" opacity="1" label="10–20 m"/>',
+    '<ColorMapEntry color="#ffd000" quantity="-6" opacity="1" label="6–10 m"/>',
+    '<ColorMapEntry color="#2060ff" quantity="-3" opacity="1" label="3–6 m"/>',
+    '<ColorMapEntry color="#20d060" quantity="-2" opacity="1" label="2–3 m"/>',
+    '<ColorMapEntry color="#ff4020" quantity="0" opacity="1" label="0–2 m"/>',
     '</ColorMap></RasterSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer></StyledLayerDescriptor>'
   ].join("");
 }
@@ -182,7 +181,7 @@ function makeUpstreamUrl(type, bbox, { pad = 0, scale = 1, theme = "day" } = {})
     version: "1.1.1",
     layers: "emodnet:mean",
     styles: "",
-    format: type === "contours" ? "image/png" : "image/png8",
+    format: "image/png",
     transparent: "true",
     tiled: "false",
     width: String(requestSize),
@@ -277,7 +276,7 @@ export async function onRequestGet(context) {
     const upstream = await fetch(upstreamUrl, {
       headers: {
         Accept: "image/png",
-        "User-Agent": "Weatherbear depth layer/1.5"
+        "User-Agent": "Weatherbear depth layer/1.6"
       }
     });
 
@@ -302,7 +301,7 @@ export async function onRequestGet(context) {
         "x-weatherbear-depth-scale": String(requestedScale),
         "x-weatherbear-depth-theme": theme,
         "x-weatherbear-depth-interpolation": type === "contours" ? "bilinear" : "nearest",
-        "x-weatherbear-depth-encoding": type === "fill" ? "contour-bands-v9" : "contours"
+        "x-weatherbear-depth-encoding": type === "fill" ? "signed-bands-v10" : "contours"
       }
     });
 

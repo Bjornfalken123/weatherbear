@@ -58,3 +58,7 @@ Tileytans ytterkant behandlas inte som land.
 - OpenSeaMap seamarks
 
 Se `DJUPLAGER-ANALYS-V9.md` för verifierade fel, algoritm och tester.
+
+## V10 – djupzonernas färgkodning
+
+V10 använder vanlig PNG och sju separata interna signaturfärger för att transportera djupzonerna från EMODnet/GeoServer till klienten. Signaturerna visas inte direkt utan avkodas till Weatherbears dag- och nattpaletter. GeoServer-intervallen använder övre gränserna -50, -20, -10, -6, -3, -2 och 0 meter.
