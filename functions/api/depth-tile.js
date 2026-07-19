@@ -107,17 +107,24 @@ function xmlEscape(value) {
 }
 
 function buildWeatherbearDepthAnalysisSld() {
-  // Fyllnadsanalysen behöver kontinuerliga djupvärden, inte redan klassificerade färger.
-  // 0–127,5 m kodas till 8-bitars gråskala med ungefär 0,5 m per nivå.
-  // Djupare vatten klipps till 127,5 m, vilket är tillräckligt för kustlogik och färgzoner.
+  // V9 kodar sjökortets djupzoner som exakta gråskaleklasser.
+  // Klasserna följer samma nivåer som djupkurvorna: 2, 3, 6, 10, 20 och 50 m.
+  // Klienten avkodar därefter klassen och applicerar dag-/nattpaletten lokalt.
+  // Land och positiva höjder görs transparenta.
   return [
     '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/sld http://schemas.opengis.net/sld/1.0.0/StyledLayerDescriptor.xsd">',
-    '<NamedLayer><Name>emodnet:mean</Name><UserStyle><Title>Weatherbear numeric depth analysis</Title><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>',
-    '<ColorMap type="ramp" extended="false">',
-    '<ColorMapEntry color="#000000" quantity="-12000" opacity="1"/>',
-    '<ColorMapEntry color="#000000" quantity="-127.5" opacity="1"/>',
-    '<ColorMapEntry color="#ffffff" quantity="0" opacity="1"/>',
-    '<ColorMapEntry color="#ffffff" quantity="0.01" opacity="0"/>',
+    '<NamedLayer><Name>emodnet:mean</Name><UserStyle><Title>Weatherbear depth bands v9</Title><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>',
+    '<ColorMap type="intervals" extended="false">',
+    '<ColorMapEntry color="#000000" quantity="-32768" opacity="0" label="no data"/>',
+    '<ColorMapEntry color="#202020" quantity="-1000" opacity="1" label="djupare än 50 m"/>',
+    '<ColorMapEntry color="#404040" quantity="-50" opacity="1" label="20–50 m"/>',
+    '<ColorMapEntry color="#606060" quantity="-20" opacity="1" label="10–20 m"/>',
+    '<ColorMapEntry color="#808080" quantity="-10" opacity="1" label="6–10 m"/>',
+    '<ColorMapEntry color="#a0a0a0" quantity="-6" opacity="1" label="3–6 m"/>',
+    '<ColorMapEntry color="#c0c0c0" quantity="-3" opacity="1" label="2–3 m"/>',
+    '<ColorMapEntry color="#e0e0e0" quantity="-2" opacity="1" label="0–2 m"/>',
+    '<ColorMapEntry color="#e0e0e0" quantity="0" opacity="1" label="0 m"/>',
+    '<ColorMapEntry color="#ffffff" quantity="0.001" opacity="0" label="land"/>',
     '</ColorMap></RasterSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer></StyledLayerDescriptor>'
   ].join("");
 }
@@ -142,7 +149,7 @@ function buildWeatherbearContourSld(theme = "day", scale = 1) {
     '<ogc:Function name="parameter"><ogc:Literal>levels</ogc:Literal>',
     '<ogc:Literal>-50</ogc:Literal><ogc:Literal>-20</ogc:Literal><ogc:Literal>-10</ogc:Literal><ogc:Literal>-6</ogc:Literal><ogc:Literal>-3</ogc:Literal><ogc:Literal>-2</ogc:Literal>',
     '</ogc:Function></ogc:Function></Transformation>',
-    `<Rule><LineSymbolizer><Stroke><CssParameter name="stroke">${lineColor}</CssParameter><CssParameter name="stroke-opacity">${isNight ? "0.72" : "0.78"}</CssParameter><CssParameter name="stroke-width">${lineWidth}</CssParameter></Stroke></LineSymbolizer>`,
+    `<Rule><LineSymbolizer><Stroke><CssParameter name="stroke">${lineColor}</CssParameter><CssParameter name="stroke-opacity">${isNight ? "0.30" : "0.22"}</CssParameter><CssParameter name="stroke-width">${lineWidth}</CssParameter></Stroke></LineSymbolizer>`,
     '<TextSymbolizer><Label><ogc:Function name="numberFormat"><ogc:Literal>0</ogc:Literal><ogc:Function name="abs"><ogc:PropertyName>value</ogc:PropertyName></ogc:Function></ogc:Function></Label>',
     `<Font><CssParameter name="font-family">Arial</CssParameter><CssParameter name="font-size">${fontSize}</CssParameter><CssParameter name="font-weight">bold</CssParameter></Font>`,
     `<LabelPlacement><LinePlacement/></LabelPlacement><Halo><Radius><ogc:Literal>${haloRadius}</ogc:Literal></Radius><Fill><CssParameter name="fill">${haloColor}</CssParameter><CssParameter name="fill-opacity">${isNight ? "0.9" : "0.82"}</CssParameter></Fill></Halo>`,
@@ -153,7 +160,7 @@ function buildWeatherbearContourSld(theme = "day", scale = 1) {
 }
 
 function makeUpstreamUrl(type, bbox, { pad = 0, scale = 1, theme = "day" } = {}) {
-  const safePad = Math.max(0, Math.min(16, Math.round(Number(pad) || 0)));
+  const safePad = Math.max(0, Math.min(56, Math.round(Number(pad) || 0)));
   const renderScale = Math.max(1, Math.min(2, Math.round(Number(scale) || 1)));
   const pixelWidth = (bbox[2] - bbox[0]) / TILE_SIZE;
   const pixelHeight = (bbox[3] - bbox[1]) / TILE_SIZE;
@@ -175,7 +182,7 @@ function makeUpstreamUrl(type, bbox, { pad = 0, scale = 1, theme = "day" } = {})
     version: "1.1.1",
     layers: "emodnet:mean",
     styles: "",
-    format: "image/png",
+    format: type === "contours" ? "image/png" : "image/png8",
     transparent: "true",
     tiled: "false",
     width: String(requestSize),
@@ -213,7 +220,7 @@ export async function onRequestGet(context) {
   const y = numberParam(requestUrl, "y");
   const requestedBbox = parseMercatorBbox(requestUrl.searchParams.get("bbox"));
   const requestedType = requestUrl.searchParams.get("type");
-  const requestedPad = Math.max(0, Math.min(16, Math.round(numberParam(requestUrl, "pad") || 0)));
+  const requestedPad = Math.max(0, Math.min(56, Math.round(numberParam(requestUrl, "pad") || 0)));
   const requestedScale = Math.max(1, Math.min(2, Math.round(numberParam(requestUrl, "scale") || 1)));
   const theme = requestUrl.searchParams.get("theme") === "night" ? "night" : "day";
   const type = requestedType === "contours" ? "contours" : "fill";
@@ -270,7 +277,7 @@ export async function onRequestGet(context) {
     const upstream = await fetch(upstreamUrl, {
       headers: {
         Accept: "image/png",
-        "User-Agent": "Weatherbear depth layer/1.4"
+        "User-Agent": "Weatherbear depth layer/1.5"
       }
     });
 
@@ -294,7 +301,8 @@ export async function onRequestGet(context) {
         "x-weatherbear-depth-pad": String(requestedPad),
         "x-weatherbear-depth-scale": String(requestedScale),
         "x-weatherbear-depth-theme": theme,
-        "x-weatherbear-depth-interpolation": type === "contours" ? "bilinear" : "nearest"
+        "x-weatherbear-depth-interpolation": type === "contours" ? "bilinear" : "nearest",
+        "x-weatherbear-depth-encoding": type === "fill" ? "contour-bands-v9" : "contours"
       }
     });
 
