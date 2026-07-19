@@ -191,7 +191,7 @@ export async function onRequestGet(context) {
   const stride = chooseStride(queryBounds);
   const cache = caches.default;
   const cacheUrl = new URL(context.request.url);
-  cacheUrl.searchParams.set("v", "11");
+  cacheUrl.searchParams.set("v", "12");
   cacheUrl.searchParams.set("stride", String(stride));
   const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
   const cached = await cache.match(cacheKey);
@@ -206,7 +206,7 @@ export async function onRequestGet(context) {
     const upstream = await fetch(upstreamUrl, {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Weatherbear raw depth grid/2.0"
+        "User-Agent": "Weatherbear raw depth grid/3.0"
       }
     });
     if (!upstream.ok) return emptyResponse(`erddap-${upstream.status}`, 120);
