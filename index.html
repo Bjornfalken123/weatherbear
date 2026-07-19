@@ -1483,11 +1483,11 @@
     body[data-nautical-theme="night"] .nautical-depth-labels{color:rgba(255,247,223,0.76);}
     @media(max-width:700px){
       #nauticalDepthLegend{
-        top:calc(var(--safe-top) + 68px);
-        right:12px;
-        bottom:auto;
-        left:auto;
-        transform:none;
+        top:auto;
+        right:auto;
+        bottom:calc(var(--safe-bottom) + 108px);
+        left:50%;
+        transform:translateX(-50%);
         padding:6px 8px;
         border-radius:10px;
       }
@@ -1642,38 +1642,38 @@
       background:rgba(232,215,168,0.055);
       border-color:rgba(232,215,168,0.10);
     }
-    body[data-nautical-theme="night"] .nautical-status-value{color:rgba(224,166,93,0.96);}
+    body[data-nautical-theme="night"] .nautical-status-value{color:rgba(184,137,92,0.96);}
     body[data-nautical-theme="night"] .nautical-status-label,
     body[data-nautical-theme="night"] .nautical-status-sub{color:rgba(196,139,72,0.72);}
     body[data-nautical-theme="night"] #nauticalDepthLegend{
       background:rgba(5,5,5,0.94);
-      color:rgba(224,166,93,0.94);
-      border-color:rgba(224,166,93,0.18);
+      color:rgba(184,137,92,0.94);
+      border-color:rgba(184,137,92,0.18);
       box-shadow:0 8px 22px rgba(0,0,0,0.54);
     }
-    body[data-nautical-theme="night"] .nautical-depth-labels{color:rgba(224,166,93,0.72);}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(1){background:#30494e;}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(2){background:#2a4146;}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(3){background:#24393e;}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(4){background:#1e3136;}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(5){background:#192a2f;}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(6){background:#142227;}
-    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(7){background:#0f1b1f;}
+    body[data-nautical-theme="night"] .nautical-depth-labels{color:rgba(184,137,92,0.72);}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(1){background:#2f3d40;}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(2){background:#28363a;}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(3){background:#222f33;}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(4){background:#1c282d;}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(5){background:#161f26;}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(6){background:#111a20;}
+    body[data-nautical-theme="night"] .nautical-depth-scale i:nth-child(7){background:#070c10;}
     body[data-nautical-theme="night"] #nauticalThemeToggle{
-      color:rgba(224,166,93,0.96);
-      border-color:rgba(224,166,93,0.22);
+      color:rgba(184,137,92,0.96);
+      border-color:rgba(184,137,92,0.22);
       background:rgba(5,5,5,0.94);
     }
     body[data-app-mode="nautical"][data-nautical-theme="night"] .nautical-compass-face{
       background:radial-gradient(circle at 50% 50%,rgba(134,83,40,0.11),rgba(8,7,6,0.98) 62%,rgba(2,2,2,1));
-      border-color:rgba(224,166,93,0.24);
-      box-shadow:0 8px 22px rgba(0,0,0,0.62),inset 0 1px 0 rgba(224,166,93,0.08),inset 0 -10px 22px rgba(0,0,0,0.56);
+      border-color:rgba(184,137,92,0.24);
+      box-shadow:0 8px 22px rgba(0,0,0,0.62),inset 0 1px 0 rgba(184,137,92,0.08),inset 0 -10px 22px rgba(0,0,0,0.56);
       filter:saturate(.7) brightness(.78);
     }
     body[data-app-mode="nautical"][data-nautical-theme="night"] .nautical-compass-info,
     body[data-app-mode="nautical"][data-nautical-theme="night"] .nautical-speed-value,
     body[data-app-mode="nautical"][data-nautical-theme="night"] .nautical-compass-mode{
-      color:rgba(224,166,93,0.9);
+      color:rgba(184,137,92,0.9);
       text-shadow:0 1px 8px rgba(0,0,0,0.9);
     }
     body[data-app-mode="nautical"][data-nautical-theme="night"] #modeSwitcherBtn,
@@ -1681,15 +1681,15 @@
     body[data-app-mode="nautical"][data-nautical-theme="night"] #modeSwitcherMenu,
     body[data-app-mode="nautical"][data-nautical-theme="night"] .mode-switch-option{
       background:rgba(5,5,5,0.94) !important;
-      color:rgba(224,166,93,0.92) !important;
-      border-color:rgba(224,166,93,0.18) !important;
+      color:rgba(184,137,92,0.92) !important;
+      border-color:rgba(184,137,92,0.18) !important;
       box-shadow:0 8px 22px rgba(0,0,0,0.52) !important;
     }
     body[data-app-mode="nautical"][data-nautical-theme="night"] #mobileFilterSheet,
     body[data-app-mode="nautical"][data-nautical-theme="night"] #mobileSearchSheet{
       background:rgba(4,4,4,0.985) !important;
-      color:rgba(224,166,93,0.9) !important;
-      border-color:rgba(224,166,93,0.14) !important;
+      color:rgba(184,137,92,0.9) !important;
+      border-color:rgba(184,137,92,0.14) !important;
     }
     body[data-app-mode="nautical"] #nauticalThemeToggle{
       bottom:calc(var(--safe-bottom) + 104px) !important;
@@ -2294,6 +2294,9 @@
       var nauticalCoastalFallbackLayerId = "weatherbear-coastal-fallback-layer";
       var nauticalNightDimmerSourceId = "weatherbear-night-dimmer-source";
       var nauticalNightDimmerLayerId = "weatherbear-night-dimmer-layer";
+      var nauticalCoastlineLayerId = "weatherbear-coastline-layer";
+      var weatherbearNauticalBasePaintSnapshot = new Map();
+      var weatherbearNauticalBasePaletteActive = false;
       var weatherbearVectorTileModulesPromise = null;
       var weatherbearWaterTileGeometryCache = new Map();
       var weatherbearBaseWaterDescriptor = null;
@@ -5483,30 +5486,37 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         var isFill=type!=="contours";
 
         if(!bbox){
-          return {radius:0,pad:3,renderScale:renderScale,maxGroundMeters:0,groundMetersPerPixel:null};
+          return {radius:0,landRadius:0,pad:3,renderScale:renderScale,maxGroundMeters:0,maxLandGroundMeters:0,groundMetersPerPixel:null};
         }
 
         var projectedMetersPerPixel=(bbox[2]-bbox[0])/(256*renderScale);
         var centerLatitude=weatherbearMercatorYToLatitude((bbox[1]+bbox[3])/2);
         var groundMetersPerPixel=projectedMetersPerPixel*Math.max(0.15,Math.cos(centerLatitude*Math.PI/180));
 
-        // Ingen uppskattning vid låg zoom. Maskning och supersampling används ändå.
+        // Ingen uppskattning på översiktszoom. Maskning och supersampling används ändå.
         if(!isFill||!isFinite(z)||z<11){
-          return {radius:0,pad:3,renderScale:renderScale,maxGroundMeters:0,groundMetersPerPixel:groundMetersPerPixel};
+          return {radius:0,landRadius:0,pad:3,renderScale:renderScale,maxGroundMeters:0,maxLandGroundMeters:0,groundMetersPerPixel:groundMetersPerPixel};
         }
 
-        // EMODnets kustglipor är normalt mindre än en halv 115 m-cell. Vi fyller endast
-        // inåt mot land och högst 50 meter, aldrig generella hål ute till havs.
-        var maxGroundMeters=50;
+        // Två oberoende begränsningar:
+        // 1) högst 55 m från verklig djupdata
+        // 2) högst 45 m från MapTilers faktiska kustlinje
+        // Därmed fylls bara den kustnära no-data-remsan, aldrig större hål ute till havs.
+        var maxGroundMeters=55;
+        var maxLandGroundMeters=45;
         var radius=Math.round(maxGroundMeters/Math.max(0.1,groundMetersPerPixel));
-        radius=Math.max(1,Math.min(22,radius));
-        var logicalPad=Math.ceil(radius/renderScale)+4;
+        var landRadius=Math.round(maxLandGroundMeters/Math.max(0.1,groundMetersPerPixel));
+        radius=Math.max(1,Math.min(32,radius));
+        landRadius=Math.max(1,Math.min(28,landRadius));
+        var logicalPad=Math.ceil(Math.max(radius,landRadius)/renderScale)+4;
 
         return {
           radius:radius,
-          pad:Math.max(3,Math.min(16,logicalPad)),
+          landRadius:landRadius,
+          pad:Math.max(3,Math.min(18,logicalPad)),
           renderScale:renderScale,
           maxGroundMeters:maxGroundMeters,
+          maxLandGroundMeters:maxLandGroundMeters,
           groundMetersPerPixel:groundMetersPerPixel
         };
       }
@@ -5550,15 +5560,17 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           {depth:35,color:[251,253,255]},
           {depth:75,color:[255,255,255]}
         ],
+        // Låg-luminanspalett inspirerad av ECDIS/S-52-principen:
+        // dämpade toner, tydlig grund/djup-separation och ingen stark blå skärmglöd.
         night:[
-          {depth:0,color:[48,73,78]},
-          {depth:1,color:[42,65,70]},
-          {depth:2.5,color:[36,57,62]},
-          {depth:4.5,color:[30,49,54]},
-          {depth:8,color:[25,42,47]},
-          {depth:15,color:[20,34,39]},
-          {depth:35,color:[15,27,31]},
-          {depth:75,color:[10,18,22]}
+          {depth:0,color:[47,61,64]},
+          {depth:1,color:[40,54,58]},
+          {depth:2.5,color:[34,47,51]},
+          {depth:4.5,color:[28,40,45]},
+          {depth:8,color:[22,33,38]},
+          {depth:15,color:[17,26,31]},
+          {depth:35,color:[12,19,24]},
+          {depth:75,color:[7,12,16]}
         ]
       };
 
@@ -5567,13 +5579,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       }
 
       function decodeWeatherbearDepthSample(r,g,b,alpha){
-        if(Number(alpha)<24) return null;
+        // Endast helt opaka gråskalepixlar räknas som verklig källa.
+        // Delvis transparenta kustpixlar är blandningar mellan djup och no-data och
+        // får aldrig styra den kustnära uppskattningen.
+        if(Number(alpha)<245) return null;
         var maximum=Math.max(r,g,b),minimum=Math.min(r,g,b);
-        // Analysbilden ska vara gråskala. Stor färgskillnad betyder att svaret inte är
-        // Weatherbears numeriska djupraster och ska därför inte användas för uppskattning.
-        if(maximum-minimum>18) return null;
+        if(maximum-minimum>8) return null;
         var gray=(Number(r)+Number(g)+Number(b))/3;
-        // Servern kodar 0–127,5 meter med ungefär 0,5 meter per gråskalenivå.
         return Math.max(0,Math.min(127.5,(255-gray)*0.5));
       }
 
@@ -5615,20 +5627,32 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         var layers=Array.isArray(style.layers)?style.layers:[];
         var sources=style.sources||{};
         var candidates=[];
+
         for(var i=0;i<layers.length;i++){
           var layer=layers[i]||{};
-          if(layer["source-layer"]!=="water"||!layer.source) continue;
+          if(layer["source-layer"]!=="water"||!layer.source||layer.type!=="fill") continue;
           var source=sources[layer.source];
           if(!source||source.type!=="vector") continue;
-          var score=0;
-          if(layer.type==="fill") score+=10;
-          if(!layer.filter) score+=2;
-          if(layer.layout&&layer.layout.visibility==="none") score-=5;
-          candidates.push({score:score,index:i,sourceId:layer.source,sourceLayer:"water",sourceDefinition:source});
+          var score=10;
+          if(!layer.filter) score+=20;
+          if(layer.layout&&layer.layout.visibility==="none") score-=10;
+          candidates.push({
+            score:score,
+            index:i,
+            layerId:layer.id||null,
+            sourceId:layer.source,
+            sourceLayer:"water",
+            sourceDefinition:source,
+            filter:layer.filter||null
+          });
         }
-        candidates.sort(function(a,b){return b.score-a.score||b.index-a.index;});
-        if(candidates.length){
-          weatherbearBaseWaterDescriptor=candidates[0];
+
+        // Klientens pixelmask kan i nuläget inte tolka godtyckliga MapLibre-filter.
+        // För exakt geometri används därför endast en ofiltrerad vattenfyllning.
+        var exact=candidates.filter(function(candidate){return !candidate.filter;});
+        exact.sort(function(a,b){return b.score-a.score||b.index-a.index;});
+        if(exact.length){
+          weatherbearBaseWaterDescriptor=exact[0];
           return weatherbearBaseWaterDescriptor;
         }
         return null;
@@ -5793,31 +5817,45 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         var tiles=await Promise.all(jobs);
         var centralTile=tiles.find(function(tile){return tile.dx===0&&tile.dy===0;});
         if(!centralTile||centralTile.failed) return null;
+
         for(var i=0;i<tiles.length;i++){
           var tile=tiles[i];
-          if(tile.failed) continue; // okänd granntile antas aldrig vara vatten
+          if(tile.failed) continue;
           var offsetX=halo+tile.dx*tilePixelSize;
           var offsetY=halo+tile.dy*tilePixelSize;
           drawWeatherbearWaterGeometry(context,tile.features,offsetX,offsetY,tilePixelSize);
         }
+
         var waterPixels=context.getImageData(0,0,size,size).data;
-        var waterMask=new Uint8Array(size*size);
-        for(var pixel=0;pixel<waterMask.length;pixel++){
-          waterMask[pixel]=waterPixels[pixel*4+3]>=128?1:0;
+        var coverage=new Uint8Array(size*size);
+        var binary=new Uint8Array(size*size);
+        for(var pixel=0;pixel<coverage.length;pixel++){
+          var alpha=waterPixels[pixel*4+3];
+          coverage[pixel]=alpha;
+          // En låg tröskel låter fyllningen nå den antialiasade vattensidan,
+          // medan den faktiska alfakanalen fortfarande klipper mjukt exakt vid kusten.
+          binary[pixel]=alpha>=32?1:0;
         }
-        return waterMask;
+        return {binary:binary,coverage:coverage,width:size,height:size};
       }
 
-      function applyWeatherbearWaterMask(imageData,waterMask){
-        if(!waterMask||waterMask.length!==imageData.width*imageData.height) return false;
+      function applyWeatherbearWaterMask(imageData,waterMaskData){
+        var binary=waterMaskData&&waterMaskData.binary?waterMaskData.binary:waterMaskData;
+        var coverage=waterMaskData&&waterMaskData.coverage?waterMaskData.coverage:null;
+        if(!binary||binary.length!==imageData.width*imageData.height) return false;
         var pixels=imageData.data;
-        for(var i=0;i<waterMask.length;i++){
-          if(waterMask[i]) continue;
+        for(var i=0;i<binary.length;i++){
           var offset=i*4;
-          pixels[offset]=0;
-          pixels[offset+1]=0;
-          pixels[offset+2]=0;
-          pixels[offset+3]=0;
+          if(!binary[i]){
+            pixels[offset]=0;
+            pixels[offset+1]=0;
+            pixels[offset+2]=0;
+            pixels[offset+3]=0;
+            continue;
+          }
+          if(coverage&&coverage.length===binary.length){
+            pixels[offset+3]=Math.round(pixels[offset+3]*(coverage[i]/255));
+          }
         }
         return true;
       }
@@ -5895,18 +5933,25 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             if(shore>maxShore) maxShore=shore;
           }
         }
-        if(samples.length<7||maxShore-minShore<2) return null;
+
+        // En kustgradient accepteras bara när flera verkliga provpunkter täcker
+        // ett tydligt intervall vinkelrätt mot stranden.
+        if(samples.length<10||maxShore-minShore<3) return null;
         var sumW=0,sumX=0,sumY=0,sumXX=0,sumXY=0;
         for(var sampleIndex=0;sampleIndex<samples.length;sampleIndex++){
           var sample=samples[sampleIndex];
-          sumW+=sample.weight;sumX+=sample.shore*sample.weight;sumY+=sample.depth*sample.weight;
-          sumXX+=sample.shore*sample.shore*sample.weight;sumXY+=sample.shore*sample.depth*sample.weight;
+          sumW+=sample.weight;
+          sumX+=sample.shore*sample.weight;
+          sumY+=sample.depth*sample.weight;
+          sumXX+=sample.shore*sample.shore*sample.weight;
+          sumXY+=sample.shore*sample.depth*sample.weight;
         }
         var denominator=sumW*sumXX-sumX*sumX;
-        if(sumW<=0||Math.abs(denominator)<0.5) return null;
+        if(sumW<=0||Math.abs(denominator)<0.75) return null;
         var slope=(sumW*sumXY-sumX*sumY)/denominator;
         var intercept=(sumY-slope*sumX)/sumW;
-        if(!isFinite(slope)||slope<=0.025||slope>4) return null;
+        if(!isFinite(slope)||slope<=0.02||slope>2.5) return null;
+
         var weightedMean=sumY/sumW,totalVariance=0,residualVariance=0;
         for(sampleIndex=0;sampleIndex<samples.length;sampleIndex++){
           sample=samples[sampleIndex];
@@ -5915,17 +5960,24 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           residualVariance+=sample.weight*Math.pow(sample.depth-predicted,2);
         }
         var confidence=totalVariance>0?1-residualVariance/totalVariance:0;
-        if(!isFinite(confidence)||confidence<0.16) return null;
-        return Math.min(4,slope);
+        if(!isFinite(confidence)||confidence<0.32) return null;
+        return slope;
       }
 
-      function renderWeatherbearDepthField(imageData,settings,waterMask,theme){
+      function renderWeatherbearDepthField(imageData,settings,waterMaskData,theme){
         var width=imageData.width,height=imageData.height,pixels=imageData.data,count=width*height;
+        var waterMask=waterMaskData&&waterMaskData.binary?waterMaskData.binary:waterMaskData;
+        var waterCoverage=waterMaskData&&waterMaskData.coverage?waterMaskData.coverage:null;
         if(!count||!waterMask||waterMask.length!==count) return imageData;
+
         var maxRadius=settings&&Number(settings.radius)||0;
+        var maxLandRadius=settings&&Number(settings.landRadius)||0;
         var infinity=65535,distance=new Uint16Array(count),nearest=new Int32Array(count),originalSource=new Uint8Array(count);
         var depthValues=new Float32Array(count),filledDepth=new Float32Array(count),filledIndices=new Int32Array(count),filledCount=0,sourceCount=0;
-        distance.fill(infinity);nearest.fill(-1);depthValues.fill(NaN);filledDepth.fill(NaN);
+        distance.fill(infinity);
+        nearest.fill(-1);
+        depthValues.fill(NaN);
+        filledDepth.fill(NaN);
 
         for(var i=0;i<count;i++){
           var offset=i*4;
@@ -5935,10 +5987,14 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           }
           var depth=decodeWeatherbearDepthSample(pixels[offset],pixels[offset+1],pixels[offset+2],pixels[offset+3]);
           if(depth==null) continue;
-          depthValues[i]=depth;distance[i]=0;nearest[i]=i;originalSource[i]=1;sourceCount++;
+          depthValues[i]=depth;
+          distance[i]=0;
+          nearest[i]=i;
+          originalSource[i]=1;
+          sourceCount++;
         }
 
-        if(sourceCount>0&&maxRadius>=1){
+        if(sourceCount>0&&maxRadius>=1&&maxLandRadius>=1){
           var landDistance=buildWeatherbearDistanceToLand(width,height,waterMask);
           function relax(target,source,cost){
             if(target<0||target>=count||source<0||source>=count) return;
@@ -5946,76 +6002,109 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             var candidate=distance[source]+cost;
             if(candidate<distance[target]){distance[target]=candidate;nearest[target]=nearest[source];}
           }
+
           for(var py=0;py<height;py++){
             for(var px=0;px<width;px++){
               i=py*width+px;
               if(!waterMask[i]||distance[i]===0) continue;
-              if(px>0) relax(i,i-1,10);if(py>0) relax(i,i-width,10);
-              if(px>0&&py>0) relax(i,i-width-1,14);if(px+1<width&&py>0) relax(i,i-width+1,14);
+              if(px>0) relax(i,i-1,10);
+              if(py>0) relax(i,i-width,10);
+              if(px>0&&py>0) relax(i,i-width-1,14);
+              if(px+1<width&&py>0) relax(i,i-width+1,14);
             }
           }
           for(var py2=height-1;py2>=0;py2--){
             for(var px2=width-1;px2>=0;px2--){
-              i=py2*width+px2;if(!waterMask[i]) continue;
-              if(px2+1<width) relax(i,i+1,10);if(py2+1<height) relax(i,i+width,10);
-              if(px2+1<width&&py2+1<height) relax(i,i+width+1,14);if(px2>0&&py2+1<height) relax(i,i+width-1,14);
+              i=py2*width+px2;
+              if(!waterMask[i]) continue;
+              if(px2+1<width) relax(i,i+1,10);
+              if(py2+1<height) relax(i,i+width,10);
+              if(px2+1<width&&py2+1<height) relax(i,i+width+1,14);
+              if(px2>0&&py2+1<height) relax(i,i+width-1,14);
             }
           }
 
-          var maxCost=maxRadius*10,slopeCache=new Float32Array(count),slopeKnown=new Uint8Array(count);
+          var maxCost=maxRadius*10;
+          var maxLandCost=maxLandRadius*10;
+          var slopeCache=new Float32Array(count),slopeKnown=new Uint8Array(count);
           for(i=0;i<count;i++){
             if(!waterMask[i]||originalSource[i]||nearest[i]<0||distance[i]>maxCost) continue;
+            if(landDistance[i]===infinity||landDistance[i]>maxLandCost) continue;
+
             var source=nearest[i];
-            if(landDistance[i]===infinity||landDistance[source]===infinity) continue;
-            // Endast no-data som ligger närmare land än den verkliga källpunkten får fyllas.
-            // Det förhindrar att kustlogiken breder ut sig över allmänna hål ute till havs.
-            if(landDistance[i]>landDistance[source]+10) continue;
+            if(landDistance[source]===infinity) continue;
+
+            // Fyll bara en no-data-pixel om den ligger kustnärmare än den verkliga
+            // källpunkten. Hål som ligger åt öppet vatten lämnas orörda.
+            if(landDistance[i]>landDistance[source]+5) continue;
             if(!weatherbearWaterLineIsClear(source,i,width,height,waterMask)) continue;
+
             var sourceDepth=depthValues[source];
             if(!isFinite(sourceDepth)) continue;
+            var sourceShorePx=landDistance[source]/10;
+            var targetShorePx=landDistance[i]/10;
             var slope=null;
-            if(slopeKnown[source]) slope=isFinite(slopeCache[source])?slopeCache[source]:null;
-            else{
-              slope=estimateWeatherbearShoreSlope(source,width,height,depthValues,landDistance,waterMask,Math.max(5,Math.min(14,Math.round(maxRadius*0.8))));
-              slopeKnown[source]=1;slopeCache[source]=slope==null?NaN:slope;
+
+            if(slopeKnown[source]){
+              slope=isFinite(slopeCache[source])?slopeCache[source]:null;
+            }else{
+              slope=estimateWeatherbearShoreSlope(
+                source,width,height,depthValues,landDistance,waterMask,
+                Math.max(6,Math.min(16,Math.round(maxRadius*0.75)))
+              );
+              slopeKnown[source]=1;
+              slopeCache[source]=slope==null?NaN:slope;
             }
-            var sourceShorePx=landDistance[source]/10,targetShorePx=landDistance[i]/10;
-            // När verkliga data är grunda men ingen säker trend finns, avtar djupet
-            // försiktigt mot strand. Vid brant/djupt vatten behålls djupet om inte
-            // grannvärdena och kurvriktningen ger stöd för en positiv kustgradient.
-            if(slope==null&&sourceDepth<=6){
-              slope=Math.min(1.25,sourceDepth/Math.max(2.5,sourceShorePx+0.5));
-            }
+
             var estimate=sourceDepth;
             if(slope!=null){
               estimate=Math.max(0,Math.min(sourceDepth,sourceDepth-slope*Math.max(0,sourceShorePx-targetShorePx)));
+            }else if(sourceDepth<=4){
+              // Grunt vatten blir normalt grundare mot strand. Utan säker lokal
+              // gradient används en försiktig, monoton avtrappning mot kustlinjen.
+              var shallowRatio=(targetShorePx+0.35)/Math.max(0.35,sourceShorePx+0.35);
+              shallowRatio=Math.max(0.10,Math.min(1,shallowRatio));
+              estimate=sourceDepth*shallowRatio;
+              if(targetShorePx<=0.75) estimate=Math.min(estimate,0.35);
+            }else if(sourceDepth<=8){
+              // Mellandjup får bara en liten kustnära minskning när trend saknas.
+              var mediumRatio=(targetShorePx+0.5)/Math.max(0.5,sourceShorePx+0.5);
+              mediumRatio=Math.max(0,Math.min(1,mediumRatio));
+              estimate=sourceDepth*(0.82+0.18*mediumRatio);
             }
-            if(sourceDepth<=3&&targetShorePx<=0.75) estimate=Math.min(estimate,0.5);
-            filledDepth[i]=estimate;filledIndices[filledCount++]=i;
+            // Djupt vatten behåller närmaste verkliga djup om ingen statistiskt
+            // trovärdig kustgradient finns. Vi hittar aldrig på en grundbank.
+            filledDepth[i]=Math.max(0,estimate);
+            filledIndices[filledCount++]=i;
           }
 
           if(filledCount>0){
-            // Liten vattenmedveten utjämning på uppskattade värden. Originaldata
-            // förändras aldrig och ett uppskattat värde får aldrig bli djupare än
-            // den källpunkt som valts av avståndstransformen.
+            // Två små vattenmedvetna utjämningspass minskar Voronoi-kanter mellan
+            // närmaste källpunkter. Originaldjup är låsta och ändras aldrig.
             for(var pass=0;pass<2;pass++){
               var previous=new Float32Array(filledDepth);
               for(var fi=0;fi<filledCount;fi++){
-                i=filledIndices[fi];var x=i%width,y=(i/width)|0,sum=0,sumW=0;
+                i=filledIndices[fi];
+                var x=i%width,y=(i/width)|0,sum=0,sumW=0;
                 for(var ddy=-1;ddy<=1;ddy++){
-                  var ny=y+ddy;if(ny<0||ny>=height) continue;
+                  var ny=y+ddy;
+                  if(ny<0||ny>=height) continue;
                   for(var ddx=-1;ddx<=1;ddx++){
-                    var nx=x+ddx;if(nx<0||nx>=width) continue;
-                    var ni=ny*width+nx;if(!waterMask[ni]) continue;
+                    var nx=x+ddx;
+                    if(nx<0||nx>=width) continue;
+                    var ni=ny*width+nx;
+                    if(!waterMask[ni]) continue;
                     var value=isFinite(depthValues[ni])?depthValues[ni]:previous[ni];
                     if(!isFinite(value)) continue;
                     var weight=(ddx===0&&ddy===0)?2:(ddx===0||ddy===0?1:0.7);
-                    sum+=value*weight;sumW+=weight;
+                    sum+=value*weight;
+                    sumW+=weight;
                   }
                 }
                 if(sumW>0){
-                  var sourceIndex=nearest[i],sourceLimit=isFinite(depthValues[sourceIndex])?depthValues[sourceIndex]:filledDepth[i];
-                  filledDepth[i]=Math.max(0,Math.min(sourceLimit,filledDepth[i]*0.72+(sum/sumW)*0.28));
+                  var sourceIndex=nearest[i];
+                  var sourceLimit=isFinite(depthValues[sourceIndex])?depthValues[sourceIndex]:filledDepth[i];
+                  filledDepth[i]=Math.max(0,Math.min(sourceLimit,filledDepth[i]*0.76+(sum/sumW)*0.24));
                 }
               }
             }
@@ -6028,18 +6117,20 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             pixels[pixelOffset]=0;pixels[pixelOffset+1]=0;pixels[pixelOffset+2]=0;pixels[pixelOffset+3]=0;
             continue;
           }
-          var finalDepth=depthValues[i],alpha=255;
-          if(!isFinite(finalDepth)&&isFinite(filledDepth[i])){
-            finalDepth=filledDepth[i];
-            var normalized=distance[i]/Math.max(1,maxRadius*10);
-            alpha=Math.round(255*(1-weatherbearSmoothstep(0.86,1,normalized)));
-          }
-          if(!isFinite(finalDepth)||alpha<=0){
+
+          var finalDepth=depthValues[i];
+          if(!isFinite(finalDepth)&&isFinite(filledDepth[i])) finalDepth=filledDepth[i];
+          if(!isFinite(finalDepth)){
             pixels[pixelOffset]=0;pixels[pixelOffset+1]=0;pixels[pixelOffset+2]=0;pixels[pixelOffset+3]=0;
             continue;
           }
+
           var color=colorForWeatherbearDepth(finalDepth,theme);
-          pixels[pixelOffset]=color[0];pixels[pixelOffset+1]=color[1];pixels[pixelOffset+2]=color[2];pixels[pixelOffset+3]=alpha;
+          var coverageAlpha=waterCoverage&&waterCoverage.length===count?waterCoverage[i]:255;
+          pixels[pixelOffset]=color[0];
+          pixels[pixelOffset+1]=color[1];
+          pixels[pixelOffset+2]=color[2];
+          pixels[pixelOffset+3]=coverageAlpha;
         }
         return imageData;
       }
@@ -6122,13 +6213,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
 
       function buildWeatherbearDepthTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
-        return weatherbearDepthProtocolName+"://tile?v=7&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=8&type=fill&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function buildWeatherbearContourTileUrl(theme){
         var renderTheme=theme==="night"?"night":"day";
         // Konturer går genom samma protokoll och samma vattenmask som djupfärgen.
-        return weatherbearDepthProtocolName+"://tile?v=7&type=contours&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
+        return weatherbearDepthProtocolName+"://tile?v=8&type=contours&theme="+renderTheme+"&z={z}&x={x}&y={y}&bbox={bbox-epsg-3857}";
       }
 
       function refreshWeatherbearDepthThemeSources(theme){
@@ -6162,7 +6253,13 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
         if(!maptilerMap) return;
         try{
           var firstWeatherLayerId=getFirstWeatherOverlayLayerId();
-          var orderedIds=[nauticalNightDimmerLayerId,nauticalCoastalFallbackLayerId,nauticalDepthLayerId,nauticalDepthContourLayerId];
+          var orderedIds=[
+            nauticalNightDimmerLayerId,
+            nauticalCoastalFallbackLayerId,
+            nauticalDepthLayerId,
+            nauticalDepthContourLayerId,
+            nauticalCoastlineLayerId
+          ];
           orderedIds.forEach(function(id){
             if(maptilerMap.getLayer&&maptilerMap.getLayer(id)){
               if(firstWeatherLayerId&&firstWeatherLayerId!==id) maptilerMap.moveLayer(id,firstWeatherLayerId);
@@ -6181,9 +6278,10 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
           registerWeatherbearDepthProtocol();
           var waterDescriptor=findWeatherbearBaseWaterDescriptor();
           if(!waterDescriptor||!waterDescriptor.sourceId){
-            console.warn("Baskartans exakta vattenkälla kunde inte identifieras ännu");
+            console.warn("En ofiltrerad vattenyta i den aktiva MapTiler-stilen kunde inte identifieras");
             return false;
           }
+
           var beforeLayer=getFirstWeatherOverlayLayerId()||undefined;
           var visibility=baseMapMode==="nautical"?"visible":"none";
           var theme=nauticalTheme==="night"?"night":"day";
@@ -6192,82 +6290,174 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
             maptilerMap.addSource(nauticalNightDimmerSourceId,{type:"geojson",data:buildWeatherbearWorldGeoJson()});
           }
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalNightDimmerLayerId))){
-            maptilerMap.addLayer({id:nauticalNightDimmerLayerId,type:"fill",source:nauticalNightDimmerSourceId,minzoom:0,maxzoom:22,layout:{visibility:visibility},paint:{"fill-color":"#030303","fill-opacity":theme==="night"?0.58:0}},beforeLayer);
+            maptilerMap.addLayer({
+              id:nauticalNightDimmerLayerId,
+              type:"fill",
+              source:nauticalNightDimmerSourceId,
+              minzoom:0,
+              maxzoom:22,
+              layout:{visibility:visibility},
+              paint:{"fill-color":"#080504","fill-opacity":theme==="night"?0.28:0}
+            },beforeLayer);
           }
 
-          // Reservvattnet använder exakt samma source-id och source-layer som Streets-baskartans vatten.
-          // Därmed finns ingen separat kustgeometri som kan glida i förhållande till MapTiler.
+          // Vattenytan, kustlinjen och klientens pixelmask använder samma ofiltrerade
+          // source-id/source-layer från den aktiva MapTiler-stilen.
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastalFallbackLayerId))){
-            maptilerMap.addLayer({id:nauticalCoastalFallbackLayerId,type:"fill",source:waterDescriptor.sourceId,"source-layer":waterDescriptor.sourceLayer||"water",minzoom:0,maxzoom:22,layout:{visibility:visibility},paint:{"fill-color":theme==="night"?"#0b1216":"#d7edf8","fill-opacity":1,"fill-antialias":false}},beforeLayer);
+            maptilerMap.addLayer({
+              id:nauticalCoastalFallbackLayerId,
+              type:"fill",
+              source:waterDescriptor.sourceId,
+              "source-layer":waterDescriptor.sourceLayer||"water",
+              minzoom:0,
+              maxzoom:22,
+              layout:{visibility:visibility},
+              paint:{
+                "fill-color":theme==="night"?"#0b1216":"#d7edf8",
+                "fill-opacity":1,
+                "fill-antialias":true
+              }
+            },beforeLayer);
           }
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthSourceId))){
-            maptilerMap.addSource(nauticalDepthSourceId,{type:"raster",tiles:[buildWeatherbearDepthTileUrl(theme)],tileSize:256,minzoom:4,maxzoom:15,bounds:WEATHERBEAR_DEPTH_BOUNDS,attribution:"Djupdata: EMODnet Bathymetry DTM 2024 · visualisering: Weatherbear"});
+            maptilerMap.addSource(nauticalDepthSourceId,{
+              type:"raster",
+              tiles:[buildWeatherbearDepthTileUrl(theme)],
+              tileSize:256,
+              minzoom:4,
+              maxzoom:15,
+              bounds:WEATHERBEAR_DEPTH_BOUNDS,
+              attribution:"Djupdata: EMODnet Bathymetry DTM 2024 · visualisering: Weatherbear"
+            });
             nauticalDepthTilesTheme=theme;
           }
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId))){
-            maptilerMap.addLayer({id:nauticalDepthLayerId,type:"raster",source:nauticalDepthSourceId,minzoom:4,maxzoom:22,layout:{visibility:visibility},paint:{"raster-opacity":1,"raster-resampling":"linear","raster-fade-duration":0}},beforeLayer);
+            maptilerMap.addLayer({
+              id:nauticalDepthLayerId,
+              type:"raster",
+              source:nauticalDepthSourceId,
+              minzoom:4,
+              maxzoom:22,
+              layout:{visibility:visibility},
+              paint:{"raster-opacity":1,"raster-resampling":"linear","raster-fade-duration":0}
+            },beforeLayer);
           }
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalDepthContourSourceId))){
-            maptilerMap.addSource(nauticalDepthContourSourceId,{type:"raster",tiles:[buildWeatherbearContourTileUrl(theme)],tileSize:256,minzoom:7,maxzoom:15,bounds:WEATHERBEAR_DEPTH_BOUNDS,attribution:"Djupkurvor: EMODnet Bathymetry"});
+            maptilerMap.addSource(nauticalDepthContourSourceId,{
+              type:"raster",
+              tiles:[buildWeatherbearContourTileUrl(theme)],
+              tileSize:256,
+              minzoom:7,
+              maxzoom:15,
+              bounds:WEATHERBEAR_DEPTH_BOUNDS,
+              attribution:"Djupkurvor: EMODnet Bathymetry"
+            });
           }
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthContourLayerId))){
-            maptilerMap.addLayer({id:nauticalDepthContourLayerId,type:"raster",source:nauticalDepthContourSourceId,minzoom:7,maxzoom:22,layout:{visibility:visibility},paint:{"raster-opacity":theme==="night"?0.68:0.8,"raster-resampling":"linear","raster-fade-duration":0}},beforeLayer);
+            maptilerMap.addLayer({
+              id:nauticalDepthContourLayerId,
+              type:"raster",
+              source:nauticalDepthContourSourceId,
+              minzoom:7,
+              maxzoom:22,
+              layout:{visibility:visibility},
+              paint:{"raster-opacity":theme==="night"?0.58:0.78,"raster-resampling":"linear","raster-fade-duration":0}
+            },beforeLayer);
+          }
+
+          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastlineLayerId))){
+            maptilerMap.addLayer({
+              id:nauticalCoastlineLayerId,
+              type:"line",
+              source:waterDescriptor.sourceId,
+              "source-layer":waterDescriptor.sourceLayer||"water",
+              minzoom:7,
+              maxzoom:22,
+              layout:{visibility:visibility,"line-join":"round","line-cap":"round"},
+              paint:{
+                "line-color":theme==="night"?"#665344":"#7f919b",
+                "line-opacity":theme==="night"?0.55:0.72,
+                "line-width":["interpolate",["linear"],["zoom"],7,0.35,12,0.55,16,0.9]
+              }
+            },beforeLayer);
           }
 
           if(!(maptilerMap.getSource&&maptilerMap.getSource(nauticalSeamarkSourceId))){
-            maptilerMap.addSource(nauticalSeamarkSourceId,{type:"raster",tiles:[NAUTICAL_SEAMARK_TILE_URL],tileSize:256,maxzoom:18,attribution:"© OpenSeaMap contributors"});
+            maptilerMap.addSource(nauticalSeamarkSourceId,{
+              type:"raster",
+              tiles:[NAUTICAL_SEAMARK_TILE_URL],
+              tileSize:256,
+              maxzoom:18,
+              attribution:"© OpenSeaMap contributors"
+            });
           }
           if(!(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId))){
-            maptilerMap.addLayer({id:nauticalSeamarkLayerId,type:"raster",source:nauticalSeamarkSourceId,layout:{visibility:visibility},paint:{"raster-opacity":1,"raster-fade-duration":0}},beforeLayer);
+            maptilerMap.addLayer({
+              id:nauticalSeamarkLayerId,
+              type:"raster",
+              source:nauticalSeamarkSourceId,
+              layout:{visibility:visibility},
+              paint:{"raster-opacity":1,"raster-fade-duration":0}
+            },beforeLayer);
           }
 
+          applyWeatherbearNauticalBasePalette(theme);
           scheduleNauticalLayerOrderRefresh();
           applyNauticalTheme();
           return true;
-        }catch(e){console.warn("Sjökortslagret kunde inte läggas till", e);return false;}
+        }catch(e){
+          console.warn("Sjökortslagret kunde inte läggas till", e);
+          return false;
+        }
       }
       function setBaseMapMode(mode){
-  var previousMode = baseMapMode;
-  baseMapMode = mode === "nautical" ? "nautical" : "standard";
+  var previousMode=baseMapMode;
+  baseMapMode=mode==="nautical"?"nautical":"standard";
 
-  if(baseMapMode === "nautical" && previousMode !== "nautical"){
-    nauticalEntryFocusPending = true;
+  if(baseMapMode==="nautical"&&previousMode!=="nautical"){
+    nauticalEntryFocusPending=true;
   }
 
   if(maptilerMap){
     ensureNauticalChartLayers();
-
-    var visibility = baseMapMode === "nautical" ? "visible" : "none";
+    var visibility=baseMapMode==="nautical"?"visible":"none";
 
     try{
-      [nauticalNightDimmerLayerId,nauticalCoastalFallbackLayerId,nauticalDepthLayerId,nauticalDepthContourLayerId,nauticalSeamarkLayerId].forEach(function(layerId){
-        if(maptilerMap.getLayer && maptilerMap.getLayer(layerId)){
-          maptilerMap.setLayoutProperty(layerId, "visibility", visibility);
+      [
+        nauticalNightDimmerLayerId,
+        nauticalCoastalFallbackLayerId,
+        nauticalDepthLayerId,
+        nauticalDepthContourLayerId,
+        nauticalCoastlineLayerId,
+        nauticalSeamarkLayerId
+      ].forEach(function(layerId){
+        if(maptilerMap.getLayer&&maptilerMap.getLayer(layerId)){
+          maptilerMap.setLayoutProperty(layerId,"visibility",visibility);
         }
       });
-
       scheduleNauticalLayerOrderRefresh();
     }catch(e){
-      console.warn("Kunde inte byta kartläge", e);
+      console.warn("Kunde inte byta kartläge",e);
     }
   }
 
   syncBaseMapButtons();
   applyNauticalTheme();
   syncCustomUserLocationVisuals();
-  if(baseMapMode === "nautical" && activeMode === "nautical"){
-    startNauticalGps();
-    if(userTrackingMode === "off") userTrackingMode = "follow";
 
-    if(hasUserPosition() && userTrackingMode !== "off"){
-      updateNavigationCamera({ immediate:true, ensureNavigationZoom:true });
+  if(baseMapMode==="nautical"&&activeMode==="nautical"){
+    startNauticalGps();
+    if(userTrackingMode==="off") userTrackingMode="follow";
+    if(hasUserPosition()&&userTrackingMode!=="off"){
+      updateNavigationCamera({immediate:true,ensureNavigationZoom:true});
     }
   }else{
-    userTrackingMode = "off";
-    nauticalEntryFocusPending = false;
-    if(activeMode !== "nautical" && typeof stopNauticalHud === "function") stopNauticalHud();
+    restoreWeatherbearNauticalBasePalette();
+    userTrackingMode="off";
+    nauticalEntryFocusPending=false;
+    if(activeMode!=="nautical"&&typeof stopNauticalHud==="function") stopNauticalHud();
   }
 }
 
@@ -6703,50 +6893,133 @@ function bindNauticalCompassHud(){
   }, {passive:true});
 }
 
+
+function weatherbearRememberBasePaint(layerId,property){
+  if(!maptilerMap||!layerId) return;
+  var key=layerId+"|"+property;
+  if(weatherbearNauticalBasePaintSnapshot.has(key)) return;
+  var value;
+  try{value=maptilerMap.getPaintProperty(layerId,property);}catch(e){value=undefined;}
+  weatherbearNauticalBasePaintSnapshot.set(key,{layerId:layerId,property:property,value:value});
+}
+
+function weatherbearSetBasePaint(layerId,property,value){
+  if(!maptilerMap||!layerId) return;
+  weatherbearRememberBasePaint(layerId,property);
+  try{maptilerMap.setPaintProperty(layerId,property,value);}catch(e){}
+}
+
+function weatherbearBaseLayerClass(layer){
+  if(!layer||!layer.id) return null;
+  if(layer.id.indexOf("weatherbear-")===0||layer.id.indexOf("nautical-")===0) return null;
+  if(layer.type==="background") return "background";
+  if(layer.type!=="fill") return null;
+  var sourceLayer=String(layer["source-layer"]||"").toLowerCase();
+  var id=String(layer.id||"").toLowerCase();
+  var key=sourceLayer+" "+id;
+  if(/building/.test(key)) return "building";
+  if(sourceLayer==="land"||/landcover|landuse|park|wood|forest|grass|cemetery|pitch|aeroway|natural/.test(key)) return "land";
+  return null;
+}
+
+function restoreWeatherbearNauticalBasePalette(){
+  if(!maptilerMap||!weatherbearNauticalBasePaintSnapshot.size){
+    weatherbearNauticalBasePaletteActive=false;
+    return;
+  }
+  weatherbearNauticalBasePaintSnapshot.forEach(function(entry){
+    try{maptilerMap.setPaintProperty(entry.layerId,entry.property,entry.value==null?null:entry.value);}catch(e){}
+  });
+  weatherbearNauticalBasePaintSnapshot.clear();
+  weatherbearNauticalBasePaletteActive=false;
+}
+
+function applyWeatherbearNauticalBasePalette(theme){
+  if(!maptilerMap||!maptilerMap.getStyle) return;
+  if(baseMapMode!=="nautical"){
+    restoreWeatherbearNauticalBasePalette();
+    return;
+  }
+
+  var isNight=theme==="night";
+  var style=maptilerMap.getStyle()||{};
+  var layers=Array.isArray(style.layers)?style.layers:[];
+  for(var i=0;i<layers.length;i++){
+    var layer=layers[i];
+    var kind=weatherbearBaseLayerClass(layer);
+    if(kind==="background"){
+      weatherbearSetBasePaint(layer.id,"background-color",isNight?"#181310":"#f1eee5");
+      weatherbearSetBasePaint(layer.id,"background-opacity",1);
+    }else if(kind==="land"){
+      weatherbearSetBasePaint(layer.id,"fill-color",isNight?"#211a17":"#e8e4d7");
+      weatherbearSetBasePaint(layer.id,"fill-opacity",isNight?0.34:0.58);
+    }else if(kind==="building"){
+      weatherbearSetBasePaint(layer.id,"fill-color",isNight?"#2b211d":"#d9d3c7");
+      weatherbearSetBasePaint(layer.id,"fill-opacity",isNight?0.38:0.56);
+    }
+  }
+  weatherbearNauticalBasePaletteActive=true;
+}
+
 function applyNauticalTheme(){
-  var theme = nauticalTheme === "night" ? "night" : "day";
-  document.body.setAttribute("data-nautical-theme", theme);
-  var btn = document.getElementById("nauticalThemeToggle");
+  var theme=nauticalTheme==="night"?"night":"day";
+  document.body.setAttribute("data-nautical-theme",theme);
+  var btn=document.getElementById("nauticalThemeToggle");
   if(btn){
-    btn.textContent = theme === "night" ? "Natt" : "Dag";
-    btn.setAttribute("aria-label", theme === "night" ? "Byt till dagläge" : "Byt till nattläge");
+    btn.textContent=theme==="night"?"Natt":"Dag";
+    btn.setAttribute("aria-label",theme==="night"?"Byt till dagläge":"Byt till nattläge");
   }
 
   refreshWeatherbearDepthThemeSources(theme);
+  applyWeatherbearNauticalBasePalette(theme);
   if(!maptilerMap) return;
+
   try{
-    var nauticalVisible = baseMapMode === "nautical";
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalNightDimmerLayerId)){
+    var nauticalVisible=baseMapMode==="nautical";
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalNightDimmerLayerId)){
       maptilerMap.setLayoutProperty(nauticalNightDimmerLayerId,"visibility",nauticalVisible?"visible":"none");
-      maptilerMap.setPaintProperty(nauticalNightDimmerLayerId,"fill-opacity",theme === "night" ? 0.62 : 0);
+      // Dämpa baskartans vägar/text utan att lägga ett svart filter över djup,
+      // sjömärken eller kustlinje.
+      maptilerMap.setPaintProperty(nauticalNightDimmerLayerId,"fill-opacity",theme==="night"?0.28:0);
     }
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalCoastalFallbackLayerId)){
-      maptilerMap.setPaintProperty(nauticalCoastalFallbackLayerId,"fill-color",theme === "night" ? "#0a1216" : "#d7edf8");
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastalFallbackLayerId)){
+      maptilerMap.setPaintProperty(nauticalCoastalFallbackLayerId,"fill-color",theme==="night"?"#0b1216":"#d7edf8");
       maptilerMap.setPaintProperty(nauticalCoastalFallbackLayerId,"fill-opacity",1);
     }
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthLayerId)){
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthLayerId)){
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-opacity",1);
       maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-brightness-min",0);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-brightness-max",theme === "night" ? 0.9 : 1);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-saturation",theme === "night" ? -0.08 : 0);
-      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-contrast",theme === "night" ? 0.12 : 0.04);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-brightness-max",1);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-saturation",0);
+      maptilerMap.setPaintProperty(nauticalDepthLayerId,"raster-contrast",theme==="night"?0.08:0.04);
     }
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalDepthContourLayerId)){
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-opacity",theme === "night" ? 0.72 : 0.82);
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalDepthContourLayerId)){
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-opacity",theme==="night"?0.58:0.78);
       maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-min",0);
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-max",theme === "night" ? 0.9 : 1);
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-saturation",theme === "night" ? -0.12 : 0);
-      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-contrast",theme === "night" ? 0.22 : 0.12);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-brightness-max",1);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-saturation",0);
+      maptilerMap.setPaintProperty(nauticalDepthContourLayerId,"raster-contrast",theme==="night"?0.18:0.12);
     }
-    if(maptilerMap.getLayer && maptilerMap.getLayer(nauticalSeamarkLayerId)){
-      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-opacity",theme === "night" ? 0.88 : 1);
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalCoastlineLayerId)){
+      maptilerMap.setPaintProperty(nauticalCoastlineLayerId,"line-color",theme==="night"?"#665344":"#7f919b");
+      maptilerMap.setPaintProperty(nauticalCoastlineLayerId,"line-opacity",theme==="night"?0.55:0.72);
+    }
+
+    if(maptilerMap.getLayer&&maptilerMap.getLayer(nauticalSeamarkLayerId)){
+      // Säkerhetsfärgerna behålls men luminansen sänks i nattläge.
+      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-opacity",theme==="night"?0.9:1);
       maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-brightness-min",0);
-      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-brightness-max",theme === "night" ? 0.58 : 1);
-      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-saturation",theme === "night" ? -0.28 : 0);
-      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-contrast",theme === "night" ? 0.34 : 0);
+      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-brightness-max",theme==="night"?0.72:1);
+      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-saturation",theme==="night"?-0.12:0);
+      maptilerMap.setPaintProperty(nauticalSeamarkLayerId,"raster-contrast",theme==="night"?0.18:0);
     }
   }catch(e){
-    console.warn("Kunde inte uppdatera sjökortstema", e);
+    console.warn("Kunde inte uppdatera sjökortstema",e);
   }
 }
 

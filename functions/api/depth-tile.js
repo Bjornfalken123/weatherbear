@@ -182,7 +182,7 @@ function makeUpstreamUrl(type, bbox, { pad = 0, scale = 1, theme = "day" } = {})
     height: String(requestSize),
     srs: "EPSG:3857",
     bbox: requestBbox.join(","),
-    interpolations: "bilinear"
+    interpolations: type === "contours" ? "bilinear" : "nearest"
   });
 
   if (type === "contours") {
@@ -270,7 +270,7 @@ export async function onRequestGet(context) {
     const upstream = await fetch(upstreamUrl, {
       headers: {
         Accept: "image/png",
-        "User-Agent": "Weatherbear depth layer/1.3"
+        "User-Agent": "Weatherbear depth layer/1.4"
       }
     });
 
@@ -293,7 +293,8 @@ export async function onRequestGet(context) {
         "x-weatherbear-depth-grid": requestedBbox ? "maplibre-bbox" : "legacy-zxy",
         "x-weatherbear-depth-pad": String(requestedPad),
         "x-weatherbear-depth-scale": String(requestedScale),
-        "x-weatherbear-depth-theme": theme
+        "x-weatherbear-depth-theme": theme,
+        "x-weatherbear-depth-interpolation": type === "contours" ? "bilinear" : "nearest"
       }
     });
 
