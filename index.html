@@ -1965,6 +1965,234 @@
     }
     body[data-app-mode="weather"] .weather-home-footer{color:rgba(190,205,225,.58);}
 
+
+
+    /* v16: consolidated responsive UI system. This final block intentionally
+       overrides older per-version offsets so floating controls use one layout model. */
+    :root{
+      --wb-control-gap:12px;
+      --wb-control-size:44px;
+      --wb-sheet-radius:22px;
+      --wb-mobile-nav-height:calc(var(--tab-bar-height) + var(--safe-bottom));
+      --wb-nautical-panel-height:calc(88px + var(--safe-bottom));
+      --wb-floating-shadow:0 12px 30px rgba(0,0,0,.34);
+    }
+
+    #uiSheetBackdrop{
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:8950;
+      border:0;
+      padding:0;
+      background:rgba(1,5,12,.48);
+      backdrop-filter:blur(2px);
+      -webkit-backdrop-filter:blur(2px);
+      cursor:default;
+    }
+    body.ui-sheet-open #uiSheetBackdrop{display:block;}
+    body.ui-sheet-open{overscroll-behavior:none;}
+
+    /* Desktop: keep map controls inside the map and prevent panels from growing
+       beyond the usable viewport. */
+    @media (min-width:701px){
+      #filterDrawer{
+        top:70px;
+        max-height:calc(100dvh - 110px);
+        overflow:auto;
+        overscroll-behavior:contain;
+      }
+      #mapOverlayPanel{
+        max-height:calc(100dvh - 40px);
+      }
+      #overlayBody{
+        max-height:calc(100dvh - 130px);
+        overscroll-behavior:contain;
+      }
+      #timeControl{
+        bottom:18px;
+        max-width:calc(100% - 40px);
+      }
+    }
+
+    @media (max-width:700px){
+      :root{
+        --wb-edge:12px;
+        --wb-top-row:calc(var(--safe-top) + 12px);
+        --wb-map-bottom:var(--wb-mobile-nav-height);
+      }
+
+      html,body{width:100%;max-width:100%;}
+      .container{padding:0 !important;max-width:none !important;}
+      .map-panel{padding:0 !important;border:0 !important;border-radius:0 !important;min-height:var(--app-height) !important;}
+      #map,#maptilerMap{height:var(--app-height) !important;min-height:var(--app-height) !important;border:0 !important;border-radius:0 !important;}
+
+      /* Bottom sheets share one geometry and always sit above map controls. */
+      #mobileFilterSheet,#mobileSearchSheet,#mobileSeaSheet{
+        display:none;
+        position:fixed !important;
+        left:0 !important;
+        right:0 !important;
+        bottom:0 !important;
+        z-index:9000 !important;
+        width:100% !important;
+        max-height:min(84dvh,760px) !important;
+        padding:0 0 var(--safe-bottom) !important;
+        border-radius:var(--wb-sheet-radius) var(--wb-sheet-radius) 0 0 !important;
+        overflow:hidden !important;
+        overscroll-behavior:contain;
+      }
+      #mobileFilterSheet.is-open,#mobileSearchSheet.is-open,#mobileSeaSheet.is-open{display:flex !important;flex-direction:column;}
+      #mobileSearchSheet{z-index:9020 !important;}
+      #mobileSeaSheet{z-index:9010 !important;}
+      .sheet-header{flex:0 0 auto;position:sticky !important;top:0 !important;z-index:3 !important;}
+      .sheet-body,#mobileSearchResults,#favoritePlacesWrap{
+        min-height:0;
+        overflow-y:auto !important;
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior:contain;
+      }
+      .sheet-body{padding-bottom:calc(var(--safe-bottom) + 20px) !important;}
+
+      /* Hide floating map actions while a sheet is open. */
+      body.ui-sheet-open #mobileQuickActions,
+      body.ui-sheet-open #modeSwitcher,
+      body.ui-sheet-open #advancedTrayBtn,
+      body.ui-sheet-open #nauticalThemeToggle,
+      body.ui-sheet-open #nauticalDepthLegend,
+      body.ui-sheet-open .nautical-compass-hud,
+      body.ui-sheet-open #mapOverlayPanel,
+      body.ui-sheet-open #timeControl{
+        visibility:hidden !important;
+        pointer-events:none !important;
+      }
+
+      /* Standard and advanced modes: one predictable bottom stack. */
+      body:not([data-app-mode="nautical"]) #bottomTabBar{z-index:8000 !important;}
+      body:not([data-app-mode="nautical"]) #timeControl{
+        bottom:var(--wb-mobile-nav-height) !important;
+        z-index:7000 !important;
+      }
+      body:not([data-app-mode="nautical"]) #mobileQuickActions{
+        left:var(--wb-edge) !important;
+        right:auto !important;
+        bottom:calc(var(--wb-mobile-nav-height) + 126px) !important;
+        z-index:7350 !important;
+      }
+      body:not([data-app-mode="nautical"]) #modeSwitcher{
+        left:auto !important;
+        right:var(--wb-edge) !important;
+        bottom:calc(var(--wb-mobile-nav-height) + 12px) !important;
+        z-index:7950 !important;
+      }
+      body:not([data-app-mode="nautical"]) #modeSwitcherMenu{
+        left:auto !important;
+        right:0 !important;
+        bottom:50px !important;
+      }
+
+      body[data-app-mode="advanced"] #advancedTrayBtn{
+        left:50% !important;
+        right:auto !important;
+        bottom:calc(var(--wb-mobile-nav-height) + 12px) !important;
+        width:min(56vw,280px) !important;
+        transform:translateX(-50%) !important;
+        z-index:7360 !important;
+      }
+      body[data-app-mode="advanced"] #modeSwitcher{
+        bottom:calc(var(--wb-mobile-nav-height) + 76px) !important;
+      }
+      body[data-app-mode="advanced"] #mobileQuickActions{
+        bottom:calc(var(--wb-mobile-nav-height) + 142px) !important;
+      }
+      body[data-app-mode="advanced"] #mapOverlayPanel{
+        top:var(--wb-top-row) !important;
+        left:var(--wb-edge) !important;
+        right:auto !important;
+        width:min(300px,calc(100vw - 86px)) !important;
+        max-height:calc(100dvh - var(--wb-mobile-nav-height) - 176px) !important;
+        z-index:3000 !important;
+      }
+      body[data-app-mode="advanced"] #overlayBody{
+        max-height:calc(100dvh - var(--wb-mobile-nav-height) - 245px) !important;
+      }
+
+      /* Nautical mode: top row for theme/legend, bottom row above status panel
+         for map actions. Nothing shares the same slot. */
+      body[data-app-mode="nautical"] #bottomTabBar{display:none !important;}
+      body[data-app-mode="nautical"] #nauticalStatusPanel{
+        z-index:7900 !important;
+        min-height:var(--wb-nautical-panel-height);
+        padding:10px 10px calc(var(--safe-bottom) + 9px) !important;
+      }
+      body[data-app-mode="nautical"] #nauticalThemeToggle{
+        top:var(--wb-top-row) !important;
+        bottom:auto !important;
+        left:var(--wb-edge) !important;
+        right:auto !important;
+        z-index:7920 !important;
+        min-height:42px;
+      }
+      body[data-app-mode="nautical"] #nauticalDepthLegend{
+        top:var(--wb-top-row) !important;
+        bottom:auto !important;
+        left:auto !important;
+        right:var(--wb-edge) !important;
+        transform:none !important;
+        z-index:7915 !important;
+        max-width:calc(100vw - 92px);
+      }
+      body[data-app-mode="nautical"] .nautical-compass-hud{
+        left:50% !important;
+        right:auto !important;
+        bottom:calc(var(--wb-nautical-panel-height) + 14px) !important;
+        transform:translateX(-50%) !important;
+        z-index:7860 !important;
+      }
+      body[data-app-mode="nautical"] #mobileQuickActions{
+        left:var(--wb-edge) !important;
+        right:auto !important;
+        bottom:calc(var(--wb-nautical-panel-height) + 16px) !important;
+        z-index:7880 !important;
+      }
+      body[data-app-mode="nautical"] #modeSwitcher{
+        left:auto !important;
+        right:var(--wb-edge) !important;
+        bottom:calc(var(--wb-nautical-panel-height) + 16px) !important;
+        z-index:7890 !important;
+      }
+      body[data-app-mode="nautical"] #modeSwitcherMenu{
+        left:auto !important;
+        right:0 !important;
+        bottom:50px !important;
+      }
+      body[data-app-mode="nautical"] #radarObservationNotice,
+      body[data-app-mode="nautical"] #aisMapToast{
+        bottom:calc(var(--wb-nautical-panel-height) + 132px) !important;
+        max-width:calc(100vw - 32px);
+      }
+
+      /* Compact phones: reduce widths rather than allowing collisions. */
+      @media (max-width:390px){
+        body[data-app-mode="nautical"] #nauticalDepthLegend{padding:6px 7px !important;gap:5px !important;}
+        body[data-app-mode="nautical"] .nautical-depth-scale,
+        body[data-app-mode="nautical"] .nautical-depth-labels{width:88px !important;}
+        body[data-app-mode="nautical"] .nautical-compass-face{width:112px !important;height:112px !important;}
+        body[data-app-mode="advanced"] #advancedTrayBtn{width:min(52vw,210px) !important;}
+      }
+
+      /* Landscape phones: keep sheets usable and move nautical HUD away from
+         the shorter vertical center. */
+      @media (orientation:landscape) and (max-height:520px){
+        #mobileFilterSheet,#mobileSearchSheet,#mobileSeaSheet{max-height:92dvh !important;}
+        body[data-app-mode="nautical"] #nauticalStatusPanel{--wb-nautical-panel-height:calc(72px + var(--safe-bottom));padding-top:7px !important;}
+        body[data-app-mode="nautical"] .nautical-status-item{padding:5px 7px !important;}
+        body[data-app-mode="nautical"] .nautical-status-sub{display:none;}
+        body[data-app-mode="nautical"] .nautical-compass-hud{left:auto !important;right:76px !important;transform:none !important;}
+        body[data-app-mode="nautical"] #nauticalDepthLegend{top:calc(var(--safe-top) + 8px) !important;}
+        body[data-app-mode="nautical"] #nauticalThemeToggle{top:calc(var(--safe-top) + 8px) !important;}
+      }
+    }
 </style>
 </head>
 <body>
@@ -8342,5 +8570,59 @@ syncAisButtons();
     })();
   </script>
 
+
+<script>
+/* v16: one-overlay-at-a-time controller for menus, drawers and bottom sheets. */
+(function(){
+  function byId(id){return document.getElementById(id);}
+  function sheetElements(){return ['mobileFilterSheet','mobileSearchSheet','mobileSeaSheet'].map(byId).filter(Boolean);}
+  function anySheetOpen(){return sheetElements().some(function(el){return el.classList.contains('is-open');});}
+  function syncSheetState(){document.body.classList.toggle('ui-sheet-open',anySheetOpen());}
+  function closeModeMenu(){var el=byId('modeSwitcher');if(el) el.classList.remove('is-open');}
+  function closeDesktopDrawer(){var el=byId('filterDrawer');if(el) el.classList.add('is-hidden');}
+  function closeAllSheets(){
+    sheetElements().forEach(function(el){el.classList.remove('is-open');el.classList.remove('places-mode');});
+    syncSheetState();
+  }
+  function closeAllTransient(){closeModeMenu();closeDesktopDrawer();closeAllSheets();}
+
+  function ensureBackdrop(){
+    if(byId('uiSheetBackdrop')) return;
+    var btn=document.createElement('button');
+    btn.id='uiSheetBackdrop';btn.type='button';btn.setAttribute('aria-label','Stäng öppen panel');
+    btn.addEventListener('click',closeAllSheets);
+    document.body.appendChild(btn);
+  }
+
+  function observeSheets(){
+    var observer=new MutationObserver(function(){
+      if(anySheetOpen()){closeModeMenu();closeDesktopDrawer();}
+      syncSheetState();
+    });
+    sheetElements().forEach(function(el){observer.observe(el,{attributes:true,attributeFilter:['class']});});
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    ensureBackdrop();observeSheets();syncSheetState();
+
+    var modeBtn=byId('modeSwitcherBtn');
+    if(modeBtn) modeBtn.addEventListener('click',function(){
+      if(byId('modeSwitcher')&&byId('modeSwitcher').classList.contains('is-open')) closeAllSheets();
+    },true);
+
+    ['quickLayerBtn','quickSearchBtn','quickPlacesBtn','advancedTrayBtn'].forEach(function(id){
+      var el=byId(id);if(el) el.addEventListener('click',closeModeMenu,true);
+    });
+
+    document.querySelectorAll('[data-mode-option]').forEach(function(el){
+      el.addEventListener('click',function(){closeAllSheets();closeDesktopDrawer();},true);
+    });
+
+    window.addEventListener('resize',function(){closeModeMenu();syncSheetState();},{passive:true});
+    window.addEventListener('orientationchange',function(){closeModeMenu();syncSheetState();},{passive:true});
+    document.addEventListener('keydown',function(event){if(event.key==='Escape') closeAllTransient();});
+  });
+})();
+</script>
 </body>
 </html>
