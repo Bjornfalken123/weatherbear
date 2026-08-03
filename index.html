@@ -2073,26 +2073,13 @@
       border-radius:14px 14px 0 0 !important;
     }
     body.is-mobile-landscape[data-app-mode="advanced"] #advancedTrayBtn{
-      display:flex !important;position:fixed !important;left:0 !important;right:0 !important;bottom:87px !important;
+      display:flex !important;position:fixed !important;left:0 !important;right:0 !important;bottom:81px !important;
       width:100% !important;height:40px !important;min-height:40px !important;transform:none !important;z-index:7360 !important;
-      align-items:center !important;justify-content:center !important;gap:0 !important;padding:7px 18px 8px !important;
-      color:rgba(235,243,249,.96) !important;background:linear-gradient(180deg,rgba(11,24,39,.97),rgba(7,15,28,.995)) !important;
-      border:1px solid rgba(255,255,255,.10) !important;border-left:0 !important;border-right:0 !important;border-radius:14px 14px 0 0 !important;
-      box-shadow:0 -10px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06) !important;
     }
-    body.is-mobile-landscape[data-app-mode="advanced"] #advancedTrayBtn .advanced-tray-grip{
-      position:absolute !important;top:4px !important;left:50% !important;transform:translateX(-50%) !important;
-      width:32px !important;height:3px !important;border-radius:999px !important;background:rgba(232,241,248,.34) !important;
-    }
-    body.is-mobile-landscape[data-app-mode="advanced"] #advancedTrayBtn .advanced-tray-main{
-      margin-top:7px !important;display:inline-flex !important;align-items:center !important;gap:7px !important;
-      font-size:13px !important;font-weight:900 !important;line-height:1 !important;
-    }
-    body.is-mobile-landscape[data-app-mode="advanced"] #advancedTrayBtn small{display:none !important;}
     body.is-mobile-landscape[data-app-mode="advanced"] #mobileQuickActions{bottom:133px !important;}
     body.is-mobile-landscape[data-app-mode="advanced"] #mapOverlayPanel{
       display:block !important;position:fixed !important;top:58px !important;left:12px !important;right:auto !important;
-      width:min(300px,calc(100vw - 96px)) !important;max-height:145px !important;transform:none !important;z-index:3000 !important;
+      width:min(300px,calc(100vw - 96px)) !important;max-height:145px !important;z-index:3000 !important;
     }
     body.is-mobile-landscape[data-app-mode="advanced"] #overlayBody{max-height:86px !important;overflow-y:auto !important;}
 
@@ -2107,6 +2094,44 @@
     body.is-mobile-landscape.ui-panel-open #nauticalStatusPanel{
       visibility:hidden !important;pointer-events:none !important;
     }
+
+
+
+/* v18: kompakt väder-/stationspanel med dragbar nederkant på mobil. */
+#overlayResizeHandle{display:none;}
+@media (max-width:700px){
+  #mapOverlayPanel.weather-expanded{
+    width:min(300px, calc(100vw - 96px)) !important;
+  }
+  #mapOverlayPanel.weather-expanded #overlayBody{
+    height:min(var(--weather-overlay-body-max, 248px), calc(100dvh - var(--safe-top) - var(--safe-bottom) - 164px)) !important;
+    max-height:min(var(--weather-overlay-body-max, 248px), calc(100dvh - var(--safe-top) - var(--safe-bottom) - 164px)) !important;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+  }
+  #mapOverlayPanel.weather-expanded:not(.is-collapsed) #overlayResizeHandle{
+    display:flex;
+    height:24px;
+    align-items:center;
+    justify-content:center;
+    cursor:ns-resize;
+    touch-action:none;
+    user-select:none;
+    -webkit-user-select:none;
+    border-top:1px solid rgba(255,255,255,.055);
+    background:linear-gradient(180deg,rgba(255,255,255,.012),rgba(255,255,255,.035));
+  }
+  #overlayResizeHandle::before{
+    content:"";
+    width:42px;
+    height:4px;
+    border-radius:999px;
+    background:rgba(255,255,255,.28);
+    box-shadow:0 1px 0 rgba(0,0,0,.18);
+  }
+  #mapOverlayPanel.is-resizing #overlayResizeHandle::before{background:rgba(123,199,255,.78);}
+  #mapOverlayPanel.is-resizing #overlayBody{scroll-behavior:auto;}
+}
 
 </style>
 </head>
@@ -2215,6 +2240,7 @@
               <div id="overlayBody">
                 <div id="overlayContent">Tryck på kartan för att visa väderdata.</div>
               </div>
+              <div id="overlayResizeHandle" role="separator" aria-label="Dra nedåt för att visa mer data" aria-orientation="horizontal" tabindex="0"></div>
             </div>
 
             <div id="filterDrawer" class="is-hidden">
@@ -2424,7 +2450,8 @@
         maptilerTemperatureLayer=null, maptilerTimelineLayer=null, smhiRadarObservationVisible=false, smhiRadarObservationRequestId=0, smhiRadarObservationActiveKey=null,
         smhiRadarObservationSourceId="smhi-radar-observation-source", smhiRadarObservationLayerId="smhi-radar-observation-layer", smhiRadarObservationTileIds=[], smhiRadarObservationSourceIds=[], openMeteoProtocolRegistered=false, openMeteoCloudMetadataPromise=null,
         openMeteoCloudValidTimes=[], openMeteoCloudSourceActiveKey=null, openMeteoCloudRequestId=0, openMeteoCloudLastError=null,
-        openMeteoCloudApplyTimer=null, openMeteoCloudPendingTime=null, openMeteoCloudLastAppliedAt=0, openMeteoCloudSourceCache=new Map();
+        openMeteoCloudApplyTimer=null, openMeteoCloudPendingTime=null, openMeteoCloudLastAppliedAt=0, openMeteoCloudSourceCache=new Map(),
+        openMeteoCloudSourceLoadPromises=new Map(), openMeteoCloudPendingActiveKey=null, openMeteoCloudSwapToken=0;
 
       var baseMapMode = "standard";
       var weatherbearDepthProtocolRegistered = false;
@@ -5431,10 +5458,63 @@ precipitationMetric +
       }
       map.on('click',function(e){handleMapClick(e.latlng.lat,e.latlng.lng);});
 
-      var overlayCollapseBtn=document.getElementById('overlayCollapseBtn'), mapOverlayPanel=document.getElementById('mapOverlayPanel'), overlayContentEl=document.getElementById('overlayContent');
+      var overlayCollapseBtn=document.getElementById('overlayCollapseBtn'), mapOverlayPanel=document.getElementById('mapOverlayPanel'), overlayContentEl=document.getElementById('overlayContent'), overlayBodyEl=document.getElementById('overlayBody'), overlayResizeHandle=document.getElementById('overlayResizeHandle');
+      var WEATHER_OVERLAY_COMPACT_HEIGHT=248, weatherOverlayUserHeight=WEATHER_OVERLAY_COMPACT_HEIGHT;
       function updateOverlayCollapseButtonText(){if(!overlayCollapseBtn || !mapOverlayPanel) return; overlayCollapseBtn.textContent=mapOverlayPanel.classList.contains('is-collapsed')?'Visa':'Dölj';}
-      function syncWeatherOverlayExpandedState(){if(!mapOverlayPanel) return; mapOverlayPanel.classList.toggle("weather-expanded",!!weatherDetailsExpanded); refreshMapSizeSoon();}
+      function getWeatherOverlayMaximumHeight(){
+        var safeTop=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-top'))||0;
+        var safeBottom=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom'))||0;
+        return Math.max(WEATHER_OVERLAY_COMPACT_HEIGHT,window.innerHeight-safeTop-safeBottom-164);
+      }
+      function setWeatherOverlayBodyHeight(value){
+        if(!mapOverlayPanel) return;
+        var maximum=getWeatherOverlayMaximumHeight();
+        weatherOverlayUserHeight=Math.max(WEATHER_OVERLAY_COMPACT_HEIGHT,Math.min(maximum,Number(value)||WEATHER_OVERLAY_COMPACT_HEIGHT));
+        mapOverlayPanel.style.setProperty('--weather-overlay-body-max',Math.round(weatherOverlayUserHeight)+'px');
+      }
+      function resetWeatherOverlayBodyHeight(){setWeatherOverlayBodyHeight(WEATHER_OVERLAY_COMPACT_HEIGHT);}
+      function syncWeatherOverlayExpandedState(){
+        if(!mapOverlayPanel) return;
+        var wasExpanded=mapOverlayPanel.classList.contains('weather-expanded');
+        mapOverlayPanel.classList.toggle("weather-expanded",!!weatherDetailsExpanded);
+        if(isMobileView()&&weatherDetailsExpanded&&!wasExpanded) resetWeatherOverlayBodyHeight();
+        if(!weatherDetailsExpanded){mapOverlayPanel.style.removeProperty('--weather-overlay-body-max');weatherOverlayUserHeight=WEATHER_OVERLAY_COMPACT_HEIGHT;}
+        refreshMapSizeSoon();
+      }
       function toggleOverlayCollapsed(forceState){if(!mapOverlayPanel) return;if(typeof forceState==='boolean') mapOverlayPanel.classList.toggle('is-collapsed',forceState); else mapOverlayPanel.classList.toggle('is-collapsed');updateOverlayCollapseButtonText();syncOverlayTitle();refreshMapSizeSoon();}
+      function bindWeatherOverlayResizeHandle(){
+        if(!overlayResizeHandle||!mapOverlayPanel||!overlayBodyEl||overlayResizeHandle.dataset.boundResize==='1') return;
+        overlayResizeHandle.dataset.boundResize='1';
+        var startY=0,startHeight=WEATHER_OVERLAY_COMPACT_HEIGHT,activePointer=null;
+        function finishResize(){
+          if(activePointer===null) return;
+          activePointer=null;mapOverlayPanel.classList.remove('is-resizing');
+          var maximum=getWeatherOverlayMaximumHeight(),middle=Math.round((WEATHER_OVERLAY_COMPACT_HEIGHT+maximum)*0.58);
+          var snaps=[WEATHER_OVERLAY_COMPACT_HEIGHT,middle,maximum],best=snaps[0],bestDiff=Math.abs(weatherOverlayUserHeight-best);
+          snaps.forEach(function(value){var diff=Math.abs(weatherOverlayUserHeight-value);if(diff<bestDiff){best=value;bestDiff=diff;}});
+          setWeatherOverlayBodyHeight(best);refreshMapSizeSoon();
+        }
+        overlayResizeHandle.addEventListener('pointerdown',function(e){
+          if(!isMobileView()||!weatherDetailsExpanded) return;
+          e.preventDefault();e.stopPropagation();activePointer=e.pointerId;startY=e.clientY;startHeight=Math.max(WEATHER_OVERLAY_COMPACT_HEIGHT,overlayBodyEl.getBoundingClientRect().height);
+          mapOverlayPanel.classList.add('is-resizing');
+          try{overlayResizeHandle.setPointerCapture(e.pointerId);}catch(err){}
+        });
+        overlayResizeHandle.addEventListener('pointermove',function(e){
+          if(activePointer!==e.pointerId) return;e.preventDefault();setWeatherOverlayBodyHeight(startHeight+(e.clientY-startY));
+        });
+        overlayResizeHandle.addEventListener('pointerup',finishResize);
+        overlayResizeHandle.addEventListener('pointercancel',finishResize);
+        overlayResizeHandle.addEventListener('dblclick',function(e){e.preventDefault();e.stopPropagation();var maximum=getWeatherOverlayMaximumHeight();setWeatherOverlayBodyHeight(weatherOverlayUserHeight>WEATHER_OVERLAY_COMPACT_HEIGHT+20?WEATHER_OVERLAY_COMPACT_HEIGHT:maximum);refreshMapSizeSoon();});
+        overlayResizeHandle.addEventListener('keydown',function(e){
+          if(!isMobileView()||!weatherDetailsExpanded) return;
+          if(e.key==='ArrowDown'){e.preventDefault();setWeatherOverlayBodyHeight(weatherOverlayUserHeight+48);}
+          else if(e.key==='ArrowUp'){e.preventDefault();setWeatherOverlayBodyHeight(weatherOverlayUserHeight-48);}
+          else if(e.key==='Home'){e.preventDefault();setWeatherOverlayBodyHeight(WEATHER_OVERLAY_COMPACT_HEIGHT);}
+          else if(e.key==='End'){e.preventDefault();setWeatherOverlayBodyHeight(getWeatherOverlayMaximumHeight());}
+        });
+      }
+      bindWeatherOverlayResizeHandle();
       if(overlayCollapseBtn) overlayCollapseBtn.addEventListener('click',function(e){e.stopPropagation();toggleOverlayCollapsed();});
       if(overlayContentEl){
         overlayContentEl.addEventListener("click",function(e){
@@ -6431,7 +6511,7 @@ var AIS_LISTEN_MS=isMobileView()?3000:5000, AIS_REFRESH_INTERVAL_MS=isMobileView
       var OPEN_METEO_CLOUD_VARIABLE="cloud_cover";
       var OPEN_METEO_CLOUD_SOURCE_ID="openmeteo-cloud-source";
       var OPEN_METEO_CLOUD_LAYER_ID="openmeteo-cloud-layer";
-      var OPEN_METEO_CLOUD_APPLY_INTERVAL_MS=90, OPEN_METEO_CLOUD_MAX_CACHED_STEPS=isMobileView()?12:24, OPEN_METEO_CLOUD_DRAG_RADIUS=isMobileView()?2:3, OPEN_METEO_CLOUD_STARTUP_RADIUS=isMobileView()?3:5, OPEN_METEO_CLOUD_PRELOAD_BATCH_DELAY_MS=isMobileView()?420:220, OPEN_METEO_CLOUD_PRELOAD_OPACITY=0.01, OPEN_METEO_CLOUD_VISIBLE_OPACITY=0.42;
+      var OPEN_METEO_CLOUD_APPLY_INTERVAL_MS=90, OPEN_METEO_CLOUD_MAX_CACHED_STEPS=isMobileView()?5:8, OPEN_METEO_CLOUD_DRAG_RADIUS=1, OPEN_METEO_CLOUD_STARTUP_RADIUS=1, OPEN_METEO_CLOUD_PRELOAD_BATCH_DELAY_MS=isMobileView()?260:180, OPEN_METEO_CLOUD_PRELOAD_OPACITY=0.002, OPEN_METEO_CLOUD_VISIBLE_OPACITY=0.42, OPEN_METEO_CLOUD_LOAD_TIMEOUT_MS=9000;
       var openMeteoCloudPreloadQueue=[], openMeteoCloudPreloadSet=new Set(), openMeteoCloudPreloadRunning=false, openMeteoCloudStartupWarmupStarted=false, forecastTimelineInitialized=false;
       // Keep a small cloud window warm in the background so Advanced/Sjökort can show Moln immediately.
       // The layer is added at near-zero opacity while inactive; visible opacity is only used when Moln is actually enabled.
@@ -7831,16 +7911,169 @@ function syncCustomUserLocationVisuals(){
       function sanitizeOpenMeteoTimeStepKey(timeStep){return String(timeStep||"current_time_1H").replace(/[^a-zA-Z0-9_-]/g,"_");}
       function getOpenMeteoCloudIds(timeStep){var safeKey=sanitizeOpenMeteoTimeStepKey(timeStep);return {sourceId:OPEN_METEO_CLOUD_SOURCE_ID+"-"+safeKey,layerId:OPEN_METEO_CLOUD_LAYER_ID+"-"+safeKey};}
       function getNearestOpenMeteoIndex(timeValue){if(!openMeteoCloudValidTimes.length) return -1;var targetTime=Number(timeValue||getSelectedAppTime());if(!isFinite(targetTime)) return -1;var bestIndex=-1,bestDiff=Infinity;for(var i=0;i<openMeteoCloudValidTimes.length;i++){var t=new Date(openMeteoCloudValidTimes[i]).getTime();if(!isFinite(t)) continue;var diff=Math.abs(t-targetTime);if(diff<bestDiff){bestDiff=diff;bestIndex=i;}}return bestIndex;}
-      function hideAllOpenMeteoCloudLayers(){if(!maptilerMap) return;openMeteoCloudSourceCache.forEach(function(entry){if(!entry||!entry.layerId) return;try{if(maptilerMap.getLayer&&maptilerMap.getLayer(entry.layerId)){maptilerMap.setLayoutProperty(entry.layerId,"visibility","visible");maptilerMap.setPaintProperty(entry.layerId,"raster-opacity",OPEN_METEO_CLOUD_PRELOAD_OPACITY);}}catch(e){}});}
-      function showCachedOpenMeteoCloudLayerForTime(timeValue){if(!maptilerMap||!satelliteLayerVisible||!openMeteoCloudValidTimes.length) return false;var timeStep=getNearestOpenMeteoTimeStep(timeValue), cached=openMeteoCloudSourceCache.get(timeStep);if(!cached||!cached.layerId) return false;try{hideAllOpenMeteoCloudLayers();if(maptilerMap.getLayer&&maptilerMap.getLayer(cached.layerId)){maptilerMap.setLayoutProperty(cached.layerId,"visibility","visible");maptilerMap.setPaintProperty(cached.layerId,"raster-opacity",OPEN_METEO_CLOUD_VISIBLE_OPACITY);cached.lastUsedAt=Date.now();cached.wasShownAtLeastOnce=true;openMeteoCloudSourceActiveKey=timeStep;scheduleNauticalLayerOrderRefresh();return true;}}catch(e){console.warn("Kunde inte visa cachat satellitlager", e);}return false;}
-      function getNearestCachedOpenMeteoCloudTime(timeValue){if(!openMeteoCloudValidTimes.length||!openMeteoCloudSourceCache.size) return null;var targetTime=Number(timeValue||getSelectedAppTime());if(!isFinite(targetTime)) return null;var bestTime=null,bestDiff=Infinity;openMeteoCloudSourceCache.forEach(function(entry){if(!entry||!entry.timeStep) return;var match=String(entry.timeStep).match(/^valid_times_(\d+)$/);if(!match) return;var index=Number(match[1]);if(!isFinite(index)) return;var validTimeRaw=openMeteoCloudValidTimes[index];if(!validTimeRaw) return;var validTime=new Date(validTimeRaw).getTime();if(!isFinite(validTime)) return;var diff=Math.abs(validTime-targetTime);if(diff<bestDiff){bestDiff=diff;bestTime=validTime;}});return bestTime;}
-      function queueOpenMeteoCloudStepByIndex(index,priority){if(!openMeteoCloudValidTimes.length) return;if(index<0||index>=openMeteoCloudValidTimes.length) return;var timeStep="valid_times_"+index;if(openMeteoCloudSourceCache.has(timeStep)||openMeteoCloudPreloadSet.has(timeStep)) return;openMeteoCloudPreloadSet.add(timeStep);openMeteoCloudPreloadQueue.push({index:index,timeStep:timeStep,priority:priority||0});openMeteoCloudPreloadQueue.sort(function(a,b){return b.priority-a.priority;});runOpenMeteoCloudPreloadQueue();}
-      function queueOpenMeteoCloudWindow(timeValue,radius,priority){if((!satelliteLayerVisible && !openMeteoCloudBackgroundPreload)||!openMeteoCloudValidTimes.length) return;var centerIndex=getNearestOpenMeteoIndex(timeValue);if(centerIndex<0) return;queueOpenMeteoCloudStepByIndex(centerIndex,(priority||0)+100);for(var offset=1;offset<=radius;offset++){queueOpenMeteoCloudStepByIndex(centerIndex+offset,(priority||0)+radius-offset);queueOpenMeteoCloudStepByIndex(centerIndex-offset,(priority||0)+radius-offset);}}
-      function runOpenMeteoCloudPreloadQueue(){if(openMeteoCloudPreloadRunning) return;if((!satelliteLayerVisible && !openMeteoCloudBackgroundPreload)||!maptilerMap) return;openMeteoCloudPreloadRunning=true;function next(){if((!satelliteLayerVisible && !openMeteoCloudBackgroundPreload)||!maptilerMap){openMeteoCloudPreloadRunning=false;return;}var item=openMeteoCloudPreloadQueue.shift();if(!item){openMeteoCloudPreloadRunning=false;return;}openMeteoCloudPreloadSet.delete(item.timeStep);var rawTime=openMeteoCloudValidTimes[item.index], preloadTime=new Date(rawTime).getTime();if(isFinite(preloadTime)) addOrUpdateOpenMeteoCloudLayer(preloadTime,{show:false,preload:true});setTimeout(next,OPEN_METEO_CLOUD_PRELOAD_BATCH_DELAY_MS);}next();}
-      function cancelOpenMeteoCloudWarmup(){openMeteoCloudPreloadQueue=[];openMeteoCloudPreloadSet.clear();openMeteoCloudPreloadRunning=false;}
-      function trimOpenMeteoCloudCache(){if(!maptilerMap) return;if(openMeteoCloudSourceCache.size<=OPEN_METEO_CLOUD_MAX_CACHED_STEPS) return;var entries=Array.from(openMeteoCloudSourceCache.entries()).sort(function(a,b){return (a[1].lastUsedAt||0)-(b[1].lastUsedAt||0);});while(openMeteoCloudSourceCache.size>OPEN_METEO_CLOUD_MAX_CACHED_STEPS&&entries.length){var item=entries.shift(),key=item[0],entry=item[1];if(key===openMeteoCloudSourceActiveKey) continue;try{if(entry.layerId&&maptilerMap.getLayer&&maptilerMap.getLayer(entry.layerId)) maptilerMap.removeLayer(entry.layerId);}catch(e){}try{if(entry.sourceId&&maptilerMap.getSource&&maptilerMap.getSource(entry.sourceId)) maptilerMap.removeSource(entry.sourceId);}catch(e){}openMeteoCloudSourceCache.delete(key);}}
-      function addOrUpdateOpenMeteoCloudLayer(timeValue,options){options=options||{};var shouldShow=options.show!==false,isPreload=options.preload===true||shouldShow===false;if(!maptilerMap||(!satelliteLayerVisible && !isPreload)) return false;var timeStep=getNearestOpenMeteoTimeStep(timeValue);if(isPreload&&timeStep===openMeteoCloudSourceActiveKey) return true;var ids=getOpenMeteoCloudIds(timeStep), cached=openMeteoCloudSourceCache.get(timeStep);if(!cached){try{if(!(maptilerMap.getSource&&maptilerMap.getSource(ids.sourceId))) maptilerMap.addSource(ids.sourceId,{type:"raster",url:buildOpenMeteoCloudUrl(timeValue),tileSize:512,minzoom:3,maxzoom:8});if(!(maptilerMap.getLayer&&maptilerMap.getLayer(ids.layerId))){maptilerMap.addLayer({id:ids.layerId,type:"raster",source:ids.sourceId,layout:{visibility:"visible"},paint:{"raster-opacity":isPreload?OPEN_METEO_CLOUD_PRELOAD_OPACITY:OPEN_METEO_CLOUD_VISIBLE_OPACITY,"raster-resampling":"linear"}});scheduleNauticalLayerOrderRefresh();}cached={timeStep:timeStep,sourceId:ids.sourceId,layerId:ids.layerId,createdAt:Date.now(),lastUsedAt:Date.now()};openMeteoCloudSourceCache.set(timeStep,cached);}catch(e){console.warn("Open-Meteo satellitlager kunde inte läggas till", e);openMeteoCloudLastError=e;return false;}}cached.lastUsedAt=Date.now();try{if(maptilerMap.getLayer&&maptilerMap.getLayer(cached.layerId)){maptilerMap.setLayoutProperty(cached.layerId,"visibility","visible");maptilerMap.setPaintProperty(cached.layerId,"raster-opacity",shouldShow?OPEN_METEO_CLOUD_VISIBLE_OPACITY:OPEN_METEO_CLOUD_PRELOAD_OPACITY);}}catch(e){}if(!shouldShow){trimOpenMeteoCloudCache();return true;}try{hideAllOpenMeteoCloudLayers();if(maptilerMap.getLayer&&maptilerMap.getLayer(cached.layerId)){maptilerMap.setLayoutProperty(cached.layerId,"visibility","visible");maptilerMap.setPaintProperty(cached.layerId,"raster-opacity",OPEN_METEO_CLOUD_VISIBLE_OPACITY);}openMeteoCloudSourceActiveKey=timeStep;trimOpenMeteoCloudCache();scheduleNauticalLayerOrderRefresh();return true;}catch(e){console.warn("Open-Meteo satellitlager kunde inte visas", e);openMeteoCloudLastError=e;return false;}}
-      function removeOpenMeteoCloudLayer(){if(!maptilerMap) return;openMeteoCloudSourceCache.forEach(function(entry){if(!entry||!entry.layerId) return;try{if(maptilerMap.getLayer&&maptilerMap.getLayer(entry.layerId)) maptilerMap.setLayoutProperty(entry.layerId,"visibility","none");}catch(e){}});openMeteoCloudSourceActiveKey=null;}
+      function setOpenMeteoCloudLayerVisual(entry,visible,opacity){
+        if(!maptilerMap||!entry||!entry.layerId) return;
+        try{
+          if(maptilerMap.getLayer&&maptilerMap.getLayer(entry.layerId)){
+            maptilerMap.setLayoutProperty(entry.layerId,"visibility",visible?"visible":"none");
+            if(visible&&opacity!=null) maptilerMap.setPaintProperty(entry.layerId,"raster-opacity",opacity);
+          }
+        }catch(e){}
+      }
+      function isOpenMeteoCloudEntryLoaded(entry){
+        if(!entry||!maptilerMap) return false;
+        if(entry.loaded) return true;
+        try{
+          if(maptilerMap.isSourceLoaded&&maptilerMap.isSourceLoaded(entry.sourceId)){
+            entry.loaded=true;entry.loadedAt=Date.now();return true;
+          }
+        }catch(e){}
+        return false;
+      }
+      function waitForOpenMeteoCloudEntry(entry){
+        if(!entry||!maptilerMap) return Promise.resolve(false);
+        if(isOpenMeteoCloudEntryLoaded(entry)) return Promise.resolve(true);
+        if(openMeteoCloudSourceLoadPromises.has(entry.timeStep)) return openMeteoCloudSourceLoadPromises.get(entry.timeStep);
+        var promise=new Promise(function(resolve){
+          var settled=false,timer=null;
+          function cleanup(){
+            try{maptilerMap.off('sourcedata',onData);maptilerMap.off('idle',onIdle);maptilerMap.off('error',onError);}catch(e){}
+            if(timer) clearTimeout(timer);
+            openMeteoCloudSourceLoadPromises.delete(entry.timeStep);
+          }
+          function finish(ok){
+            if(settled) return;settled=true;
+            if(ok){entry.loaded=true;entry.loadedAt=Date.now();entry.lastError=null;}
+            else entry.loadFailedAt=Date.now();
+            cleanup();resolve(!!ok);
+          }
+          function check(){if(isOpenMeteoCloudEntryLoaded(entry)) finish(true);}
+          function onData(event){if(!event||!event.sourceId||event.sourceId===entry.sourceId) check();}
+          function onIdle(){check();}
+          function onError(event){
+            if(event&&event.sourceId&&event.sourceId!==entry.sourceId) return;
+            if(event&&event.sourceId===entry.sourceId) entry.lastError=event.error||new Error('Molnkällan kunde inte laddas');
+          }
+          try{maptilerMap.on('sourcedata',onData);maptilerMap.on('idle',onIdle);maptilerMap.on('error',onError);}catch(e){}
+          timer=setTimeout(function(){check();if(!settled) finish(false);},OPEN_METEO_CLOUD_LOAD_TIMEOUT_MS);
+          setTimeout(check,0);
+        });
+        openMeteoCloudSourceLoadPromises.set(entry.timeStep,promise);
+        return promise;
+      }
+      function hideAllOpenMeteoCloudLayers(exceptKey){
+        if(!maptilerMap) return;
+        openMeteoCloudSourceCache.forEach(function(entry,key){
+          if(key===exceptKey) return;
+          if(entry&&entry.preloadInProgress) setOpenMeteoCloudLayerVisual(entry,true,OPEN_METEO_CLOUD_PRELOAD_OPACITY);
+          else setOpenMeteoCloudLayerVisual(entry,false,0);
+        });
+      }
+      function activateOpenMeteoCloudEntry(timeStep,entry){
+        if(!entry||!satelliteLayerVisible||!isOpenMeteoCloudEntryLoaded(entry)) return false;
+        hideAllOpenMeteoCloudLayers(timeStep);
+        entry.preloadInProgress=false;entry.wantShow=false;entry.lastUsedAt=Date.now();entry.wasShownAtLeastOnce=true;
+        setOpenMeteoCloudLayerVisual(entry,true,OPEN_METEO_CLOUD_VISIBLE_OPACITY);
+        openMeteoCloudSourceActiveKey=timeStep;
+        if(openMeteoCloudPendingActiveKey===timeStep) openMeteoCloudPendingActiveKey=null;
+        showOpenMeteoCloudLoadingState(false);
+        trimOpenMeteoCloudCache();scheduleNauticalLayerOrderRefresh();
+        return true;
+      }
+      function showCachedOpenMeteoCloudLayerForTime(timeValue){
+        if(!maptilerMap||!satelliteLayerVisible||!openMeteoCloudValidTimes.length) return false;
+        var timeStep=getNearestOpenMeteoTimeStep(timeValue),cached=openMeteoCloudSourceCache.get(timeStep);
+        if(!cached||!cached.layerId) return false;
+        if(isOpenMeteoCloudEntryLoaded(cached)) return activateOpenMeteoCloudEntry(timeStep,cached);
+        return false;
+      }
+      function getNearestCachedOpenMeteoCloudTime(timeValue){if(!openMeteoCloudValidTimes.length||!openMeteoCloudSourceCache.size) return null;var targetTime=Number(timeValue||getSelectedAppTime());if(!isFinite(targetTime)) return null;var bestTime=null,bestDiff=Infinity;openMeteoCloudSourceCache.forEach(function(entry){if(!entry||!entry.timeStep||!isOpenMeteoCloudEntryLoaded(entry)) return;var match=String(entry.timeStep).match(/^valid_times_(\d+)$/);if(!match) return;var index=Number(match[1]);if(!isFinite(index)) return;var validTimeRaw=openMeteoCloudValidTimes[index];if(!validTimeRaw) return;var validTime=new Date(validTimeRaw).getTime();if(!isFinite(validTime)) return;var diff=Math.abs(validTime-targetTime);if(diff<bestDiff){bestDiff=diff;bestTime=validTime;}});return bestTime;}
+      function queueOpenMeteoCloudStepByIndex(index,priority){
+        if(!openMeteoCloudValidTimes.length||index<0||index>=openMeteoCloudValidTimes.length) return;
+        var timeStep="valid_times_"+index,existing=openMeteoCloudSourceCache.get(timeStep);
+        if(existing&&isOpenMeteoCloudEntryLoaded(existing)) return;
+        if(openMeteoCloudPreloadSet.has(timeStep)) return;
+        openMeteoCloudPreloadSet.add(timeStep);openMeteoCloudPreloadQueue.push({index:index,timeStep:timeStep,priority:priority||0});
+        openMeteoCloudPreloadQueue.sort(function(a,b){return b.priority-a.priority;});runOpenMeteoCloudPreloadQueue();
+      }
+      function queueOpenMeteoCloudWindow(timeValue,radius,priority){if((!satelliteLayerVisible&&!openMeteoCloudBackgroundPreload)||!openMeteoCloudValidTimes.length) return;var centerIndex=getNearestOpenMeteoIndex(timeValue);if(centerIndex<0) return;for(var offset=1;offset<=radius;offset++){queueOpenMeteoCloudStepByIndex(centerIndex+offset,(priority||0)+radius-offset);queueOpenMeteoCloudStepByIndex(centerIndex-offset,(priority||0)+radius-offset);}}
+      function runOpenMeteoCloudPreloadQueue(){
+        if(openMeteoCloudPreloadRunning||(!satelliteLayerVisible&&!openMeteoCloudBackgroundPreload)||!maptilerMap) return;
+        openMeteoCloudPreloadRunning=true;
+        function next(){
+          if((!satelliteLayerVisible&&!openMeteoCloudBackgroundPreload)||!maptilerMap){openMeteoCloudPreloadRunning=false;return;}
+          var item=openMeteoCloudPreloadQueue.shift();
+          if(!item){openMeteoCloudPreloadRunning=false;return;}
+          openMeteoCloudPreloadSet.delete(item.timeStep);
+          var rawTime=openMeteoCloudValidTimes[item.index],preloadTime=new Date(rawTime).getTime();
+          if(!isFinite(preloadTime)){setTimeout(next,OPEN_METEO_CLOUD_PRELOAD_BATCH_DELAY_MS);return;}
+          var entry=addOrUpdateOpenMeteoCloudLayer(preloadTime,{show:false,preload:true,returnEntry:true});
+          Promise.resolve(entry&&entry.entry?waitForOpenMeteoCloudEntry(entry.entry):false).then(function(){
+            if(entry&&entry.entry){entry.entry.preloadInProgress=false;if(entry.entry.timeStep!==openMeteoCloudSourceActiveKey&&entry.entry.timeStep!==openMeteoCloudPendingActiveKey) setOpenMeteoCloudLayerVisual(entry.entry,false,0);}
+          }).finally(function(){setTimeout(next,OPEN_METEO_CLOUD_PRELOAD_BATCH_DELAY_MS);});
+        }
+        next();
+      }
+      function cancelOpenMeteoCloudWarmup(){openMeteoCloudPreloadQueue=[];openMeteoCloudPreloadSet.clear();openMeteoCloudPreloadRunning=false;openMeteoCloudSourceCache.forEach(function(entry,key){entry.preloadInProgress=false;if(key!==openMeteoCloudSourceActiveKey&&key!==openMeteoCloudPendingActiveKey) setOpenMeteoCloudLayerVisual(entry,false,0);});}
+      function removeOpenMeteoCloudCacheEntry(key){
+        var entry=openMeteoCloudSourceCache.get(key);if(!entry||!maptilerMap) return;
+        try{if(entry.layerId&&maptilerMap.getLayer&&maptilerMap.getLayer(entry.layerId)) maptilerMap.removeLayer(entry.layerId);}catch(e){}
+        try{if(entry.sourceId&&maptilerMap.getSource&&maptilerMap.getSource(entry.sourceId)) maptilerMap.removeSource(entry.sourceId);}catch(e){}
+        openMeteoCloudSourceCache.delete(key);openMeteoCloudSourceLoadPromises.delete(key);
+      }
+      function trimOpenMeteoCloudCache(){if(!maptilerMap||openMeteoCloudSourceCache.size<=OPEN_METEO_CLOUD_MAX_CACHED_STEPS) return;var entries=Array.from(openMeteoCloudSourceCache.entries()).sort(function(a,b){return (a[1].lastUsedAt||0)-(b[1].lastUsedAt||0);});while(openMeteoCloudSourceCache.size>OPEN_METEO_CLOUD_MAX_CACHED_STEPS&&entries.length){var item=entries.shift(),key=item[0],entry=item[1];if(key===openMeteoCloudSourceActiveKey||key===openMeteoCloudPendingActiveKey||(entry&&entry.preloadInProgress)) continue;removeOpenMeteoCloudCacheEntry(key);}}
+      function createOpenMeteoCloudEntry(timeValue,timeStep,isPreload){
+        if(!registerOpenMeteoProtocol()) return null;
+        var ids=getOpenMeteoCloudIds(timeStep),entry=openMeteoCloudSourceCache.get(timeStep);
+        if(entry) return entry;
+        try{
+          if(!(maptilerMap.getSource&&maptilerMap.getSource(ids.sourceId))) maptilerMap.addSource(ids.sourceId,{type:"raster",url:buildOpenMeteoCloudUrl(timeValue),tileSize:512,minzoom:3,maxzoom:8});
+          if(!(maptilerMap.getLayer&&maptilerMap.getLayer(ids.layerId))) maptilerMap.addLayer({id:ids.layerId,type:"raster",source:ids.sourceId,layout:{visibility:"visible"},paint:{"raster-opacity":OPEN_METEO_CLOUD_PRELOAD_OPACITY,"raster-resampling":"linear","raster-fade-duration":120}});
+          entry={timeStep:timeStep,sourceId:ids.sourceId,layerId:ids.layerId,createdAt:Date.now(),lastUsedAt:Date.now(),loaded:false,preloadInProgress:!!isPreload,retryCount:0};
+          openMeteoCloudSourceCache.set(timeStep,entry);scheduleNauticalLayerOrderRefresh();
+          return entry;
+        }catch(e){console.warn("Open-Meteo satellitlager kunde inte läggas till",e);openMeteoCloudLastError=e;return null;}
+      }
+      function addOrUpdateOpenMeteoCloudLayer(timeValue,options){
+        options=options||{};var shouldShow=options.show!==false,isPreload=options.preload===true||shouldShow===false;
+        if(!maptilerMap||(!satelliteLayerVisible&&!isPreload)) return options.returnEntry?null:false;
+        var timeStep=getNearestOpenMeteoTimeStep(timeValue);
+        if(isPreload&&timeStep===openMeteoCloudSourceActiveKey) return options.returnEntry?{entry:openMeteoCloudSourceCache.get(timeStep),timeStep:timeStep}:true;
+        var entry=createOpenMeteoCloudEntry(timeValue,timeStep,isPreload);
+        if(!entry) return options.returnEntry?null:false;
+        entry.lastUsedAt=Date.now();entry.preloadInProgress=!!isPreload&&!shouldShow;
+        if(!shouldShow){
+          if(!isOpenMeteoCloudEntryLoaded(entry)) setOpenMeteoCloudLayerVisual(entry,true,OPEN_METEO_CLOUD_PRELOAD_OPACITY);
+          else setOpenMeteoCloudLayerVisual(entry,false,0);
+          trimOpenMeteoCloudCache();return options.returnEntry?{entry:entry,timeStep:timeStep}:true;
+        }
+        var previousPendingKey=openMeteoCloudPendingActiveKey;
+        if(previousPendingKey&&previousPendingKey!==timeStep&&previousPendingKey!==openMeteoCloudSourceActiveKey){
+          var previousPendingEntry=openMeteoCloudSourceCache.get(previousPendingKey);
+          if(previousPendingEntry){previousPendingEntry.wantShow=false;setOpenMeteoCloudLayerVisual(previousPendingEntry,false,0);}
+        }
+        var swapToken=++openMeteoCloudSwapToken;
+        openMeteoCloudPendingActiveKey=timeStep;entry.wantShow=true;entry.preloadInProgress=false;
+        showOpenMeteoCloudLoadingState(true);
+        if(isOpenMeteoCloudEntryLoaded(entry)) activateOpenMeteoCloudEntry(timeStep,entry);
+        else{
+          setOpenMeteoCloudLayerVisual(entry,true,OPEN_METEO_CLOUD_PRELOAD_OPACITY);
+          waitForOpenMeteoCloudEntry(entry).then(function(ok){
+            if(swapToken!==openMeteoCloudSwapToken||!satelliteLayerVisible||openMeteoCloudPendingActiveKey!==timeStep) return;
+            if(ok){activateOpenMeteoCloudEntry(timeStep,entry);return;}
+            if(options.retry!==true){
+              removeOpenMeteoCloudCacheEntry(timeStep);
+              setTimeout(function(){if(swapToken===openMeteoCloudSwapToken&&satelliteLayerVisible) addOrUpdateOpenMeteoCloudLayer(timeValue,{show:true,preload:false,retry:true});},350);
+            }else{
+              removeOpenMeteoCloudCacheEntry(timeStep);
+              openMeteoCloudPendingActiveKey=null;showOpenMeteoCloudLoadingState(false);
+              openMeteoCloudLastError=entry.lastError||new Error('Molnlagret hann inte laddas');
+            }
+          });
+        }
+        return options.returnEntry?{entry:entry,timeStep:timeStep}:true;
+      }
+      function removeOpenMeteoCloudLayer(){if(!maptilerMap) return;++openMeteoCloudSwapToken;openMeteoCloudPendingActiveKey=null;openMeteoCloudSourceCache.forEach(function(entry){setOpenMeteoCloudLayerVisual(entry,false,0);entry.wantShow=false;});openMeteoCloudSourceActiveKey=null;showOpenMeteoCloudLoadingState(false);}
       function syncOpenMeteoCloudLayerForSelectedTime(timeValue,options){
         options=options||{};
         if(!maptilerMap) return;
@@ -7877,9 +8110,12 @@ function syncCustomUserLocationVisuals(){
         ensureOpenMeteoCloudMetadata().then(function(){
           if(requestId!==openMeteoCloudRequestId) return;
           if(!satelliteLayerVisible) return;
-          showOpenMeteoCloudLoadingState(false);
-          var ok=addOrUpdateOpenMeteoCloudLayer(targetTime);
-          if(ok&&shouldPreload) queueOpenMeteoCloudWindow(targetTime,OPEN_METEO_CLOUD_DRAG_RADIUS,50);
+          var requested=addOrUpdateOpenMeteoCloudLayer(targetTime,{show:true,preload:false,returnEntry:true});
+          if(requested&&requested.entry&&shouldPreload){
+            waitForOpenMeteoCloudEntry(requested.entry).then(function(ok){
+              if(ok&&satelliteLayerVisible) queueOpenMeteoCloudWindow(targetTime,OPEN_METEO_CLOUD_DRAG_RADIUS,50);
+            });
+          }
         }).catch(function(e){
           if(requestId!==openMeteoCloudRequestId) return;
           console.warn("Open-Meteo satellit misslyckades", e);
@@ -7893,11 +8129,16 @@ function syncCustomUserLocationVisuals(){
         if(openMeteoCloudStartupWarmupStarted) return;
         openMeteoCloudStartupWarmupStarted=true;
         ensureOpenMeteoCloudMetadata().then(function(){
-          setTimeout(function(){
-            // Preload around current app time even while Weather home is active. This makes Moln ready
-            // when the user switches to Avancerat and also reduces blank steps when nudging time forward.
-            queueOpenMeteoCloudWindow(timeValue || getSelectedAppTime(),OPEN_METEO_CLOUD_STARTUP_RADIUS,20);
-          },650);
+          var warmTime=timeValue||getSelectedAppTime();
+          var key=openMeteoCloudPendingActiveKey||openMeteoCloudSourceActiveKey;
+          var entry=key?openMeteoCloudSourceCache.get(key):null;
+          Promise.resolve(entry?waitForOpenMeteoCloudEntry(entry):true).then(function(){
+            setTimeout(function(){
+              // Förladda bara när huvudsteget fått chans att bli färdigt. På så sätt
+              // konkurrerar inte flera molnraster med den bild användaren väntar på.
+              queueOpenMeteoCloudWindow(warmTime,OPEN_METEO_CLOUD_STARTUP_RADIUS,20);
+            },220);
+          });
         }).catch(function(e){console.warn("Start-warmup för satellit misslyckades", e);});
       }
 
@@ -8173,7 +8414,7 @@ weatherGeolocateControl.on('geolocate',function(e){
 
       if(!shownFromCache && typeof syncOpenMeteoCloudLayerForSelectedTime === "function"){
         syncOpenMeteoCloudLayerForSelectedTime(selectedForecastTime, {
-          immediate: true,
+          immediate: false,
           preload: true
         });
       }else if(

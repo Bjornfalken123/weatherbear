@@ -1,4 +1,6 @@
-# Weatherbear
+# Weatherbear v18
+
+Denna version bygger vidare på v17 och ändrar endast två avgränsade delar: den mobila väder-/stationspanelen samt molnlagrets laddnings- och cacheväxling. Sjökortets WFS-kurvor, djupfärger, övriga menyer och API-funktioner är oförändrade. Se `UI-MOLN-FIX-V18.md`.
 
 Komplett Weatherbear-app med sjökortsläge och UI-korrigering v17.
 
